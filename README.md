@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-- Client: <http://localhost:5173>
+- Client: <http://localhost:5173> (thêm `?debug` để xem fps và số draw call)
 - Server: <http://127.0.0.1:3000/api/health>, WebSocket ở `/ws` (client đi qua proxy của Vite).
 
 Muốn đổi cổng thì chép `.env.example` thành `.env` rồi sửa.
@@ -37,5 +37,5 @@ Sau khi build, chạy server bản build bằng `npm run start -w @dilam/server`
 packages/shared   luật chơi và giao thức dùng chung (GAME_NAME, schema zod)
 apps/server       Fastify (REST) + ws (WebSocket)
 apps/client       Vite + Three.js, HUD bằng HTML/CSS thuần
-docs/             thiết kế, giao thức, quyết định
+docs/             thiết kế, giao thức, quyết định, hiệu năng
 ```

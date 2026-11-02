@@ -61,3 +61,47 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Chưa dùng font riêng**: dùng font hệ thống (`system-ui`…), hiển thị tốt tiếng Việt.
 - Chưa có Origin check, heartbeat, xác thực WebSocket (xem trên).
 - Server chưa phục vụ file tĩnh của client khi chạy bản build; sẽ làm ở phase deploy (Phase 7).
+
+## Phase 1: engine 3D và nhân vật (2026-11-02)
+
+### Engine
+
+- **Vòng lặp bước cố định 60 Hz** (`engine/loop.ts`): logic chạy 1/60 s mỗi bước, tối đa 5 bước mỗi khung hình (máy quá chậm thì bỏ phần nợ thay vì dồn sang khung sau). Vị trí nhân vật được nội suy giữa hai bước nên vẫn mượt trên màn 120/144 Hz.
+- **Tab bị ẩn** (`visibilitychange`): hủy `requestAnimationFrame`; khi hiện lại thì đặt lại đồng hồ để không có "bước nhảy" dài.
+- **Mức chất lượng** thay đổi pixel ratio, bóng và số hạt bụi. Không đổi khử răng cưa (antialias), vì muốn đổi phải tạo lại WebGL context. Số liệu chi tiết ở `docs/PERF.md`.
+- **Chế độ "Tự động"** chỉ tự _hạ_ mức, không tự nâng lại, để tránh nhảy qua lại liên tục. Người chơi chọn tay trong menu "Đồ họa"; lựa chọn này được lưu lại.
+- **Dùng `PCFShadowMap`**: `PCFSoftShadowMap` đã bị bỏ ở three r187 (dùng sẽ ra cảnh báo console).
+- **Một vật liệu dùng chung cho mỗi màn**: `MeshLambertMaterial` có màu đỉnh. Các khối nhỏ được gộp thành một geometry, màu ghi vào thuộc tính `color` của đỉnh, nên mỗi bộ phận chỉ tốn 1 draw call. Lambert rẻ hơn Standard và hợp phong cách dễ thương.
+- **Giải phóng tài nguyên**: mỗi màn (`SceneController`) tự `dispose()`. Hàm `disposeObject3D` duyệt cả cảnh và giải phóng geometry, material, texture và shadow map của đèn. Đã kiểm tra bằng `renderer.info.memory`: đổi màn qua lại nhiều lần thì số geometry và texture không tăng.
+
+### Nhân vật
+
+- **Cao khoảng 1,2 m**, gồm 6 bộ phận chuyển động (đầu, thân, 2 tay, 2 chân). Mỗi bộ phận là một Group làm khớp xoay (cổ, vai, hông); tư thế được tính bằng hàm thuần `computePose`, không dùng xương.
+- **Đổi tư thế mượt** bằng cách trộn dần (`blendPose`) về tư thế đích.
+- **Chuyển tư thế trong văn phòng**: chỉ tự đổi giữa đứng và đi. Ngồi và gõ phím có thể thử ở màn tạo nhân vật; trong văn phòng sẽ gắn với hoạt động ở Phase 2.
+- **4 màu da, 5 màu tóc, 4 kiểu tóc, 4 trang phục.** Prompt không nói số màu tóc nên chọn 5 (có một màu vui là tím khoai môn). Màu lưu theo _chỉ số_ trong danh sách, không lưu mã màu, để sau này chỉnh màu không làm hỏng dữ liệu cũ.
+- **Danh sách họ và tên cho nút "Thỉnh tên"** nằm trong `strings.ts`, vì đây là chuỗi người chơi nhìn thấy. Tên có dạng "Họ + Tên"; phần tên có thể gồm tên đệm (ví dụ "Minh Anh").
+- **Tên trên thẻ**: tối đa 24 ký tự, chuẩn hóa NFC, bỏ ký tự điều khiển, gộp khoảng trắng. Để trống thì tự thỉnh một tên. Chưa lọc từ cấm: AGENTS.md chỉ yêu cầu lọc _tên công ty_, phần đó làm ở Phase 6.
+
+### Lưu trữ
+
+- **Hồ sơ nhân vật** lưu trong localStorage, khóa `dilam.profile.v1` (có trường `version`); mức đồ họa lưu ở `dilam.quality.v1`. Khi đọc, dữ liệu được kiểm tra bằng zod; dữ liệu hỏng thì coi như chưa có.
+- **Bị chặn lưu** (chế độ riêng tư, chặn cookie, hết dung lượng): game vẫn chơi được với dữ liệu trong bộ nhớ và báo cho người chơi biết nhân vật sẽ mất khi tải lại trang.
+- **Đã có hồ sơ thì tải trang vào thẳng văn phòng.** Nút "Sửa thẻ" mở lại màn tạo nhân vật với lựa chọn cũ.
+- Đây chỉ là lưu cục bộ. Từ Phase 4, server mới là nơi giữ dữ liệu chính.
+
+### Thế giới và điều khiển
+
+- **Phòng thử 14 × 10 m** (`world/roomLayout.ts`). Tường là mặt phẳng một phía quay vào trong, nên camera vòng ra ngoài thì nhìn xuyên được tường. Nhờ vậy không cần xử lý camera va chạm tường.
+- **Va chạm**: hộp chữ nhật thẳng trục (AABB) trên mặt sàn, coi nhân vật như hình vuông có bán kính 0,28 m. Xét từng trục riêng để nhân vật trượt dọc theo mép vật cản.
+- **Bấm hoặc chạm lên sàn**: tia chiếu được cắt với mặt phẳng sàn y = 0 (rẻ hơn raycast vào mesh). Đi thẳng nếu không vướng gì; vướng thì đi vòng qua các góc vật cản (đồ thị tầm nhìn + Dijkstra). Đích nằm trong vật cản thì dời ra mép gần nhất; bấm ra ngoài phòng thì bỏ qua.
+- **Chạm, kéo và zoom**: nhấc tay trong vòng 8 px và 450 ms thì tính là chạm, ngoài ra là kéo. Kéo một ngón hoặc chuột (trái hoặc phải) để xoay camera; chụm hai ngón hoặc cuộn chuột để zoom.
+- **Joystick ảo** hiện khi trình duyệt báo `(pointer: coarse)`, hoặc ngay lần chạm đầu tiên.
+- **Giới hạn camera**: góc ngẩng 0,3–1,25 rad (khoảng 17°–72°), khoảng cách 3,5–11 m.
+- **Phím di chuyển** không được nhận khi đang gõ vào ô nhập liệu, và được xóa hết khi cửa sổ mất focus.
+
+### Khác
+
+- **Bỏ nút "Thử kết nối" khỏi giao diện** vì Phase 1 không làm mạng. Mã kết nối (`net/`) và các chuỗi liên quan vẫn giữ lại để dùng ở Phase 4.
+- **`?debug`** hiện số đo hiệu năng và mở `window.__dilam` cho kiểm thử tự động. Không có `?debug` thì không lộ gì ra `window`.
+- **Kiểm thử E2E** chạy bằng Chrome headless qua DevTools Protocol, có giả lập cảm ứng. Kịch bản chưa được đưa vào repo (xem "Việc còn dở" trong báo cáo Phase 1).
