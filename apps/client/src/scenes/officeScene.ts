@@ -78,6 +78,8 @@ const CAMERA_FOLLOW = 9;
 const CAMERA_BLEND = 5;
 const LOOK_HEIGHT = 0.75;
 const DEFAULT_ORBIT: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+/** Góc camera lúc mới vào phòng; yaw tính lệch so với hướng nhân vật lúc xuất hiện. */
+const ENTRY_ORBIT: OrbitState = { yaw: 0.42, pitch: 0.42, distance: 5.6 };
 /** Giới hạn camera khi nhìn từ trên. */
 const TOP_CAMERA_LIMITS = {
   ...CAMERA_LIMITS,
@@ -188,6 +190,11 @@ export class OfficeScene implements SceneController {
     this.position = { ...layout.spawn };
     this.previous = { ...layout.spawn };
     this.facing = layout.spawnFacing;
+    // Mới vào: camera đứng phía trong phòng nhìn lại cửa vào (thấy nhân vật, cửa, máy chấm công),
+    // thấp dưới trần để không bị ép sát vào tường sau lưng.
+    this.orbit = { ...ENTRY_ORBIT, yaw: layout.spawnFacing + ENTRY_ORBIT.yaw };
+    this.orbitGoal = { ...this.orbit };
+    this.freeOrbit = { ...this.orbit };
 
     this.scene.fog = new Fog(0x0e0e12, 24, 55);
     this.lighting = createLighting(this.scene, 9, { x: 4, y: 9, z: -5 });
