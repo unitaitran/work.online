@@ -2,8 +2,8 @@
 // và câu nhanh. Chỉ vẽ chi tiết vài người gần nhất; xa hơn vẽ khối đơn giản bằng một InstancedMesh
 // (1 draw call cho tất cả) để máy yếu vẫn chạy.
 import {
+  jobName,
   poseAt,
-  titleName,
   type PlayerProfile,
   type PlayerSnapshot,
   type Pose,
@@ -183,7 +183,7 @@ export class RemotePlayers {
       sid: p.profile.sid,
       code: p.profile.code,
       name: p.profile.name,
-      title: titleName(p.profile.title, p.profile.branch),
+      title: jobName(p.profile.job ?? null, p.profile.title, p.profile.branch),
       hidden: this.hiddenCodes.has(p.profile.code),
       x: Math.round(p.x * 100) / 100,
       z: Math.round(p.z * 100) / 100,
@@ -269,7 +269,9 @@ export class RemotePlayers {
       // Nhãn tên chỉ cho người gần (vẽ chi tiết) hoặc đang nói: đỡ cập nhật DOM mỗi khung hình.
       const showLabel = index < this.detailed || player.speech !== null;
       const screen = showLabel ? project(player.x, BUBBLE_HEIGHT, player.z) : null;
-      const label = player.speech?.text ?? titleName(player.profile.title, player.profile.branch);
+      const label =
+        player.speech?.text ??
+        jobName(player.profile.job ?? null, player.profile.title, player.profile.branch);
       this.bubbles.update(bubbleId(player.profile.sid), screen, label);
     });
     this.proxies.count = proxyCount;

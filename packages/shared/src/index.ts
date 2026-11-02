@@ -10,6 +10,7 @@ export * from './companyApi';
 export * from './companySim';
 export * from './filter';
 export * from './hiring';
+export * from './job';
 export * from './constants';
 export * from './levels';
 export * from './missions';

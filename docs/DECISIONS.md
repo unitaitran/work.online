@@ -348,5 +348,12 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Bảng "lật task" và "tường than thở" chuyển lên tường tây cạnh dãy ngồi (2 bảng dán note). Ống quẻ KPI ở góc tây bắc.
 
 ## Chỉ vào phòng nơi đang làm (2026-11-02)
+
 - Server quyết định phòng khi kết nối (kể cả kết nối lại): người có `employer` là công ty (chủ hoặc nhân viên) vào thẳng `company:<id>`; người làm ở Mây Hồng/NPC vào văn phòng chung.
 - Người thuộc một công ty gửi `switch_room` sang `office` bị từ chối (`forbidden`). Nút "Về văn phòng chung" trong bảng công ty đã bỏ; muốn về văn phòng chung thì phải nghỉ việc.
+
+## Chức danh theo nơi làm (2026-11-03)
+
+- Cấp (XP) là của người chơi, không reset khi đổi chỗ làm. Chỉ chức danh hiển thị đổi: tự mở công ty là CEO, làm cho công ty người chơi khác thì theo vị trí (khung cấp của công ty đó), ở văn phòng chung thì theo thang 13 chức danh.
+- Thang 13 chức danh vẫn được tính ngầm để mở khoá phòng ban, nhánh và đồ cửa hàng, tránh mất quyền lợi đã có khi đổi chỗ làm.
+- Server gửi `job` trong hồ sơ công khai (`'ceo' | Position | null`). Khi CEO đổi khung cấp, nhãn của nhân viên đang online cập nhật ở lần đổi hồ sơ kế tiếp (lên cấp, vào lại phòng).

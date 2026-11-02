@@ -20,6 +20,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp } from '../app';
+import { publicProfile } from '../rooms/profile';
 import { testConfig, type ServerConfig } from '../config';
 
 const apps: FastifyInstance[] = [];
@@ -287,6 +288,21 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     const b = await player(app, 'Bình');
     return { app, host, a, b, companyId: detail.company.id };
   }
+
+  it('chức danh theo nơi làm: chủ là CEO, nhân viên theo khung cấp, rời công ty về thang chung', async () => {
+    const { app, a, b, companyId } = await setup();
+    expect(publicProfile(app.repos, a.userId).job).toBe('ceo');
+    expect(publicProfile(app.repos, b.userId).job).toBeNull();
+    const state = app.game.engine.state(b.userId);
+    app.game.engine.save(b.userId, { ...state, xp: xpForLevel(40) });
+    const { applicationId } = (await post(app, b, '/api/company/apply', { companyId })).json<{
+      applicationId: number;
+    }>();
+    await post(app, a, '/api/company/applications', { applicationId, approve: true });
+    expect(publicProfile(app.repos, b.userId).job).toBe('junior');
+    await post(app, b, '/api/company/leave');
+    expect(publicProfile(app.repos, b.userId).job).toBeNull();
+  });
 
   it('B nộp đơn, A duyệt, B vào phòng công ty và thấy A', async () => {
     const { app, host, a, b, companyId } = await setup();

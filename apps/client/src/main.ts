@@ -6,8 +6,10 @@ import {
   goalAmount,
   levelProgress,
   QUICK_CHATS,
-  titleFor,
-  titleName,
+  jobName,
+  jobTagFor,
+  levelFor,
+  titleForLevel,
   dayMood,
   PROTOCOL_VERSION,
   COMPANY_COLORS,
@@ -17,8 +19,10 @@ import {
   type InventoryResponse,
   type LeaderboardResponse,
   type WallPost,
+  type Branch,
   type ProgressState,
   type RoomEventView,
+  type Workplace,
   type ServerMessage,
 } from '@dilam/shared';
 import { ActivityBus } from './activities/events';
@@ -418,6 +422,23 @@ function start(): void {
     return STRINGS.company.employer[employer] ?? employer;
   };
 
+  // Công ty người chơi đang làm, để tính chức danh: tự mở là CEO, làm cho người khác thì
+  // theo khung cấp từng vị trí; ở văn phòng chung thì theo thang chức danh chung.
+  let workplace: Workplace | null = null;
+  const loadWorkplace = async (): Promise<void> => {
+    if (!progress.state.employer?.startsWith('company:')) {
+      workplace = null;
+      return;
+    }
+    const r = await api.request<MyCompanyResponse>('GET', '/api/company/me');
+    const detail = r.ok ? r.value.detail : null;
+    workplace = detail ? { owner: detail.isOwner, bands: detail.company.hiringBands } : null;
+  };
+  const jobAtLevel = (level: number, branch: Branch | null): string =>
+    jobName(jobTagFor(workplace, level), titleForLevel(level), branch);
+  const myJob = (state: ProgressState = progress.state): string =>
+    jobAtLevel(levelFor(state.xp), state.branch);
+
   // ---------- Màn "Ở nhà": ngoài văn phòng ----------
   const account = { guest: session.me.guest, username: session.me.username };
   const showLobby = (profile: Profile, notice: string | null): void => {
@@ -432,15 +453,11 @@ function start(): void {
       if (panel) scene.setViewInset(panel.getInset());
     };
     const p = levelProgress(progress.state.xp);
-    void workplaceName().then((workplace) => {
+    void Promise.all([workplaceName(), loadWorkplace()]).then(([workplace]) => {
       if (disposed) return;
       panel = mountLobbyPanel(hudRoot, {
         name: profile.name,
-        stats: STRINGS.lobby.stats(
-          p.level,
-          titleName(titleFor(progress.state.xp), progress.state.branch),
-          progress.state.coins,
-        ),
+        stats: STRINGS.lobby.stats(p.level, myJob(), progress.state.coins),
         workplace,
         notice,
         account: { ...account },
@@ -665,7 +682,7 @@ function start(): void {
       const p = levelProgress(state.xp);
       officeHudView.setProgress({
         level: p.level,
-        title: titleName(titleFor(state.xp), state.branch),
+        title: myJob(state),
         ratio: p.ratio,
         into: p.into,
         needed: p.needed,
@@ -704,12 +721,18 @@ function start(): void {
           audio.play('ting');
           officeHudView.showToast(STRINGS.progress.mission.done(BALANCE.mission));
         }
-        if (result.titleAfter > result.titleBefore) {
-          // Lên chức danh: màn chúc mừng (có nhạc riêng) rồi hỏi phòng ban / nhánh nếu vừa mở khoá.
-          celebratePromotion(promotionDeps, titleName(result.titleAfter, state.branch));
-        } else if (result.levelAfter > result.levelBefore) {
-          audio.play('levelup');
-          officeHudView.showToast(STRINGS.progress.levelUp(result.levelAfter));
+        const jobBefore = jobAtLevel(result.levelBefore, state.branch);
+        const jobAfter = jobAtLevel(result.levelAfter, state.branch);
+        if (jobAfter !== jobBefore) {
+          // Lên chức danh ở nơi đang làm: màn chúc mừng rồi hỏi phòng ban / nhánh nếu vừa mở khoá.
+          celebratePromotion(promotionDeps, jobAfter);
+        } else {
+          if (result.levelAfter > result.levelBefore) {
+            audio.play('levelup');
+            officeHudView.showToast(STRINGS.progress.levelUp(result.levelAfter));
+          }
+          // Ở công ty người chơi, thang chức danh chung vẫn mở khoá phòng ban / nhánh.
+          if (result.titleAfter > result.titleBefore) askChoices(promotionDeps);
         }
       } else if (change.kind === 'missionAssigned') {
         audio.play('ting');
@@ -736,6 +759,10 @@ function start(): void {
           serverOffset = message.serverTime - Date.now();
           roomKind = message.room.replace(/-\d+$/, '');
           updateCeoAccess();
+          // Nơi làm có thể vừa đổi (mở công ty, được nhận, nghỉ việc): tính lại chức danh.
+          void loadWorkplace().then(() => {
+            refreshProgress();
+          });
           if (pendingRoom && roomKind !== pendingRoom) {
             room.send({ type: 'switch_room', roomId: pendingRoom });
           }
@@ -1077,7 +1104,7 @@ function start(): void {
           appearance: profile.appearance,
           equipped,
           level: progress.level,
-          title: titleName(progress.title, state.branch),
+          title: myJob(state),
           streak: state.checkIn.streak,
           stats: state.daily.day === progress.today ? state.daily.stats : undefined,
           day: progress.today ?? '',

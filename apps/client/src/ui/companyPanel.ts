@@ -21,7 +21,6 @@ import {
   type LevelBand,
   type Position,
   stageConfig,
-  titleName,
   type CompanyDetail,
   type CompanyPublic,
   type MyCompanyResponse,
@@ -681,7 +680,8 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                 children: [
                   el('strong', { text: m.name }),
                   el('span', {
-                    text: ` · ${m.owner ? p.owner : `${s.ranks[m.role] ?? ''} · ${positionText(m.position)}`} · ${titleName(m.title, null)} · ${p.level(m.level)}`,
+                    // Trong công ty, chức danh là CEO hoặc vị trí theo khung cấp (không dùng thang chức danh chung).
+                    text: ` · ${m.owner ? p.owner : `${positionText(m.position)} · ${s.ranks[m.role] ?? ''}`} · ${p.level(m.level)}`,
                   }),
                 ],
               }),

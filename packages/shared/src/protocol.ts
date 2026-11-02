@@ -4,6 +4,7 @@ import { clientActionSchema, type ActionServerMessage } from './actions';
 import type { Appearance } from './character';
 import type { RoomEventKind, RoomEventView } from './social';
 import type { Branch } from './levels';
+import type { JobTag } from './job';
 
 /** Đường dẫn WebSocket trên server (dev: Vite chuyển tiếp tới server). Token ở query `?token=`. */
 export const WS_PATH = '/ws';
@@ -66,6 +67,8 @@ export interface PlayerProfile {
   appearance: Appearance;
   title: number;
   branch: Branch | null;
+  /** Chức danh theo nơi làm: CEO, vị trí ở công ty người chơi, hoặc null (thang chức danh chung). */
+  job?: JobTag;
   /** Đồ đang mặc và thú cưng (Phase 5A). */
   equipped?: string[];
 }
