@@ -359,6 +359,14 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Server gửi `job` trong hồ sơ công khai (`'ceo' | Position | null`). Khi CEO đổi khung cấp, nhãn của nhân viên đang online cập nhật ở lần đổi hồ sơ kế tiếp (lên cấp, vào lại phòng).
 
 ## Công cụ dev cho riêng tài khoản quản trị (2026-11-03)
+
 - `DEV_USERS` (danh sách tên đăng nhập) cho phép đúng các tài khoản này dùng công cụ dev ở môi trường thật; `DEV_TOOLS` (mở cho mọi người) vẫn bị cấm khi `NODE_ENV=production`.
 - Server là nơi kiểm tra quyền: API `/api/dev/*` trả 404 với người khác (không lộ là có API). Client chỉ tải bảng công cụ dev khi `/api/me` trả `devTools: true`.
 - Không áp dụng cho tài khoản khách. XP/xu cộng bằng công cụ dev vẫn tính vào bảng xếp hạng, nên chỉ dùng để thử.
+
+## Deploy lên VPS (2026-11-03)
+
+- Build Docker image trên GitHub Actions và đẩy lên ghcr.io; VPS 1 GB RAM chỉ kéo image về chạy (build trên VPS dễ hết bộ nhớ).
+- Deploy chỉ chạy khi CI trên `main` đạt; health lỗi thì tự quay về image trước.
+- Tạm dùng user root qua khoá SSH riêng cho Actions (thu hồi được độc lập); có thể chuyển sang user `deploy` thuộc nhóm docker sau.
+- Gỡ file SQLite local (`apps/server/data/*`) khỏi git; thêm vào `.gitignore`.

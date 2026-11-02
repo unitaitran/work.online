@@ -16,6 +16,11 @@ coverage/
 *.db-journal
 *.db-wal
 *.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+apps/server/data/
+backups/
 
 # Log và rác hệ điều hành / editor
 *.log

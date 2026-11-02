@@ -1,0 +1,29 @@
+# Caddy máy chủ thật: HTTPS tự động cho tên miền (DOMAIN có thể gồm nhiều tên, cách nhau dấu phẩy),
+# thêm http://<IP> để vào thử bằng IP khi tên miền chưa trỏ về.
+(game) {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# Server đọc IP thật từ X-Forwarded-For khi TRUST_PROXY=1.
+		header_up X-Forwarded-For {remote_host}
+	}
+	log {
+		# Không ghi query string (token WebSocket nằm trong query) và header Authorization.
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					delete token
+				}
+				request>headers>Authorization delete
+			}
+		}
+	}
+}
+
+{$DOMAIN} {
+	import game
+}
+
+http://{$SERVER_IP} {
+	import game
+}

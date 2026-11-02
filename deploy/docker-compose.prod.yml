@@ -1,0 +1,66 @@
+# Máy chủ thật: chạy image đã build sẵn trên GitHub Actions (ghcr.io), không build trên VPS.
+# Workflow deploy chép file này thành /opt/dilam/docker-compose.yml và đặt IMAGE trong /opt/dilam/.env.
+#   cd /opt/dilam && docker compose pull && docker compose up -d
+services:
+  app:
+    image: ${IMAGE:?IMAGE chưa đặt trong .env}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DB_PATH: /data/dilam.sqlite
+      BACKUP_DIR: /backups
+      CLIENT_DIST: /app/client
+      TRUST_PROXY: 1
+    volumes:
+      - data:/data
+      - ./backups:/backups
+    expose:
+      - '3000'
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN chưa đặt trong .env}
+      SERVER_IP: ${SERVER_IP:-127.0.0.1}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  # Sao lưu SQLite mỗi 24 giờ vào /opt/dilam/backups (giữ BACKUP_KEEP bản).
+  backup:
+    image: ${IMAGE:?IMAGE chưa đặt trong .env}
+    restart: unless-stopped
+    depends_on:
+      - app
+    env_file: .env
+    environment:
+      DB_PATH: /data/dilam.sqlite
+      BACKUP_DIR: /backups
+    volumes:
+      - data:/data
+      - ./backups:/backups
+    entrypoint:
+      ['/bin/sh', '-c', 'while true; do sleep 3600; node server/backup.js; sleep 82800; done']
+
+volumes:
+  data:
+  caddy-data:
+  caddy-config:

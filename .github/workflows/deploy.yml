@@ -1,0 +1,79 @@
+name: Deploy
+
+# Tự deploy lên máy chủ thật sau khi CI trên nhánh main chạy đạt; hoặc bấm tay (Run workflow).
+# Build image trên GitHub (VPS 1 GB RAM không build), đẩy lên ghcr.io, VPS kéo về và chạy.
+# Secrets cần có: DEPLOY_HOST, DEPLOY_SSH_KEY (khoá riêng), DEPLOY_KNOWN_HOSTS (dòng ssh-keyscan).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      IMAGE_REPO: ghcr.io/unitaitran/work.online
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build và đẩy image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: BUILD_ID=${{ env.SHA }}
+          tags: |
+            ${{ env.IMAGE_REPO }}:${{ env.SHA }}
+            ${{ env.IMAGE_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Chuẩn bị SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Chép cấu hình lên máy chủ
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          scp deploy/docker-compose.prod.yml "root@$HOST:/opt/dilam/docker-compose.yml"
+          scp deploy/Caddyfile.prod "root@$HOST:/opt/dilam/Caddyfile"
+          scp deploy/remote-deploy.sh "root@$HOST:/opt/dilam/remote-deploy.sh"
+
+      - name: Deploy (lỗi health thì tự quay về bản cũ)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s\n' "$TOKEN" | ssh "root@$HOST" \
+            "bash /opt/dilam/remote-deploy.sh '${{ env.IMAGE_REPO }}:${{ env.SHA }}' '${{ github.actor }}'"

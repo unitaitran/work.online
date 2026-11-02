@@ -100,3 +100,11 @@ Khi đổi gói tin không tương thích (REST hoặc WebSocket):
 | Mọi người cùng IP (sau proxy) | Đặt `TRUST_PROXY=1`                                                                       |
 | Nhiều người báo "kín chỗ"     | Tăng `SERVER_CAPACITY` (xem số đo trong `docs/PERF.md`)                                   |
 | `429` khi tạo tài khoản       | Giới hạn 5 tài khoản/IP, hồi 1 mỗi 10 phút (đúng thiết kế)                                |
+
+## Máy chủ thật congso.online và tự deploy (CI/CD)
+
+- VPS Ubuntu 22.04 (1 nhân, 1 GB RAM + 2 GB swap), thư mục `/opt/dilam`: `docker-compose.yml` (chép từ `deploy/docker-compose.prod.yml`), `Caddyfile` (từ `deploy/Caddyfile.prod`), `.env` (chỉ nằm trên VPS, quyền 600), `backups/` (sao lưu SQLite hằng ngày, giữ 14 bản). Tường lửa chỉ mở SSH, 80, 443.
+- Không build trên VPS. Push lên `main` → workflow **CI** đạt → workflow **Deploy** build image, đẩy lên `ghcr.io/unitaitran/work.online:<sha>`, chép cấu hình lên VPS, chạy `deploy/remote-deploy.sh`: kéo image, khởi động lại, đợi `/api/health`; lỗi thì tự quay về image cũ. Bấm tay: tab Actions → Deploy → Run workflow.
+- Secrets của repo: `DEPLOY_HOST`, `DEPLOY_SSH_KEY` (khoá riêng chỉ dùng cho Actions), `DEPLOY_KNOWN_HOSTS`. Thu hồi quyền: xoá dòng `dilam-github-actions` trong `/root/.ssh/authorized_keys`.
+- Đổi cấu hình (ví dụ `DEV_USERS`, `SERVER_CAPACITY`): sửa `/opt/dilam/.env` rồi `cd /opt/dilam && docker compose up -d`.
+- Xem log: `cd /opt/dilam && docker compose logs -f --tail 100 app`. Vào thử bằng IP khi tên miền chưa trỏ: `http://45.117.178.60`.
