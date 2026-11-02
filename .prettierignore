@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+package-lock.json
+
+# Tài liệu gốc do người viết soạn tay (AGENTS.md, lộ trình): giữ nguyên định dạng.
+/*.md
+!/README.md

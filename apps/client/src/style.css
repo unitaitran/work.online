@@ -1,0 +1,124 @@
+:root {
+  color-scheme: light;
+  --paper: #fdf3e7;
+  --ink: #3b3241;
+  --ink-soft: #6e6475;
+  --card: rgb(255 255 255 / 82%);
+  --accent: #ff8a65;
+  --accent-dark: #e8704b;
+  --ok: #2e7d5b;
+  --error: #c0392b;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+  pointer-events: none;
+}
+
+.hud-card {
+  pointer-events: auto;
+  width: min(420px, 100%);
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgb(59 50 65 / 12%);
+  backdrop-filter: blur(6px);
+  text-align: center;
+}
+
+.hud-title {
+  margin: 0;
+  font-size: clamp(1.6rem, 6vw, 2.2rem);
+  letter-spacing: 0.01em;
+}
+
+.hud-tagline {
+  margin: 4px 0 14px;
+  color: var(--ink-soft);
+}
+
+.hud-button {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.hud-button:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+
+.hud-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.hud-button:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.hud-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.hud-status {
+  min-height: 1.5em;
+  margin: 12px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.hud-status[data-tone='ok'] {
+  color: var(--ok);
+}
+
+.hud-status[data-tone='error'] {
+  color: var(--error);
+}
+
+.hud-status[data-tone='pending'] {
+  color: var(--ink-soft);
+}

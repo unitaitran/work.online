@@ -1,0 +1,27 @@
+# Phụ thuộc và bản build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Biến môi trường (chỉ commit .env.example)
+.env
+.env.*
+!.env.example
+
+# Dữ liệu SQLite cục bộ (dùng từ các phase sau)
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Log và rác hệ điều hành / editor
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
