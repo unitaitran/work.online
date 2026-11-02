@@ -170,10 +170,10 @@ export function attachGameService(
         result.outcome.granted,
       );
     }
-    // Đổi chức danh / nhánh thì cả phòng thấy nhãn mới.
+    // Lên cấp (có thể đổi chức danh hoặc vị trí ở công ty) / chọn nhánh thì cả phòng thấy nhãn mới.
     if (
       message.action.kind === 'choose_branch' ||
-      (result.outcome && result.outcome.titleAfter !== result.outcome.titleBefore)
+      (result.outcome && result.outcome.levelAfter !== result.outcome.levelBefore)
     ) {
       session.room.updateProfile(session.userId, publicProfile(ctx.repos, session.userId));
     }
@@ -215,7 +215,7 @@ export function attachGameService(
           result.outcome.granted,
         );
       }
-      if (result.outcome.titleAfter !== result.outcome.titleBefore) {
+      if (result.outcome.levelAfter !== result.outcome.levelBefore) {
         session.room.updateProfile(session.userId, publicProfile(ctx.repos, session.userId));
       }
     }
