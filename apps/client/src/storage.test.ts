@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_APPEARANCE } from './avatar/appearance';
 import {
+  loadAudioSettings,
+  loadCoachDone,
   loadProfile,
   loadQualityMode,
   openLocalStorage,
   PROFILE_KEY,
   saveProfile,
+  saveAudioSettings,
+  saveCoachDone,
   saveQualityMode,
   type KeyValueStore,
 } from './storage';
@@ -85,5 +89,27 @@ describe('lưu mức đồ họa', () => {
     expect(loadQualityMode(store)).toBe('low');
     store.setItem('dilam.quality.v1', '"ultra"');
     expect(loadQualityMode(store)).toBe('auto');
+  });
+});
+
+describe('cài đặt âm thanh và hướng dẫn', () => {
+  it('mặc định: bật âm thanh, chưa xem hướng dẫn', () => {
+    expect(loadAudioSettings(new MemoryStore()).enabled).toBe(true);
+    expect(loadCoachDone(new MemoryStore())).toBe(false);
+    expect(loadAudioSettings(blockedStore).enabled).toBe(true);
+  });
+
+  it('lưu rồi đọc lại', () => {
+    const store = new MemoryStore();
+    saveAudioSettings(store, { enabled: false, volume: 0.25 });
+    expect(loadAudioSettings(store)).toEqual({ enabled: false, volume: 0.25 });
+    saveCoachDone(store);
+    expect(loadCoachDone(store)).toBe(true);
+  });
+
+  it('âm lượng ngoài khoảng 0..1 thì về mặc định', () => {
+    const store = new MemoryStore();
+    store.setItem('dilam.audio.v1', JSON.stringify({ enabled: true, volume: 5 }));
+    expect(loadAudioSettings(store).volume).toBeLessThanOrEqual(1);
   });
 });

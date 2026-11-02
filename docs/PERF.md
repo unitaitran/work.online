@@ -58,3 +58,57 @@ Chế độ "Tự động" khởi đầu ở mức Cao (máy có chuột) hoặc
 
 - Đo trên điện thoại tầm trung thật (Android, Chrome) bằng `?debug`, cho cả ba mức.
 - Đo thời gian GPU (`EXT_disjoint_timer_query_webgl2`) để thấy khác biệt giữa các mức khi fps không chạm vsync.
+
+## Phase 2A: tầng văn phòng đầy đủ, 1 người chơi + 3 NPC (2026-11-02)
+
+Máy đo, cách đo và trình duyệt giống Phase 1. Cảnh: tầng 26 × 18 m gồm 8 bàn làm việc, phòng họp kính, pantry, khu nghỉ trưa, 6 chậu cây và 3 NPC đi lại; camera mặc định ở chỗ xuất hiện. Số draw call dao động theo vị trí NPC và vật trong khung hình (Three.js bỏ qua những gì nằm ngoài camera).
+
+| Kịch bản                                       | Mức  | fps | CPU ms/khung | Draw call | Tam giác |
+| ---------------------------------------------- | ---- | --: | -----------: | --------: | -------: |
+| Máy tính 1264×705, DPR 1                       | Cao  |  60 |         0,67 |        46 |   33 458 |
+|                                                | Vừa  |  60 |         0,62 |        46 |   33 458 |
+|                                                | Thấp |  60 |         0,48 |        31 |   20 536 |
+| Máy tính 1280×720, DPR 2                       | Cao  |  60 |         0,61 |        53 |   40 978 |
+|                                                | Vừa  |  60 |         0,59 |        47 |   36 372 |
+|                                                | Thấp |  60 |         0,52 |        25 |   15 930 |
+| Giả lập điện thoại 390×844, DPR 3, CPU chậm 4× | Cao  |  60 |         2,56 |        45 |   36 080 |
+|                                                | Vừa  |  60 |         2,65 |        45 |   36 080 |
+|                                                | Thấp |  60 |         2,15 |        35 |   24 850 |
+| Giả lập điện thoại 390×844, DPR 3, CPU chậm 6× | Cao  |  60 |         4,17 |        51 |   40 686 |
+|                                                | Vừa  |  60 |         3,64 |        45 |   36 200 |
+|                                                | Thấp |  60 |         2,88 |        23 |   15 758 |
+
+**Mục tiêu "dưới 150 draw call ở mức Vừa": đạt, tối đa đo được 47.** Một lần đo khác, ở góc nhìn ra cửa kính, được 41 (Cao/Vừa) và 19 (Thấp).
+
+### Draw call theo thành phần (lượt vẽ chính, khi mọi thứ nằm trong khung hình)
+
+| Thành phần                                           | Draw call | Ghi chú                |
+| ---------------------------------------------------- | --------: | ---------------------- |
+| Sàn, tường, cửa kính thành phố                       |         3 |                        |
+| Đồ chỉ có một cái (pantry, sofa, phòng họp, máy in…) |         1 | gộp, màu đỉnh          |
+| Bàn làm việc ×8                                      |         1 | InstancedMesh          |
+| Ghế ×14 (8 bàn + 6 phòng họp)                        |         1 | InstancedMesh          |
+| Màn hình (3 loại họa tiết)                           |         3 | InstancedMesh mỗi loại |
+| Chậu cây ×6                                          |         1 | InstancedMesh          |
+| Kính phòng họp                                       |         1 | trong suốt             |
+| Người chơi + 3 NPC                                   |        24 | 6 mỗi nhân vật         |
+| Bụi lơ lửng, vòng đánh dấu, bóng giả                 |       0–2 | tuỳ mức                |
+| **Tổng lượt chính**                                  |   **~35** | shadow map thêm 10–30  |
+
+Nhân vật chiếm phần lớn số draw call (6 mỗi người). Đây vẫn là chỗ đầu tiên cần gộp khi có nhiều người chơi (Phase 4).
+
+### Âm thanh chạy 10 phút
+
+Ngồi ở bàn làm việc trong 10 phút với nhạc nền, tiếng điều hòa và tiếng gõ phím liên tục (tạo và hủy hàng nghìn nút âm thanh), mức Vừa. Trước mỗi lần đo ép dọn rác (`HeapProfiler.collectGarbage`).
+
+| Phút | JS heap (MB) | Nút DOM | Giọng âm thanh đang phát | AudioContext | fps |
+| ---: | -----------: | ------: | -----------------------: | ------------ | --: |
+|    1 |        12,12 |     130 |                        9 | running      |  60 |
+|    3 |        12,22 |     130 |                        8 | running      |  60 |
+|    5 |        12,18 |     130 |                        9 | running      |  60 |
+|    7 |        12,18 |     130 |                        9 | running      |  60 |
+|   10 |        12,07 |     130 |                        7 | running      |  60 |
+
+**Không rò bộ nhớ**: heap không tăng (12,12 → 12,07 MB), số nút DOM đứng yên, số giọng đang phát cao nhất là 16 rồi tự giải phóng. Số geometry và texture trên GPU giữ nguyên (37/8).
+
+Khi tab bị ẩn hoặc tắt âm thanh, `AudioContext` chuyển sang `suspended` và bộ lên lịch nhạc dừng. Kịch bản kiểm thử phải giả lập sự kiện `visibilitychange`, vì Chrome headless không đổi `document.hidden` khi chuyển tab.

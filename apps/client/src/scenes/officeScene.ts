@@ -1,5 +1,6 @@
-// Văn phòng thử Phase 1: đi lại bằng bàn phím, joystick ảo, hoặc chạm/bấm lên sàn.
+// Tầng văn phòng Phase 2A: đi lại, chạm để dùng đồ vật, ngồi làm việc, đồng nghiệp NPC.
 import {
+  Box3,
   Color,
   Fog,
   Mesh,
@@ -13,6 +14,7 @@ import {
   Vector3,
   type MeshLambertMaterial,
 } from 'three';
+import type { SoundName } from '../audio/audioEngine';
 import type { Appearance } from '../avatar/appearance';
 import { AvatarModel } from '../avatar/avatarModel';
 import { applyDrag, applyZoom, orbitOffset, type OrbitState } from '../engine/cameraMath';
@@ -24,37 +26,61 @@ import type { SceneController } from '../engine/types';
 import { VirtualJoystick } from '../input/joystick';
 import { KeyboardInput } from '../input/keyboard';
 import { PointerControls } from '../input/pointerControls';
+import { NpcAgent, type NpcSpec } from '../npc/npcAgent';
+import { seededRng } from '../npc/schedule';
 import { STRINGS } from '../strings';
+import { BubbleLayer } from '../ui/bubbles';
+import type { InteractionHint } from '../ui/officeHud';
 import { moveWithCollisions, type Aabb, type Vec2 } from '../world/collision';
 import { DustMotes } from '../world/dust';
+import { ARRIVE_RADIUS, nearestInteractable, SeatRegistry } from '../world/interaction';
 import { createLighting, type Lighting } from '../world/lighting';
 import { combineInputs, headingOf, inputToWorld, stepToward } from '../world/movement';
+import { buildOffice, type BuiltOffice } from '../world/office/buildOffice';
+import {
+  officeInteractables,
+  officeObstacles,
+  type Interactable,
+  type OfficeLayout,
+} from '../world/office/layout';
+import { PERIOD_LIGHTING, type DayPeriod } from '../world/office/period';
 import { findPath } from '../world/pathfinding';
-import { buildRoom } from '../world/room';
-import { obstaclesOf, type RoomLayout } from '../world/roomLayout';
 import { createSoftDotTexture } from '../world/textures';
 import { createBlobShadow } from './blobShadow';
 
-/** Tốc độ đi (m/s) và bán kính va chạm của nhân vật. */
 export const WALK_SPEED = 2.6;
 export const PLAYER_RADIUS = 0.28;
 const TURN_SPEED = 14;
 const CAMERA_FOLLOW = 9;
+const CAMERA_BLEND = 5;
 const LOOK_HEIGHT = 0.75;
 const MARKER_SECONDS = 1.2;
+const BUBBLE_HEIGHT = 1.42;
+const BUBBLE_MAX_DISTANCE = 16;
+const BUBBLE_TOP_MARGIN = 120;
+const PLAYER_ID = 'player';
+
+export type OfficeEvent =
+  { type: 'interact'; item: Interactable } | { type: 'seatTaken'; name: string };
 
 export interface OfficeSceneOptions {
   canvas: HTMLElement;
-  /** Lớp HUD để gắn joystick ảo. */
+  /** Lớp HUD để gắn joystick ảo và bong bóng NPC. */
   hudLayer: HTMLElement;
   appearance: Appearance;
-  layout: RoomLayout;
+  layout: OfficeLayout;
+  period: DayPeriod;
+  npcs: readonly NpcSpec[];
+  onHint(hint: InteractionHint | null): void;
+  onEvent(event: OfficeEvent): void;
+  onSound(name: SoundName): void;
 }
 
 export class OfficeScene implements SceneController {
   readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(50, 1, 0.1, 60);
+  readonly camera = new PerspectiveCamera(50, 1, 0.1, 80);
   private readonly material: MeshLambertMaterial = createVertexColorMaterial();
+  private readonly office: BuiltOffice;
   private readonly avatar: AvatarModel;
   private readonly lighting: Lighting;
   private readonly dust: DustMotes;
@@ -63,40 +89,65 @@ export class OfficeScene implements SceneController {
   private readonly keyboard = new KeyboardInput();
   private readonly joystick: VirtualJoystick;
   private readonly pointer: PointerControls;
+  private readonly bubbles: BubbleLayer;
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
   private readonly obstacles: Aabb[];
   private readonly bounds: Aabb;
+  private readonly items: Interactable[];
+  private readonly pickBoxes: { item: Interactable; box: Box3 }[];
+  private readonly seats = new SeatRegistry();
+  private readonly npcs: NpcAgent[];
   private readonly canvas: HTMLElement;
+  private readonly options: OfficeSceneOptions;
 
   private position: Vec2;
   private previous: Vec2;
-  private facing = Math.PI;
+  private facing: number;
   private path: Vec2[] = [];
+  private pending: Interactable | null = null;
+  private seated: Interactable | null = null;
   private stuckSeconds = 0;
   private markerSeconds = 0;
-  private orbit: OrbitState = { yaw: 0.5, pitch: 0.7, distance: 6.5 };
+  private typingTimer = 0;
+  private orbit: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+  private orbitGoal: OrbitState = { ...this.orbit };
+  private freeOrbit: OrbitState = { ...this.orbit };
   private readonly lookTarget = new Vector3();
+  private readonly tmp = new Vector3();
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.code !== 'KeyE' || event.repeat) return;
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return;
+    this.triggerHint();
+  };
 
   constructor(options: OfficeSceneOptions) {
+    this.options = options;
     this.canvas = options.canvas;
     const { layout } = options;
     this.bounds = layout.bounds;
-    this.obstacles = obstaclesOf(layout);
+    this.obstacles = officeObstacles(layout);
+    this.items = officeInteractables(layout);
     this.position = { ...layout.spawn };
     this.previous = { ...layout.spawn };
+    this.facing = layout.spawnFacing;
 
-    this.scene.background = new Color(0xfdf3e7);
-    this.scene.fog = new Fog(0xfdf3e7, 18, 40);
-    this.lighting = createLighting(this.scene, 9);
+    this.scene.fog = new Fog(0xfdf3e7, 22, 50);
+    this.lighting = createLighting(this.scene, 9, { x: 4, y: 9, z: -5 });
+    this.office = buildOffice(layout, this.material, options.period);
+    this.scene.add(this.office.group);
+    this.setPeriod(options.period);
 
-    const room = buildRoom(layout, this.material);
-    this.scene.add(room.group);
+    this.pickBoxes = this.items.map((item) => ({
+      item,
+      box: new Box3(new Vector3(...item.pick.min), new Vector3(...item.pick.max)),
+    }));
 
     const dotTexture = createSoftDotTexture();
     this.dust = new DustMotes({ ...layout.bounds, height: layout.wallHeight }, dotTexture);
     this.scene.add(this.dust.points);
-
     this.blob = createBlobShadow(dotTexture);
     this.scene.add(this.blob);
 
@@ -111,6 +162,31 @@ export class OfficeScene implements SceneController {
     this.avatar = new AvatarModel(options.appearance, this.material);
     this.scene.add(this.avatar.root);
 
+    // Đồng nghiệp NPC.
+    const itemMap = new Map(this.items.map((item) => [item.id, item]));
+    const coffee = itemMap.get('coffee');
+    const world = {
+      obstacles: this.obstacles,
+      bounds: this.bounds,
+      interactables: itemMap,
+      seats: this.seats,
+      meetingSeatIds: this.items.filter((item) => item.kind === 'meeting').map((item) => item.id),
+      coffeeSpots: coffee
+        ? [0, 1, 2].map((i) => ({
+            spot: { x: coffee.approach.x - 0.1, z: coffee.approach.z + 0.7 + i * 0.7 },
+            facing: coffee.facing,
+          }))
+        : [],
+      strollSpots: layout.strollSpots,
+    };
+    this.bubbles = new BubbleLayer(options.hudLayer);
+    this.npcs = options.npcs.map((spec, i) => {
+      const npc = new NpcAgent(spec, this.material, world, seededRng(1000 + i), i);
+      this.scene.add(npc.avatar.root);
+      this.bubbles.ensure(spec.id, spec.name);
+      return npc;
+    });
+
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
     this.joystick = new VirtualJoystick(options.hudLayer, STRINGS.office.joystick);
     this.pointer = new PointerControls(options.canvas, {
@@ -118,15 +194,52 @@ export class OfficeScene implements SceneController {
         this.handleTap(x, y);
       },
       onDrag: (dx, dy) => {
-        this.orbit = applyDrag(this.orbit, dx, dy);
+        if (this.seated) return;
+        this.orbitGoal = applyDrag(this.orbitGoal, dx, dy);
+        this.orbit = { ...this.orbit, yaw: this.orbitGoal.yaw, pitch: this.orbitGoal.pitch };
       },
       onZoom: (factor) => {
-        this.orbit = applyZoom(this.orbit, factor);
+        if (this.seated) return;
+        this.orbitGoal = applyZoom(this.orbitGoal, factor);
+        this.orbit = { ...this.orbit, distance: this.orbitGoal.distance };
       },
     });
+    window.addEventListener('keydown', this.onKeyDown);
   }
 
-  /** Vị trí hiện tại (dùng cho kiểm thử tự động / debug). */
+  // ---------- Dùng từ bên ngoài (HUD, debug) ----------
+
+  setPeriod(period: DayPeriod): void {
+    const lighting = PERIOD_LIGHTING[period];
+    this.office.setPeriod(period);
+    this.lighting.applyPeriod(lighting);
+    this.scene.background = new Color(lighting.background);
+    this.scene.fog?.color.setHex(lighting.background);
+  }
+
+  /** Nút "Chạm để dùng" / "Đứng dậy" hoặc phím E. */
+  triggerHint(): void {
+    if (this.seated) {
+      this.standUp();
+      return;
+    }
+    const nearby = nearestInteractable(this.position, this.items);
+    if (nearby) this.requestInteraction(nearby);
+  }
+
+  /** Đi tới vật và dùng khi tới nơi (như khi chạm vào vật đó). */
+  requestInteractionById(id: string): boolean {
+    const item = this.items.find((candidate) => candidate.id === id);
+    if (!item) return false;
+    if (this.seated) this.standUp();
+    this.requestInteraction(item);
+    return true;
+  }
+
+  getInteractables(): readonly Interactable[] {
+    return this.items;
+  }
+
   getPlayerPosition(): Vec2 {
     return { ...this.position };
   }
@@ -135,10 +248,22 @@ export class OfficeScene implements SceneController {
     return { ...this.orbit };
   }
 
-  /** Toạ độ màn hình (pixel CSS) của một điểm trên sàn; null nếu điểm ở sau camera. */
-  projectFloorPoint(x: number, z: number): { x: number; y: number } | null {
+  getSeatedId(): string | null {
+    return this.seated?.id ?? null;
+  }
+
+  getNpcStatuses(): { name: string; status: string; position: Vec2 }[] {
+    return this.npcs.map((npc) => ({
+      name: npc.name,
+      status: npc.status(),
+      position: npc.getPosition(),
+    }));
+  }
+
+  /** Toạ độ màn hình (pixel CSS) của một điểm 3D; null nếu ở sau camera. */
+  projectPoint(x: number, y: number, z: number): { x: number; y: number } | null {
     const rect = this.canvas.getBoundingClientRect();
-    const v = new Vector3(x, 0, z).project(this.camera);
+    const v = this.tmp.set(x, y, z).project(this.camera);
     if (v.z > 1) return null;
     return {
       x: rect.left + ((v.x + 1) / 2) * rect.width,
@@ -146,12 +271,107 @@ export class OfficeScene implements SceneController {
     };
   }
 
+  projectFloorPoint(x: number, z: number): { x: number; y: number } | null {
+    return this.projectPoint(x, 0, z);
+  }
+
+  // ---------- SceneController ----------
+
   fixedUpdate(dt: number): void {
     this.previous = { ...this.position };
     const input = combineInputs(this.keyboard.vector(), this.joystick.vector());
-    let delta: Vec2 = { x: 0, z: 0 };
+    const hasInput = Math.hypot(input.x, input.y) > 0.05;
 
-    if (Math.hypot(input.x, input.y) > 0.05) {
+    if (this.seated) {
+      if (hasInput) this.standUp();
+      else this.updateTyping(dt);
+    }
+
+    if (!this.seated) this.movePlayer(dt, hasInput ? input : null);
+
+    this.avatar.update(dt);
+    for (const npc of this.npcs) npc.update(dt);
+  }
+
+  frameUpdate(frameSeconds: number, alpha: number): void {
+    const x = lerp(this.previous.x, this.position.x, alpha);
+    const z = lerp(this.previous.z, this.position.z, alpha);
+    this.avatar.root.position.set(x, 0, z);
+    this.avatar.root.rotation.y = this.facing;
+    this.blob.position.set(x, 0.006, z);
+    this.blob.visible = this.blobAllowed && !this.seated;
+    this.lighting.follow(x, z);
+
+    // Camera: ngồi thì nhìn gần qua vai về phía bàn, đứng thì theo sau như cũ.
+    this.orbit = {
+      yaw: dampAngle(this.orbit.yaw, this.orbitGoal.yaw, CAMERA_BLEND, frameSeconds),
+      pitch: damp(this.orbit.pitch, this.orbitGoal.pitch, CAMERA_BLEND, frameSeconds),
+      distance: damp(this.orbit.distance, this.orbitGoal.distance, CAMERA_BLEND, frameSeconds),
+    };
+    const seat = this.seated;
+    const focusX = seat ? x - Math.sin(seat.facing + Math.PI) * 0.35 : x;
+    const focusZ = seat ? z - Math.cos(seat.facing + Math.PI) * 0.35 : z;
+    const focusY = seat ? 0.5 : LOOK_HEIGHT;
+    this.lookTarget.set(
+      damp(this.lookTarget.x, focusX, CAMERA_FOLLOW, frameSeconds),
+      damp(this.lookTarget.y, focusY, CAMERA_FOLLOW, frameSeconds),
+      damp(this.lookTarget.z, focusZ, CAMERA_FOLLOW, frameSeconds),
+    );
+    const offset = orbitOffset(this.orbit);
+    this.camera.position.set(
+      this.lookTarget.x + offset.x,
+      this.lookTarget.y + offset.y,
+      this.lookTarget.z + offset.z,
+    );
+    this.camera.lookAt(this.lookTarget);
+
+    if (this.markerSeconds > 0) {
+      this.markerSeconds = Math.max(0, this.markerSeconds - frameSeconds);
+      const k = this.markerSeconds / MARKER_SECONDS;
+      this.marker.material.opacity = Math.min(1, k * 2);
+      this.marker.scale.setScalar(1 + (1 - k) * 0.4);
+      this.marker.visible = this.markerSeconds > 0;
+    }
+
+    this.office.update(frameSeconds);
+    this.dust.update(frameSeconds);
+    this.updateBubbles();
+    this.updateHint();
+  }
+
+  private blobAllowed = false;
+
+  applyQuality(preset: QualityPreset): void {
+    this.lighting.applyQuality(preset);
+    this.avatar.setShadows(preset.shadows);
+    for (const npc of this.npcs) npc.avatar.setShadows(preset.shadows);
+    this.blobAllowed = !preset.shadows;
+    this.dust.setCount(preset.particles);
+  }
+
+  resize(width: number, height: number): void {
+    this.camera.aspect = width / height;
+    this.camera.fov = width < height ? 62 : 50;
+    this.camera.updateProjectionMatrix();
+  }
+
+  dispose(): void {
+    window.removeEventListener('keydown', this.onKeyDown);
+    this.keyboard.dispose();
+    this.joystick.dispose();
+    this.pointer.dispose();
+    this.bubbles.dispose();
+    for (const npc of this.npcs) npc.dispose();
+    this.avatar.dispose();
+    disposeObject3D(this.scene);
+    this.material.dispose();
+  }
+
+  // ---------- Bên trong ----------
+
+  private movePlayer(dt: number, input: { x: number; y: number } | null): void {
+    let delta: Vec2 = { x: 0, z: 0 };
+    if (input) {
       this.cancelPath();
       const direction = inputToWorld(input, this.orbit.yaw);
       delta = { x: direction.x * WALK_SPEED * dt, z: direction.z * WALK_SPEED * dt };
@@ -176,12 +396,19 @@ export class OfficeScene implements SceneController {
     const distance = Math.hypot(movedX, movedZ);
     this.position = moved;
 
-    // Đang đi theo đường mà gần như không nhích được: bỏ đường (tránh đứng dậm chân mãi).
     if (this.path.length > 0 && distance < WALK_SPEED * dt * 0.2) {
       this.stuckSeconds += dt;
       if (this.stuckSeconds > 0.4) this.cancelPath();
     } else {
       this.stuckSeconds = 0;
+    }
+
+    // Tới chỗ dùng vật thì dùng luôn.
+    const pending = this.pending;
+    if (pending && this.path.length === 0) {
+      this.pending = null;
+      const d = Math.hypot(pending.approach.x - moved.x, pending.approach.z - moved.z);
+      if (d <= ARRIVE_RADIUS + 0.05) this.use(pending);
     }
     if (this.path.length === 0 && this.markerSeconds > 0.3) this.markerSeconds = 0.3;
 
@@ -189,67 +416,79 @@ export class OfficeScene implements SceneController {
     if (walking) {
       this.facing = dampAngle(this.facing, headingOf({ x: movedX, z: movedZ }), TURN_SPEED, dt);
     }
-    this.avatar.setPose(walking ? 'walk' : 'stand');
-    this.avatar.update(dt);
+    if (!this.seated) this.avatar.setPose(walking ? 'walk' : 'stand');
   }
 
-  frameUpdate(frameSeconds: number, alpha: number): void {
-    const x = lerp(this.previous.x, this.position.x, alpha);
-    const z = lerp(this.previous.z, this.position.z, alpha);
-    this.avatar.root.position.set(x, 0, z);
-    this.avatar.root.rotation.y = this.facing;
-    this.blob.position.set(x, 0.006, z);
-    this.lighting.follow(x, z);
+  /** Tiếng bàn phím khi ngồi gõ: lách cách từng chuỗi, thỉnh thoảng nghỉ tay. */
+  private updateTyping(dt: number): void {
+    if (this.seated?.pose !== 'type') return;
+    this.typingTimer -= dt;
+    if (this.typingTimer > 0) return;
+    this.options.onSound('keyboard');
+    this.typingTimer =
+      Math.random() < 0.08 ? 0.6 + Math.random() * 0.8 : 0.07 + Math.random() * 0.15;
+  }
 
-    this.lookTarget.set(
-      damp(this.lookTarget.x, x, CAMERA_FOLLOW, frameSeconds),
-      LOOK_HEIGHT,
-      damp(this.lookTarget.z, z, CAMERA_FOLLOW, frameSeconds),
-    );
-    const offset = orbitOffset(this.orbit);
-    this.camera.position.set(
-      this.lookTarget.x + offset.x,
-      this.lookTarget.y + offset.y,
-      this.lookTarget.z + offset.z,
-    );
-    this.camera.lookAt(this.lookTarget);
-
-    if (this.markerSeconds > 0) {
-      this.markerSeconds = Math.max(0, this.markerSeconds - frameSeconds);
-      const k = this.markerSeconds / MARKER_SECONDS;
-      this.marker.material.opacity = Math.min(1, k * 2);
-      this.marker.scale.setScalar(1 + (1 - k) * 0.4);
-      this.marker.visible = this.markerSeconds > 0;
+  private requestInteraction(item: Interactable): void {
+    const d = Math.hypot(item.approach.x - this.position.x, item.approach.z - this.position.z);
+    if (d <= ARRIVE_RADIUS) {
+      this.cancelPath();
+      this.use(item);
+      return;
     }
-    this.dust.update(frameSeconds);
+    const path = findPath(this.position, item.approach, this.obstacles, PLAYER_RADIUS, this.bounds);
+    if (!path) return;
+    this.path = path;
+    this.pending = item;
+    this.stuckSeconds = 0;
+    this.showMarker(item.approach);
   }
 
-  applyQuality(preset: QualityPreset): void {
-    this.lighting.applyQuality(preset);
-    this.avatar.setShadows(preset.shadows);
-    this.blob.visible = !preset.shadows;
-    this.dust.setCount(preset.particles);
+  private use(item: Interactable): void {
+    if (item.seat) {
+      if (!this.seats.claim(item.id, PLAYER_ID)) {
+        const who = this.seats.occupant(item.id);
+        const npc = this.npcs.find((candidate) => candidate.spec.id === who);
+        this.options.onEvent({ type: 'seatTaken', name: npc?.name ?? '' });
+        return;
+      }
+      this.seated = item;
+      this.position = { ...item.seat };
+      this.previous = { ...item.seat };
+      this.facing = item.facing;
+      this.avatar.setPose(item.pose === 'type' ? 'type' : 'sit');
+      this.typingTimer = 0.4;
+      this.freeOrbit = { ...this.orbitGoal };
+      // Góc nhìn gần qua vai phải, đủ cao để thấy màn hình phía trên đầu nhân vật.
+      this.orbitGoal = { yaw: item.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 };
+    } else {
+      this.facing = item.facing;
+      this.avatar.setPose('stand');
+    }
+    this.options.onEvent({ type: 'interact', item });
   }
 
-  resize(width: number, height: number): void {
-    this.camera.aspect = width / height;
-    // Màn dọc: mở rộng góc nhìn một chút để không thấy quá chật.
-    this.camera.fov = width < height ? 62 : 50;
-    this.camera.updateProjectionMatrix();
-  }
-
-  dispose(): void {
-    this.keyboard.dispose();
-    this.joystick.dispose();
-    this.pointer.dispose();
-    this.avatar.dispose();
-    disposeObject3D(this.scene);
-    this.material.dispose();
+  private standUp(): void {
+    const seat = this.seated;
+    if (!seat) return;
+    this.seats.release(seat.id, PLAYER_ID);
+    this.seated = null;
+    this.position = { ...seat.approach };
+    this.previous = { ...seat.approach };
+    this.avatar.setPose('stand');
+    this.orbitGoal = { ...this.freeOrbit, yaw: this.orbit.yaw };
   }
 
   private cancelPath(): void {
     this.path = [];
+    this.pending = null;
     this.stuckSeconds = 0;
+  }
+
+  private showMarker(point: Vec2): void {
+    this.marker.position.set(point.x, 0.012, point.z);
+    this.marker.visible = true;
+    this.markerSeconds = MARKER_SECONDS;
   }
 
   private handleTap(clientX: number, clientY: number): void {
@@ -259,10 +498,32 @@ export class OfficeScene implements SceneController {
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.ray.intersectPlane(this.floorPlane, new Vector3());
+    const ray = this.raycaster.ray;
+
+    // Chạm thẳng vào đồ vật: đi tới và dùng.
+    let picked: Interactable | null = null;
+    let best = Infinity;
+    for (const { item, box } of this.pickBoxes) {
+      const hit = ray.intersectBox(box, this.tmp);
+      if (!hit) continue;
+      const d = hit.distanceTo(ray.origin);
+      if (d < best) {
+        best = d;
+        picked = item;
+      }
+    }
+    if (picked) {
+      if (picked === this.seated) return;
+      if (this.seated) this.standUp();
+      this.requestInteraction(picked);
+      return;
+    }
+
+    const hit = ray.intersectPlane(this.floorPlane, new Vector3());
     if (!hit) return;
     const { minX, maxX, minZ, maxZ } = this.bounds;
     if (hit.x < minX || hit.x > maxX || hit.z < minZ || hit.z > maxZ) return;
+    if (this.seated) this.standUp();
 
     const path = findPath(
       this.position,
@@ -274,9 +535,38 @@ export class OfficeScene implements SceneController {
     const destination = path?.at(-1);
     if (!path || !destination) return;
     this.path = path;
+    this.pending = null;
     this.stuckSeconds = 0;
-    this.marker.position.set(destination.x, 0.012, destination.z);
-    this.marker.visible = true;
-    this.markerSeconds = MARKER_SECONDS;
+    this.showMarker(destination);
+  }
+
+  private updateHint(): void {
+    if (this.seated) {
+      this.options.onHint({ kind: 'stand', label: STRINGS.interact.standUp });
+      return;
+    }
+    const nearby = this.path.length === 0 ? nearestInteractable(this.position, this.items) : null;
+    this.options.onHint(
+      nearby ? { kind: 'use', label: STRINGS.interact.labels[nearby.kind] } : null,
+    );
+  }
+
+  private updateBubbles(): void {
+    for (const npc of this.npcs) {
+      const p = npc.getPosition();
+      const far =
+        Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) >
+        BUBBLE_MAX_DISTANCE;
+      const screen = far ? null : this.projectPoint(p.x, BUBBLE_HEIGHT, p.z);
+      const rect = this.canvas.getBoundingClientRect();
+      const visible =
+        screen !== null &&
+        screen.x > rect.left - 40 &&
+        screen.x < rect.right + 40 &&
+        // Không cho bong bóng chui vào vùng thanh trên cùng của HUD.
+        screen.y > rect.top + BUBBLE_TOP_MARGIN &&
+        screen.y < rect.bottom + 40;
+      this.bubbles.update(npc.spec.id, visible ? screen : null, npc.status());
+    }
   }
 }

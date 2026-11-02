@@ -105,3 +105,69 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Bỏ nút "Thử kết nối" khỏi giao diện** vì Phase 1 không làm mạng. Mã kết nối (`net/`) và các chuỗi liên quan vẫn giữ lại để dùng ở Phase 4.
 - **`?debug`** hiện số đo hiệu năng và mở `window.__dilam` cho kiểm thử tự động. Không có `?debug` thì không lộ gì ra `window`.
 - **Kiểm thử E2E** chạy bằng Chrome headless qua DevTools Protocol, có giả lập cảm ứng. Kịch bản chưa được đưa vào repo (xem "Việc còn dở" trong báo cáo Phase 1).
+
+## Phase 2A: văn phòng và âm thanh (2026-11-02)
+
+### Tầng văn phòng
+
+- **Bố cục là dữ liệu thuần** (`world/office/layout.ts`); vật cản và vật tương tác được _suy ra_ từ đó. Có test kiểm tra mọi chỗ đứng dùng vật đều đi tới được từ chỗ xuất hiện.
+- **Kích thước tầng 26 × 18 m**, đồ đạc theo tỉ lệ nhân vật chibi cao ~1,2 m: bàn cao 0,43 m, ghế 0,27 m. Tường kính nhìn ra thành phố ở phía -Z.
+- **Phân khu**:
+  - 8 bàn open-space chia 2 dãy; mỗi bàn một màn hình hiện mã nguồn, bảng tính hoặc biểu đồ (họa tiết canvas; màn hình mã nguồn cuộn chậm).
+  - Phòng họp kính có 6 ghế.
+  - Pantry có máy pha cà phê, tủ lạnh và bàn tròn.
+  - Khu nghỉ trưa có sofa 2 chỗ, bàn trà và thảm.
+  - Máy in, tủ hồ sơ, 6 chậu cây, 3 bức tranh vẽ bằng khối màu.
+- **InstancedMesh** cho đồ lặp lại (bàn, ghế, chậu cây, mặt màn hình theo từng loại); đồ chỉ có một cái gộp chung vào một mesh màu đỉnh.
+- **Ghế không chặn đường** để dễ đi ngang và ngồi vào. Đổi lại, nhân vật có thể đi xuyên qua ghế.
+- **Cảnh ngoài cửa kính đổi theo giờ thật** của máy người chơi: sáng 5:00–11:59, chiều 12:00–17:59, đêm 18:00–4:59. Kiểm tra lại mỗi phút. Ánh sáng trong phòng cũng đổi theo buổi.
+- **`?time=morning|afternoon|night`** để ép buổi khi thử hoặc chụp ảnh.
+- **Tranh treo tường** là mặt phẳng một phía (giống tường), để camera vòng ra sau tường không thấy tranh lơ lửng.
+
+### Vật tương tác
+
+- **Mỗi vật có**:
+  - chỗ đứng dùng vật (luôn nằm ngoài vật cản);
+  - hướng quay mặt khi dùng;
+  - chỗ ngồi, nếu là ghế;
+  - hộp 3D để bấm hoặc chạm thẳng vào đồ vật.
+- **Hai cách dùng vật**:
+  - lại gần (trong 1,4 m) thì hiện nút "Chạm để dùng · tên vật"; bấm nút hoặc nhấn phím E;
+  - bấm hoặc chạm thẳng vào đồ vật: nhân vật tự đi tới (vòng tránh vật cản như khi bấm lên sàn) rồi dùng.
+- **Ngồi**: ở bàn làm việc thì tư thế gõ phím, kèm tiếng bàn phím ngẫu nhiên; ở ghế họp và sofa thì tư thế ngồi. Camera chuyển sang góc gần qua vai. Đứng dậy bằng nút "Đứng dậy", phím E, bất kỳ phím di chuyển nào, hoặc bấm chỗ khác.
+- **Một ghế một người** (`SeatRegistry`, dùng chung với NPC). Chỗ có người ngồi thì báo "<tên> đang ngồi chỗ này rồi".
+- **Dùng vật chỉ có phản hồi tại chỗ** (lời nhắn và âm thanh), **chưa cộng XP hay xu**. Điểm do server tính, làm ở các phase sau.
+
+### NPC
+
+- **3 đồng nghiệp cố định**, tên và diện mạo sinh từ hạt giống nên tải lại trang vẫn là những người đó. Mỗi người có bàn riêng (`desk-1`, `desk-4`, `desk-6`); 5 bàn còn lại để người chơi ngồi.
+- **Máy trạng thái**: làm việc 25–45 giây, rồi chọn đi pha cà phê (40%), đi họp (30%) hoặc đi dạo (30%), xong lại về làm việc. Mỗi trạng thái có hai pha "đang đi tới" và "đang làm", tương ứng với câu trong bong bóng.
+- **NPC không va chạm với người chơi** và đi theo đường tìm sẵn. Nếu chỗ ngồi họ định tới đã có người thì chuyển sang đi dạo.
+- **Bong bóng là phần tử DOM** (chữ tiếng Việt sắc nét, không tốn draw call). Bong bóng bị ẩn khi ở sau camera, xa quá 16 m, hoặc lọt vào vùng thanh trên cùng của HUD.
+
+### Âm thanh (`audio/`)
+
+- **Mọi âm thanh sinh bằng Web Audio**, không dùng file:
+  - điều hòa: nhiễu trắng qua hai tầng lọc thấp, có dao động rất chậm;
+  - bàn phím: nhiễu ngắn qua bộ lọc dải;
+  - "ting": hai sóng sin tắt dần;
+  - máy in: sóng răng cưa trầm theo nhịp in, rồi tiếng giấy trượt ra;
+  - cà phê: máy xay, nước chảy, rồi tiếng ly chạm.
+- **Nhạc lofi**:
+  - sinh từ tên văn phòng (băm FNV-1a rồi làm hạt giống cho mulberry32): cùng tên thì cùng bài;
+  - giai điệu thuộc thang ngũ cung trưởng, 70–81 BPM, vòng 8 ô nhịp; 4 ô sau lặp lại 4 ô đầu và kết về nốt gốc;
+  - có hợp âm nền, kick, hi-hat, swing nhẹ, và bộ lọc thấp cho tiếng mềm.
+- **AudioContext chỉ được tạo trong lần chạm hoặc bấm phím đầu tiên** (chính sách autoplay), nên không có cảnh báo console.
+- **Tắt âm thanh, hoặc tab bị ẩn**: gọi `AudioContext.suspend()` và dừng bộ lên lịch nhạc. Bật lại hoặc hiện tab lại thì `resume()`.
+- **Không rò bộ nhớ**: mỗi nốt hoặc tiếng động tự ngắt kết nối khi kết thúc (`onended`); số giọng đang phát xem được qua `?debug`.
+- **Lưu cài đặt** bật/tắt và âm lượng trong `dilam.audio.v1`. Âm lượng theo thang bình phương cho dễ chỉnh.
+
+### Hướng dẫn lần đầu
+
+- **4 thẻ**: chào mừng; đi lại (máy tính và cảm ứng có nội dung khác nhau); chạm để dùng; đồng nghiệp và âm thanh.
+- Xem hết hoặc bấm "Bỏ qua" thì lưu `dilam.coach.v1` và không hiện lại.
+
+### Khác
+
+- Phòng thử Phase 1 (`world/roomLayout.ts`, `world/room.ts`) vẫn giữ vì test tìm đường đang dùng, nhưng game không còn dùng phòng này.
+- Màn cảm ứng: nút "Chạm để dùng" đặt bên phải để không đè lên cần gạt; thanh trên cùng được thu gọn ở màn hẹp.

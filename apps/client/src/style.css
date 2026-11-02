@@ -59,7 +59,8 @@ body {
 
 .creator-panel,
 .notice-center,
-.joystick {
+.joystick,
+.coach {
   pointer-events: auto;
 }
 
@@ -296,10 +297,24 @@ body {
   flex: none;
 }
 
-.office-badge-name {
+.office-badge-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.office-badge-name,
+.office-badge-floor {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.office-badge-floor {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
 }
 
 .office-actions {
@@ -406,4 +421,182 @@ body {
   background: var(--accent);
   box-shadow: 0 3px 10px rgb(232 112 75 / 45%);
   pointer-events: none;
+}
+
+/* ---------- Âm thanh ---------- */
+
+.office-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sound-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 2px;
+  border-radius: 999px;
+  background: var(--card);
+}
+
+.sound-toggle {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.sound-toggle[aria-pressed='false'] {
+  color: var(--ink-soft);
+}
+
+.volume-slider {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+/* ---------- Nút "Chạm để dùng" ---------- */
+
+.interact-button {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px);
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  box-shadow: 0 6px 18px rgb(232 112 75 / 35%);
+  white-space: nowrap;
+}
+
+.interact-button:active {
+  transform: translateX(-50%) translateY(1px);
+}
+
+@media (pointer: coarse) {
+  /* Màn cảm ứng: đặt bên phải để không đè lên cần gạt bên trái. */
+  .interact-button {
+    left: auto;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 84px);
+    transform: none;
+    white-space: normal;
+    max-width: 52vw;
+  }
+
+  .interact-button:active {
+    transform: translateY(1px);
+  }
+}
+
+/* ---------- Bong bóng NPC ---------- */
+
+.bubble-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.npc-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 180px;
+  padding: 5px 10px 6px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 3px 10px rgb(59 50 65 / 15%);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-align: center;
+  will-change: transform;
+}
+
+.npc-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-bottom: 0;
+  border-top-color: rgb(255 255 255 / 92%);
+}
+
+.npc-bubble-name {
+  font-size: 0.7rem;
+  color: var(--accent-dark);
+}
+
+/* ---------- Hướng dẫn lần đầu ---------- */
+
+.coach {
+  position: fixed;
+  left: 50%;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 110px);
+  width: min(380px, calc(100% - 32px));
+  transform: translateX(-50%);
+  padding: 18px 20px 16px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(59 50 65 / 22%);
+}
+
+.coach-step {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+
+.coach-title {
+  margin: 4px 0 6px;
+  font-size: 1.15rem;
+}
+
+.coach-body {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.coach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Màn hẹp: thu gọn thanh trên cùng cho vừa hai dòng. */
+@media (max-width: 600px) {
+  .office-badge-floor,
+  .quality-label > span:first-child {
+    display: none;
+  }
+
+  .office-actions {
+    gap: 6px;
+  }
+
+  .sound-toggle {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  .volume-slider {
+    width: 52px;
+  }
+
+  .office-actions .button,
+  .quality-select {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  .quality-label {
+    padding: 2px;
+  }
+
+  .toast {
+    top: 112px;
+  }
 }
