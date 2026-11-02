@@ -57,6 +57,9 @@ services:
     volumes:
       - data:/data
       - ./backups:/backups
+    # Container này không chạy server game: tắt health check thừa hưởng từ image.
+    healthcheck:
+      disable: true
     entrypoint:
       ['/bin/sh', '-c', 'while true; do sleep 3600; node server/backup.js; sleep 82800; done']
 
