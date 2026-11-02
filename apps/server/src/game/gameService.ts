@@ -20,7 +20,9 @@ import type { Gateway, Session } from '../ws/gateway';
 import { ProgressEngine, type PlayerContext } from './progressEngine';
 import { ShopService } from './shop';
 import { RoomEventDirector } from './roomEvents';
-import { registerSocialRoutes } from './socialRoutes';
+import { registerSocialRoutes, roomInfo } from './socialRoutes';
+import { CompanyService } from '../company/companyService';
+import { registerCompanyRoutes } from '../company/companyRoutes';
 import type { RoomPlant } from '../db/repositories';
 import { sendError } from '../http/routes';
 
@@ -33,6 +35,7 @@ export interface GameService {
   engine: ProgressEngine;
   shop: ShopService;
   events: RoomEventDirector;
+  company: CompanyService;
   /** Đẩy trạng thái tiến độ mới nhất cho người chơi (sau khi công cụ khác sửa). */
   push(userId: string): void;
   contextFor(userId: string): PlayerContext;
@@ -159,6 +162,14 @@ export function attachGameService(
     if (message.action.kind === 'chore' && message.action.target.startsWith('plant-')) {
       growPlant(session, message.action.target);
     }
+    // Làm việc trong phòng công ty: XP thực nhận thành điểm công việc cho dự án của công ty.
+    if (result.outcome && result.outcome.granted > 0 && session.room.kind.startsWith('company:')) {
+      company.contribute(
+        session.userId,
+        session.room.kind.slice('company:'.length),
+        result.outcome.granted,
+      );
+    }
     // Đổi chức danh / nhánh thì cả phòng thấy nhãn mới.
     if (
       message.action.kind === 'choose_branch' ||
@@ -222,7 +233,49 @@ export function attachGameService(
     return reply.send({ entries: ctx.repos.ledger.recent(user.id, 50) });
   });
 
-  registerSocialRoutes(app, ctx, gateway);
+  // ---------- Công ty (Phase 6) ----------
+  const company = new CompanyService(ctx.repos, engine, ctx.now, {
+    online: (companyId) =>
+      gateway.rooms
+        .list()
+        .filter((info) => info.kind === `company:${companyId}`)
+        .reduce((sum, info) => sum + info.online, 0),
+    push,
+    evict: (userId, companyId) => {
+      if (gateway.sessionOf(userId)?.room.kind === `company:${companyId}`) {
+        gateway.sendToOffice(userId);
+      }
+    },
+    profileChanged: (userId) => {
+      gateway.sessionOf(userId)?.room.updateProfile(userId, publicProfile(ctx.repos, userId));
+    },
+  });
+  gateway.setAccess({
+    canEnter: (userId, kind) => company.canEnter(userId, kind.slice('company:'.length)),
+    capacity: (kind) => company.roomCapacity(kind.slice('company:'.length)),
+  });
+  registerCompanyRoutes(app, ctx, company);
+  registerSocialRoutes(app, ctx, gateway, (userId) => {
+    // Bản đồ toà nhà: thêm tầng công ty của mình (phòng riêng).
+    const mine = company.companyOf(userId);
+    if (!mine) return [];
+    const info = company.get(mine.id);
+    if (!info) return [];
+    return [
+      {
+        ...roomInfo(
+          {
+            id: `company:${mine.id}`,
+            kind: `company:${mine.id}`,
+            online: info.online,
+            capacity: company.roomCapacity(mine.id),
+          },
+          info.name,
+        ),
+        floor: info.floor,
+      },
+    ];
+  });
 
   if (ctx.config.devTools) {
     registerDevRoutes(app, ctx, engine, push);
@@ -237,7 +290,7 @@ export function attachGameService(
     });
   }
 
-  return { engine, shop, events, push, contextFor };
+  return { engine, shop, events, company, push, contextFor };
 }
 
 const devEventSchema = z.strictObject({

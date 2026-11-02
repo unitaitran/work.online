@@ -32,6 +32,7 @@ export function actionForEvent(event: ActivityEvent): Action | null {
     case 'checkin':
     case 'coffee-brew':
     case 'room-event':
+    case 'company-promotion':
       return null;
   }
 }

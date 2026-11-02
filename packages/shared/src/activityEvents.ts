@@ -24,6 +24,8 @@ export interface ActivityEventDetails {
   print: Record<string, never>;
   /** Tham gia một sự kiện phòng (sếp đi ngang, mất wifi...) thành công. */
   'room-event': { kind: string };
+  /** Chủ công ty xét thăng chức (giới hạn một lần mỗi ngày). */
+  'company-promotion': { role: number };
 }
 
 export type ActivityEventType = keyof ActivityEventDetails;
@@ -41,6 +43,7 @@ export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
   'meeting',
   'print',
   'room-event',
+  'company-promotion',
 ];
 
 export type ActivityEvent = {

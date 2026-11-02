@@ -5,6 +5,8 @@ export * from './balance';
 export * from './career';
 export * from './character';
 export * from './company';
+export * from './companyApi';
+export * from './companySim';
 export * from './filter';
 export * from './constants';
 export * from './levels';

@@ -156,6 +156,11 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
     case 'kpi-fortune':
       if (!event.detail.repeat && !ctx.fortuneClaimed) add('fortune', BALANCE.fortune);
       break;
+    case 'company-promotion':
+      if (ctx.countToday('companyPromotion') < limits.companyPromotion) {
+        add('event', BALANCE.companyPromotion);
+      }
+      break;
     case 'room-event':
       if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
       break;
@@ -286,7 +291,9 @@ export function applyEvent(
     if (part.category === 'coffeeGift') counts = bump(counts, 'coffeeGift');
     if (part.category === 'chore') counts = bump(counts, 'chore');
     if (part.category === 'fortune') fortuneClaimed = true;
-    if (part.category === 'event') counts = bump(counts, 'roomEvent');
+    if (part.category === 'event') {
+      counts = bump(counts, event.type === 'company-promotion' ? 'companyPromotion' : 'roomEvent');
+    }
     // Họp không có ưu đãi phòng ban nên XP / perMinute = số phút đã tính.
     if (part.category === 'meeting') {
       counts = bump(counts, 'meetingMinutes', Math.round(part.xp / BALANCE.meeting.perMinute));

@@ -470,7 +470,9 @@ describe('mở công ty', () => {
     expect(canOpenCompany(s).missing).toEqual(['level', 'employed']);
     const high = { ...s, xp: xpForLevel(BALANCE.company.unlockLevel) };
     expect(canOpenCompany(high).missing).toEqual(['employed']);
-    expect(canOpenCompany(leaveCompany(high))).toEqual({ ok: true, missing: [] });
+    expect(canOpenCompany(leaveCompany(high))).toMatchObject({ ok: true, missing: [] });
+    expect(canOpenCompany(leaveCompany(high), { totalEarned: 8000 }).missing).toEqual(['capital']);
+    expect(canOpenCompany(leaveCompany(high), { totalEarned: 8000 }).capital).toBe(2000);
     expect(buildingHasRoom(29)).toBe(true);
     expect(buildingHasRoom(30)).toBe(false);
   });

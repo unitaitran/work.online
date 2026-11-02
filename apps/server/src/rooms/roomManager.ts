@@ -96,6 +96,26 @@ export class RoomManager {
     }));
   }
 
+  /** Phòng còn chỗ của một loại (tạo mới nếu chưa có), không đưa ai vào. */
+  ensure(kind: string, capacity: number, layout: OfficeLayout = OFFICE_FLOOR): Room {
+    const found = [...this.rooms.values()].find((room) => room.kind === kind && room.hasRoom());
+    if (found) return found;
+    const n = (this.counters.get(kind) ?? 0) + 1;
+    this.counters.set(kind, n);
+    const room = new Room({
+      id: `${kind}-${String(n)}`,
+      kind,
+      capacity,
+      layout,
+      now: this.options.now,
+      onEmpty: (empty) => {
+        this.rooms.delete(empty.id);
+      },
+    });
+    this.rooms.set(room.id, room);
+    return room;
+  }
+
   all(): Room[] {
     return [...this.rooms.values()];
   }

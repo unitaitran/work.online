@@ -7,6 +7,7 @@ import {
   type ProgressState,
   type Profile,
 } from '@dilam/shared';
+import { createCompanyRepo, type CompanyRepo } from './companyRepo';
 import type { Db } from './database';
 
 export interface UserRecord {
@@ -28,6 +29,8 @@ export interface UserRepo {
   touch(id: string, now: number, tokenExpiresAt: number): void;
   setTimeZone(id: string, timeZone: string): void;
   setRecovery(id: string, recoveryHash: string): void;
+  setIpHash(id: string, ipHash: string): void;
+  ipHash(id: string): string | null;
   delete(id: string): void;
   count(): number;
 }
@@ -157,6 +160,9 @@ export interface Repositories {
   plants: PlantRepo;
   social: SocialRepo;
   wall: WallRepo;
+  companies: CompanyRepo;
+  /** Giá trị cấu hình lưu trong DB (khoá bí mật sinh một lần). */
+  setting(key: string, create: () => string): string;
   /** Chạy nhiều thao tác trong một transaction. */
   transaction<T>(fn: () => T): T;
 }
@@ -201,6 +207,10 @@ export function createSqliteRepositories(db: Db): Repositories {
     userTouch: db.prepare('UPDATE users SET last_seen_at = ?, token_expires_at = ? WHERE id = ?'),
     userSetTz: db.prepare('UPDATE users SET time_zone = ? WHERE id = ?'),
     userSetRecovery: db.prepare('UPDATE users SET recovery_hash = ? WHERE id = ?'),
+    userSetIp: db.prepare('UPDATE users SET ip_hash = ? WHERE id = ?'),
+    userIp: db.prepare('SELECT ip_hash FROM users WHERE id = ?'),
+    settingGet: db.prepare('SELECT value FROM server_settings WHERE key = ?'),
+    settingSet: db.prepare('INSERT OR IGNORE INTO server_settings (key, value) VALUES (?, ?)'),
     userDelete: db.prepare('DELETE FROM users WHERE id = ?'),
     userCount: db.prepare('SELECT COUNT(*) AS n FROM users'),
     charGet: db.prepare('SELECT name, appearance FROM characters WHERE user_id = ?'),
@@ -304,6 +314,10 @@ export function createSqliteRepositories(db: Db): Repositories {
     setRecovery(id, recoveryHash) {
       q.userSetRecovery.run(recoveryHash, id);
     },
+    setIpHash(id, ipHash) {
+      q.userSetIp.run(ipHash, id);
+    },
+    ipHash: (id) => (q.userIp.get(id) as { ip_hash: string | null } | undefined)?.ip_hash ?? null,
     delete(id) {
       q.userDelete.run(id);
     },
@@ -527,6 +541,13 @@ export function createSqliteRepositories(db: Db): Repositories {
     plants,
     social,
     wall,
+    companies: createCompanyRepo(db),
+    setting(key, create) {
+      const row = q.settingGet.get(key) as { value: string } | undefined;
+      if (row) return row.value;
+      q.settingSet.run(key, create());
+      return (q.settingGet.get(key) as { value: string }).value;
+    },
     transaction: (fn) => db.transaction(fn)(),
   };
 }

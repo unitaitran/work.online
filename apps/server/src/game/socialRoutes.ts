@@ -28,6 +28,12 @@ const BOARD_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const BOARD_OFFSET_MS = 7 * 3_600_000;
 const BOARD_SIZE = 20;
 
+/** Phòng hiện tại để bản đồ đánh dấu: phòng công ty dùng id theo loại "company:<id>". */
+function currentOf(room: { id: string; kind: string } | null): string | null {
+  if (!room) return null;
+  return room.kind.startsWith('company:') ? room.kind : room.id;
+}
+
 export function roomInfo(
   info: { id: string; kind: string; online: number; capacity: number },
   name: string,
@@ -48,6 +54,7 @@ export function registerSocialRoutes(
   app: FastifyInstance,
   ctx: AppContext,
   gateway: Gateway,
+  extraRooms: (userId: string) => RoomInfo[] = () => [],
 ): void {
   const { repos, helpers } = ctx;
 
@@ -202,8 +209,9 @@ export function registerSocialRoutes(
         .list()
         .filter((info) => info.kind === 'office')
         .map((info) => roomInfo(info, ''))
-        .sort((a, b) => a.floor - b.floor),
-      current: gateway.sessionOf(user.id)?.room.id ?? null,
+        .sort((a, b) => a.floor - b.floor)
+        .concat(extraRooms(user.id)),
+      current: currentOf(gateway.sessionOf(user.id)?.room ?? null),
     };
     return reply.send(response);
   });

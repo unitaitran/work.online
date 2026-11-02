@@ -3,6 +3,8 @@
 // packages/shared/rules.ts. Không bao giờ tin số liệu XP, thời lượng hay chuỗi từ client.
 import {
   applyEvent,
+  BALANCE,
+  rollDay,
   chooseBranch,
   chooseDepartment,
   COFFEE_BREW_MS,
@@ -281,6 +283,25 @@ export class ProgressEngine {
     live.lastAt.set(action.kind, now);
     if (!event) return { ok: true, state, outcome: null, today };
     return { ok: true, ...this.applyAndSave(userId, state, event, today, now, fortune), today };
+  }
+
+  /** Áp một sự kiện do server tạo (thăng chức trong công ty...) qua đúng luật XP. */
+  grant(userId: string, event: ActivityEvent): ActionOutcome {
+    const timeZone = this.repos.users.byId(userId)?.timeZone ?? 'Asia/Ho_Chi_Minh';
+    const now = this.now(userId);
+    const today = this.today(userId, timeZone);
+    return this.applyAndSave(userId, this.state(userId), event, today, now).outcome;
+  }
+
+  /** Giao một việc (chủ công ty giao): chỉ khi chưa có việc dở và chưa đủ số việc trong ngày. */
+  assignMission(userId: string, mission: Mission): boolean {
+    const timeZone = this.repos.users.byId(userId)?.timeZone ?? 'Asia/Ho_Chi_Minh';
+    const state = rollDay(this.state(userId), this.today(userId, timeZone));
+    const daily = state.daily;
+    if (daily.missions.some((m) => m.completedAt === null)) return false;
+    if (daily.missions.length >= BALANCE.missions.perDay) return false;
+    this.save(userId, { ...state, daily: { ...daily, missions: [...daily.missions, mission] } });
+    return true;
   }
 
   /** Thưởng tham gia sự kiện phòng (qua đúng luật XP, giới hạn ngày và sổ cái). */

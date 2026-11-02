@@ -121,4 +121,82 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX wall_posts_created ON wall_posts(created_at);
     `,
   },
+  {
+    version: 5,
+    sql: `
+      -- Băm IP (HMAC với khoá bí mật của server) chỉ để phát hiện tài khoản phụ tự vào công ty mình.
+      ALTER TABLE users ADD COLUMN ip_hash TEXT;
+      CREATE TABLE server_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE companies (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        name_key TEXT NOT NULL UNIQUE,
+        industry TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        icon TEXT NOT NULL,
+        building INTEGER NOT NULL,
+        floor INTEGER NOT NULL,
+        economy TEXT NOT NULL,
+        hiring INTEGER NOT NULL DEFAULT 1,
+        ipo_count INTEGER NOT NULL DEFAULT 0,
+        event_day TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE company_members (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        role INTEGER NOT NULL DEFAULT 0,
+        joined_at INTEGER NOT NULL,
+        suspicious INTEGER NOT NULL DEFAULT 0,
+        last_promo_day TEXT
+      );
+      CREATE INDEX company_members_company ON company_members(company_id);
+      CREATE TABLE company_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role INTEGER NOT NULL DEFAULT 0,
+        at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+      );
+      CREATE INDEX company_applications_company ON company_applications(company_id, status);
+      CREATE INDEX company_applications_user ON company_applications(user_id, at);
+      CREATE TABLE company_bans (
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (company_id, user_id)
+      );
+      CREATE TABLE company_invites (
+        code_hash TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        uses_left INTEGER NOT NULL
+      );
+      CREATE INDEX company_invites_company ON company_invites(company_id, created_at);
+      CREATE TABLE company_feed (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE INDEX company_feed_company ON company_feed(company_id, id);
+      CREATE TABLE user_badges (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        badge TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, badge)
+      );
+      CREATE TABLE job_offers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        company_name TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+      );
+      CREATE INDEX job_offers_user ON job_offers(user_id, at);
+    `,
+  },
 ];

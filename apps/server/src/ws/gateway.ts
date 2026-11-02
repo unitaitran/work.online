@@ -42,6 +42,11 @@ export interface Session {
 
 export type SessionListener = (session: Session) => void;
 
+export interface RoomAccess {
+  canEnter(userId: string, kind: string): boolean;
+  capacity(kind: string): number;
+}
+
 export interface Gateway extends Presence {
   rooms: RoomManager;
   /** Đăng ký xử lý thêm; trả true nếu đã xử lý tin. */
@@ -54,8 +59,10 @@ export interface Gateway extends Presence {
   onSession(listener: SessionListener): void;
   /** Gọi khi một phiên đóng. */
   onSessionEnd(listener: SessionListener): void;
-  /** Quyền vào phòng riêng (công ty, Phase 6). */
-  setAccessCheck(check: (userId: string, room: Room) => boolean): void;
+  /** Quyền vào phòng riêng (công ty, Phase 6): theo loại phòng "company:<id>". */
+  setAccess(access: RoomAccess): void;
+  /** Đưa một người đang ở phòng riêng về văn phòng chung. */
+  sendToOffice(userId: string): void;
 }
 
 /**
@@ -74,7 +81,7 @@ export function attachWebSocketGateway(
   const handlers: MessageHandler[] = [];
   const sessions = new Map<string, Session>();
   const joinListeners: SessionListener[] = [];
-  let canEnter: (userId: string, room: Room) => boolean = () => false;
+  let access: RoomAccess = { canEnter: () => false, capacity: () => 0 };
   const endListeners: SessionListener[] = [];
 
   const wss = new WebSocketServer({
@@ -216,13 +223,21 @@ export function attachWebSocketGateway(
         room.updateProfile(userId, publicProfile(ctx.repos, userId));
         return;
       case 'switch_room': {
-        const target = rooms.get(message.roomId);
-        // Phòng riêng (công ty) do module công ty kiểm tra quyền; ở đây chỉ phòng chung.
-        if (target && target.kind !== 'office' && !canEnter(userId, target)) {
+        // Phòng riêng (công ty): roomId là loại phòng "company:<id>"; module công ty kiểm tra quyền.
+        let roomId = message.roomId;
+        if (roomId.startsWith('company:')) {
+          if (!access.canEnter(userId, roomId)) {
+            session.send({ type: 'switch_failed', reason: 'forbidden' });
+            return;
+          }
+          roomId = rooms.ensure(roomId, access.capacity(roomId)).id;
+        } else if (roomId === 'office') {
+          roomId = rooms.ensure('office', ctx.config.roomCapacity).id;
+        } else if (rooms.get(roomId)?.kind !== 'office') {
           session.send({ type: 'switch_failed', reason: 'forbidden' });
           return;
         }
-        const moved = rooms.move(userId, message.roomId, publicProfile(ctx.repos, userId));
+        const moved = rooms.move(userId, roomId, publicProfile(ctx.repos, userId));
         if (!moved.ok) {
           session.send({ type: 'switch_failed', reason: moved.reason });
           return;
@@ -259,8 +274,18 @@ export function attachWebSocketGateway(
     onSessionEnd(listener) {
       endListeners.push(listener);
     },
-    setAccessCheck(check) {
-      canEnter = check;
+    setAccess(next) {
+      access = next;
+    },
+    sendToOffice(userId) {
+      const session = sessions.get(userId);
+      if (!session || session.room.kind === 'office') return;
+      const office = rooms.ensure('office', ctx.config.roomCapacity);
+      const moved = rooms.move(userId, office.id, publicProfile(ctx.repos, userId));
+      if (moved.ok) {
+        session.room = moved.room;
+        for (const listener of joinListeners) listener(session);
+      }
     },
   };
 }
