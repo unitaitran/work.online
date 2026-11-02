@@ -22,6 +22,8 @@ export interface ReviewFlowDeps {
   /** Mở hộp thoại (khoá điều khiển cảnh trong lúc mở). */
   openPanel(title: string, onClose?: () => void): Modal;
   play(sound: SoundName): void;
+  /** Khoá/mở điều khiển cảnh 3D (màn chúc mừng không đi qua openPanel). */
+  lockInput(locked: boolean): void;
   progress: {
     readonly state: { title: number; branch: Branch | null };
     reviewStatus(): { due: boolean; eligible: boolean; nextTitle: number | null };
@@ -67,7 +69,7 @@ function runInterview(deps: ReviewFlowDeps): void {
     }
     modal.body.replaceChildren(
       el('p', { className: 'review-period', text: s.interview.step(index + 1, questions.length) }),
-      el('p', { className: 'activity-intro', text: index === 0 ? s.interview.intro : '' }),
+      ...(index === 0 ? [el('p', { className: 'activity-intro', text: s.interview.intro })] : []),
       el('p', { className: 'interview-prompt', text: question.prompt }),
       el('div', {
         className: 'interview-options',
@@ -107,7 +109,7 @@ function afterInterview(
 
 /** Màn chúc mừng: pháo giấy bằng CSS (không ảnh), nhạc chiến thắng sinh bằng Web Audio. */
 export function showCelebration(
-  deps: Pick<ReviewFlowDeps, 'root' | 'play'>,
+  deps: Pick<ReviewFlowDeps, 'root' | 'play' | 'lockInput'>,
   title: string,
   onClose: () => void,
 ): void {
@@ -145,11 +147,23 @@ export function showCelebration(
       }),
     ],
   });
+  // Khoá điều khiển cảnh trong lúc chúc mừng (không đi lại hay tương tác phía sau).
+  deps.lockInput(true);
+  const onKey = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  };
   const close = (): void => {
+    window.removeEventListener('keydown', onKey, true);
     overlay.remove();
+    deps.lockInput(false);
     onClose();
   };
   button.addEventListener('click', close);
+  window.addEventListener('keydown', onKey, true);
   deps.root.append(overlay);
   button.focus();
 }
@@ -157,8 +171,9 @@ export function showCelebration(
 /** Sau khi lên chức: chọn phòng ban (chức danh 3) hoặc nhánh (chức danh 5) nếu cần. */
 export function askChoices(deps: ReviewFlowDeps): void {
   if (deps.progress.needsDepartment()) {
+    // Đóng mà chưa chọn thì thôi (lần vào văn phòng sau sẽ hỏi lại), chọn xong mới hỏi tiếp.
     const modal = deps.openPanel(s.department.title, () => {
-      askChoices(deps);
+      if (!deps.progress.needsDepartment()) askChoices(deps);
     });
     modal.body.append(
       el('p', { className: 'activity-intro', text: s.department.intro }),
@@ -186,7 +201,7 @@ export function askChoices(deps: ReviewFlowDeps): void {
   }
   if (deps.progress.needsBranch()) {
     const modal = deps.openPanel(s.branch.title, () => {
-      askChoices(deps);
+      if (!deps.progress.needsBranch()) askChoices(deps);
     });
     modal.body.append(
       el('p', { className: 'activity-intro', text: s.branch.intro }),

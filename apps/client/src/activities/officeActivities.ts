@@ -109,13 +109,16 @@ export class OfficeActivities {
     }
   }
 
+  /** Rời ghế họp: phát sự kiện họp kèm thời gian đã ngồi. */
+  private endMeeting(): void {
+    if (!this.meeting) return;
+    const { seatId, since } = this.meeting;
+    this.meeting = null;
+    this.o.bus.emit(makeEvent('meeting', since, clock.now() - since, { seatId }));
+  }
+
   onSeatChange(item: Interactable | null): void {
-    // Rời ghế họp: phát sự kiện họp kèm thời gian đã ngồi.
-    if (this.meeting && item?.id !== this.meeting.seatId) {
-      const { seatId, since } = this.meeting;
-      this.meeting = null;
-      this.o.bus.emit(makeEvent('meeting', since, clock.now() - since, { seatId }));
-    }
+    if (this.meeting && item?.id !== this.meeting.seatId) this.endMeeting();
     if (item?.kind === 'meeting' && !this.meeting)
       this.meeting = { seatId: item.id, since: clock.now() };
     this.seatedAtDesk = item?.kind === 'desk';
@@ -183,6 +186,8 @@ export class OfficeActivities {
   }
 
   dispose(): void {
+    // Rời văn phòng (sửa thẻ...) khi đang ngồi họp: vẫn ghi nhận thời gian đã họp.
+    this.endMeeting();
     window.clearTimeout(this.coffeeTimer);
     this.focus?.stop();
     this.modal?.close();

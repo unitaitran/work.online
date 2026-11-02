@@ -122,10 +122,12 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       const { plannedMs, completed, lines } = event.detail;
       const minutes = Math.round(plannedMs / 60_000);
       const actualMs = Math.min(event.durationMs, plannedMs);
+      // Độ dài phiên lạ (không có trong bảng) thì tính theo phút trọn như dừng sớm.
+      const partialXp = Math.floor(actualMs / 60_000) * BALANCE.focus.partialPerMinute;
       const sessionXp =
         completed && actualMs >= plannedMs
-          ? (BALANCE.focus.completed[minutes] ?? 0)
-          : Math.floor(actualMs / 60_000) * BALANCE.focus.partialPerMinute;
+          ? (BALANCE.focus.completed[minutes] ?? partialXp)
+          : partialXp;
       add('focus', sessionXp);
       // Dòng kinh công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
       linesCarry += Math.max(0, Math.floor(lines));

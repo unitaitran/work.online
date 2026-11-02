@@ -299,6 +299,9 @@ function start(): void {
     const reviewDeps: ReviewFlowDeps = {
       root: hudRoot,
       openPanel: (title, onClose) => officeActivities.openPanel(title, onClose),
+      lockInput: (locked) => {
+        scene.setInputLocked(locked);
+      },
       play: (sound) => {
         audio.play(sound);
       },

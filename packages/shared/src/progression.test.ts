@@ -137,6 +137,8 @@ describe('xpFor', () => {
     expect(xpFor(focus(3, true), ctx()).xp).toBe(35);
     expect(xpFor(focus(5, true), ctx()).xp).toBe(70);
     expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(10);
+    // Độ dài phiên không có trong bảng: tính theo phút trọn.
+    expect(xpFor(focus(2, true), ctx()).xp).toBe(10);
     // Báo "xong" nhưng thời gian không đủ: không tin, tính như dừng sớm.
     expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(5);
   });

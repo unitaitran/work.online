@@ -10,6 +10,7 @@ import {
   titleName,
   TITLE_COUNT,
   UNLOCKS,
+  type Branch,
   type ProgressState,
   type ReviewCheck,
   type ReviewStatus,
@@ -23,6 +24,7 @@ const TABS: readonly ProfileTab[] = ['card', 'review', 'log', 'roadmap', 'save']
 export interface ProfileSource {
   readonly state: ProgressState;
   reviewStatus(): ReviewStatus;
+  todayEarned(): number;
   exportCode(): string;
   importCode(
     code: string,
@@ -84,7 +86,7 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
           row(s.card.title, titleName(state.title, state.branch)),
           row(s.card.level, String(p.level)),
           row(s.card.xp, String(state.xp)),
-          row(s.card.today, s.card.todayValue(state.daily.earned, BALANCE.dailySoftCap)),
+          row(s.card.today, s.card.todayValue(o.progress.todayEarned(), BALANCE.dailySoftCap)),
           row(
             s.card.department,
             state.department ? DEPARTMENT_NAMES[state.department] : s.card.noDepartment,
@@ -216,6 +218,12 @@ function renderLog(state: ProgressState): HTMLElement {
   });
 }
 
+/** Chưa chọn nhánh thì chức danh 6–10 hiện cả hai tên (Quản lý / Chuyên môn). */
+function roadmapTitle(title: number, branch: Branch | null): string {
+  if (branch !== null || title <= BALANCE.branchFromTitle) return titleName(title, branch);
+  return `${titleName(title, 'manager')} / ${titleName(title, 'specialist')}`;
+}
+
 function renderRoadmap(state: ProgressState): HTMLElement {
   const level = levelFor(state.xp);
   const company = canOpenCompany(state);
@@ -225,7 +233,7 @@ function renderRoadmap(state: ProgressState): HTMLElement {
       const title = i + 1;
       const item = el('li', {
         className: title === state.title ? 'is-current' : title < state.title ? 'is-done' : '',
-        text: `${titleName(title, state.branch)} — ${s.roadmap.minLevel(titleMinLevel(title))}${title === state.title ? ` (${s.roadmap.current})` : ''}`,
+        text: `${roadmapTitle(title, state.branch)} — ${s.roadmap.minLevel(titleMinLevel(title))}${title === state.title ? ` (${s.roadmap.current})` : ''}`,
       });
       return item;
     }),

@@ -70,6 +70,11 @@ export class ProgressService {
     return this.current;
   }
 
+  /** XP đã nhận hôm nay (rổ ngày cũ chưa được mở lại thì là 0). */
+  todayEarned(): number {
+    return this.current.daily.day === this.time.today() ? this.current.daily.earned : 0;
+  }
+
   get level(): number {
     return levelFor(this.current.xp);
   }
