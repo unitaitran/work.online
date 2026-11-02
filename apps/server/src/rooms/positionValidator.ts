@@ -37,18 +37,16 @@ export class PositionValidator {
     );
   }
 
-  check(prev: Vec2, prevAt: number, next: Vec2, pose: Pose, now: number): PositionCheck {
+  check(prev: Vec2, prevAt: number, next: Vec2, _pose: Pose, now: number): PositionCheck {
     const dt = Math.min(Math.max((now - prevAt) / 1000, 0), 1);
     const dx = next.x - prev.x;
     const dz = next.z - prev.z;
     const distance = Math.hypot(dx, dz);
     if (distance < 1e-4) return { ok: true };
 
-    // Ngồi xuống / đứng lên ở một chỗ có sẵn: cho "nhảy" ngắn vào đúng điểm đó.
+    // Ngồi xuống / đứng lên ở một chỗ có sẵn: cho "nhảy" ngắn (không quá SEAT_JUMP) vào đúng
+    // điểm đó. Tư thế không mở thêm quyền dịch chuyển xa.
     if (distance <= SEAT_JUMP && this.nearAnchor(next)) return { ok: true };
-    if (pose === 'sit' || pose === 'type') {
-      if (this.nearAnchor(next)) return { ok: true };
-    }
 
     const maxDistance = MAX_WALK_SPEED * dt * SPEED_SLACK + DISTANCE_SLACK;
     if (distance > maxDistance) return { ok: false, x: prev.x, z: prev.z };

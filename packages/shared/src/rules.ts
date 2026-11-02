@@ -10,7 +10,13 @@ import {
   startMission,
   type Mission,
 } from './missions';
-import { emptyDaily, type CheckInState, type LogEntry, type ProgressState } from './progress';
+import {
+  EMPTY_DAILY_STATS,
+  emptyDaily,
+  type CheckInState,
+  type LogEntry,
+  type ProgressState,
+} from './progress';
 import { daysBetween } from './time';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +66,7 @@ export type XpCategory =
   | 'chore'
   | 'fortune'
   | 'meeting'
+  | 'event'
   | 'mission';
 
 /** Phòng ban nào được ưu đãi loại hoạt động nào (x departmentBuff). */
@@ -148,6 +155,9 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       break;
     case 'kpi-fortune':
       if (!event.detail.repeat && !ctx.fortuneClaimed) add('fortune', BALANCE.fortune);
+      break;
+    case 'room-event':
+      if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
       break;
     case 'meeting': {
       const used = ctx.countToday('meetingMinutes');
@@ -276,6 +286,7 @@ export function applyEvent(
     if (part.category === 'coffeeGift') counts = bump(counts, 'coffeeGift');
     if (part.category === 'chore') counts = bump(counts, 'chore');
     if (part.category === 'fortune') fortuneClaimed = true;
+    if (part.category === 'event') counts = bump(counts, 'roomEvent');
     // Họp không có ưu đãi phòng ban nên XP / perMinute = số phút đã tính.
     if (part.category === 'meeting') {
       counts = bump(counts, 'meetingMinutes', Math.round(part.xp / BALANCE.meeting.perMinute));
@@ -314,6 +325,13 @@ export function applyEvent(
   const coins =
     Math.floor(granted * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
 
+  // Số liệu trong ngày cho thẻ khoe thành tích.
+  const stats = { ...(state.daily.stats ?? EMPTY_DAILY_STATS) };
+  if (event.type === 'focus-typing') stats.keys += event.detail.scoredKeys;
+  if (event.type === 'coffee-gift' || event.type === 'coffee-drink') stats.coffees += 1;
+  if (event.type === 'meeting' && event.durationMs >= 60_000) stats.meetings += 1;
+  if (event.type === 'room-event' && event.detail.kind === 'boss_walk') stats.dodged += 1;
+
   state = {
     ...state,
     xp: state.xp + granted,
@@ -327,6 +345,7 @@ export function applyEvent(
       fortuneClaimed,
       missions,
       nextMissionAt,
+      stats,
     },
     log: log.slice(-BALANCE.log.maxEntries),
   };

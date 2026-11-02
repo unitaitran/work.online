@@ -22,6 +22,8 @@ export interface ActivityEventDetails {
   meeting: { seatId: string };
   /** In tài liệu ở máy in. */
   print: Record<string, never>;
+  /** Tham gia một sự kiện phòng (sếp đi ngang, mất wifi...) thành công. */
+  'room-event': { kind: string };
 }
 
 export type ActivityEventType = keyof ActivityEventDetails;
@@ -38,6 +40,7 @@ export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
   'chore',
   'meeting',
   'print',
+  'room-event',
 ];
 
 export type ActivityEvent = {

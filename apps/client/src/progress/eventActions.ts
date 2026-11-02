@@ -31,6 +31,7 @@ export function actionForEvent(event: ActivityEvent): Action | null {
       return { kind: 'vent', length: event.detail.length, anonymous: event.detail.anonymous };
     case 'checkin':
     case 'coffee-brew':
+    case 'room-event':
       return null;
   }
 }

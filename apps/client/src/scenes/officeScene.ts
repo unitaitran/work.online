@@ -40,6 +40,9 @@ import { STRINGS } from '../strings';
 import { BubbleLayer } from '../ui/bubbles';
 import { RemotePlayers } from './remotePlayers';
 import { RoomPlants } from './roomPlants';
+import { buildLanterns } from './lanterns';
+import type { BufferGeometry, Group } from 'three';
+import type { DayMood } from '@dilam/shared';
 import { Companions } from '../avatar/companions';
 import { gearFromEquipped } from '../avatar/gear';
 import type { PoseName } from '../avatar/pose';
@@ -247,6 +250,38 @@ export class OfficeScene implements SceneController {
     this.lighting.applyPeriod(lighting);
     this.scene.background = new Color(lighting.background);
     this.scene.fog?.color.setHex(lighting.background);
+  }
+
+  private moodGroup: Group | null = null;
+
+  /**
+   * Không khí trong ngày (lịch): Tết treo đèn lồng đỏ, ngày lương ánh vàng ấm,
+   * thứ Hai hơi trầm, thứ Sáu sáng sủa.
+   */
+  setMood(mood: DayMood): void {
+    const tint: Record<DayMood, number> = {
+      tet: 1.08,
+      payday: 1.1,
+      monday: 0.88,
+      friday: 1.06,
+      weekend: 1,
+      normal: 1,
+    };
+    this.lighting.hemi.intensity *= tint[mood];
+    if (mood === 'payday') this.lighting.hemi.color.offsetHSL(0.02, 0.1, 0);
+    if (this.moodGroup) {
+      this.moodGroup.removeFromParent();
+      // Chỉ giải phóng hình học; vật liệu dùng chung với cả văn phòng.
+      this.moodGroup.traverse((object) => {
+        if (object instanceof Mesh) (object.geometry as BufferGeometry).dispose();
+      });
+      this.moodGroup = null;
+    }
+    if (mood === 'tet') {
+      const group = buildLanterns(this.options.layout, this.material);
+      this.scene.add(group);
+      this.moodGroup = group;
+    }
   }
 
   /** Nút "Chạm để dùng" / "Đứng dậy" hoặc phím E. */

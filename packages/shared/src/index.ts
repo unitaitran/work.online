@@ -15,6 +15,7 @@ export * from './rng';
 export * from './rules';
 export * from './saveCode';
 export * from './shop';
+export * from './social';
 export * from './time';
 export * from './world/collision';
 export * from './world/officeLayout';

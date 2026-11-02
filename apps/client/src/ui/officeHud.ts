@@ -21,6 +21,7 @@ export interface OfficeHudOptions {
   onOpenProfile(): void;
   onOpenSocial(): void;
   onOpenShop(): void;
+  onOpenMore(): void;
   onWipe(): void;
 }
 
@@ -229,6 +230,14 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   shopButton.addEventListener('click', () => {
     options.onOpenShop();
   });
+  const moreButton = el('button', {
+    className: 'button button-soft more-button',
+    text: STRINGS.hub.open,
+    attrs: { type: 'button' },
+  });
+  moreButton.addEventListener('click', () => {
+    options.onOpenMore();
+  });
   const wipeButton = el('button', {
     className: 'button button-soft wipe-button',
     text: STRINGS.chores.wipeButton,
@@ -279,6 +288,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       netStatus,
       socialButton,
       shopButton,
+      moreButton,
       wipeButton,
       coffeeChip,
       focusButton,

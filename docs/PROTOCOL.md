@@ -95,6 +95,34 @@ Client gửi `{ type: "action", id, action }`. `id` là khoá chống gửi trù
 
 Lý do từ chối: `too_fast` (cùng loại quá dày), `too_far`, `not_started` (sai thứ tự), `duplicate`, `not_allowed`, `invalid`. Mỗi hành động được tính ghi vào `activity_log` (loại, XP, xu).
 
+### Sự kiện phòng, chuyển phòng (Phase 5B)
+
+| Hướng | type                                            | Trường                                                                                             |
+| ----- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| C → S | `event_respond`                                 | `id`: tham gia sự kiện (giả vờ bận, gõ router, đổ hạt)                                             |
+| C → S | `switch_room`                                   | `roomId`: chuyển sang phòng/tầng khác                                                              |
+| S → C | `room_event`                                    | `event: { id, kind, endsAt, goal?, progress? }` (gửi cả khi vừa vào phòng mà sự kiện đang diễn ra) |
+| S → C | `room_event_progress`                           | `id, progress` (mất wifi)                                                                          |
+| S → C | `room_event_end`                                | `id, kind, success, rewarded`                                                                      |
+| S → C | `switch_failed`                                 | `reason: full / not_found / forbidden`                                                             |
+| S → C | `room_plants` / `plant_added` / `plant_removed` | hoa đã tưới trong phòng (Phase 5A)                                                                 |
+
+## REST bổ sung (Phase 5)
+
+| Phương thức | Đường dẫn                                                                                     | Ghi chú                                                                                      |
+| ----------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| GET         | `/api/shop/inventory`                                                                         | `{ coins, owned, equipped }`                                                                 |
+| POST        | `/api/shop/buy`                                                                               | `{ itemId }` → `422 rejected` với `reason: not_enough_coins / owned / locked / unknown_item` |
+| POST        | `/api/shop/equip`                                                                             | `{ itemId, equip }`; cả phòng nhận `player_update`                                           |
+| GET         | `/api/shop/ledger`                                                                            | 50 dòng sổ cái gần nhất                                                                      |
+| GET         | `/api/leaderboard?period=week\|month&department=all\|dev\|...`                                | `{ rows, mine, since, hidden }`                                                              |
+| PUT         | `/api/me/privacy`                                                                             | `{ hideFromLeaderboard }`                                                                    |
+| GET         | `/api/wall`                                                                                   | 50 bài gần nhất đang hiện (không có người đăng)                                              |
+| POST        | `/api/wall`                                                                                   | `{ text }` → `201`; `422 rejected` (lý do lọc), `409 one_per_day`                            |
+| POST        | `/api/wall/:id/report`                                                                        | `409 already_reported`, `403` nếu bài của mình                                               |
+| GET         | `/api/building`                                                                               | các phòng chung (tầng, số người) và phòng hiện tại                                           |
+| GET         | `/admin`, `/api/admin/wall`, `DELETE /api/admin/wall/:id`, `POST /api/admin/wall/:id/restore` | chỉ khi có `ADMIN_KEY`, header `x-admin-key`                                                 |
+
 ### Phát triển
 
-Server chạy với cờ `--dev` (`npm run dev`) có thêm `POST /api/dev/shift-day { days }` (tua ngày riêng cho tài khoản) và `POST /api/dev/grant { xp?, coins? }`. Bản chạy thật không có các API này.
+Server chạy với cờ `--dev` (`npm run dev`) có thêm `POST /api/dev/shift-day { days }` (tua ngày riêng cho tài khoản) và `POST /api/dev/grant { xp?, coins? }`. Thêm `POST /api/dev/room-event { kind }` để gọi ngay một sự kiện phòng. Bản chạy thật không có các API này.

@@ -19,6 +19,8 @@ import { publicProfile } from '../rooms/profile';
 import type { Gateway, Session } from '../ws/gateway';
 import { ProgressEngine, type PlayerContext } from './progressEngine';
 import { ShopService } from './shop';
+import { RoomEventDirector } from './roomEvents';
+import { registerSocialRoutes } from './socialRoutes';
 import type { RoomPlant } from '../db/repositories';
 import { sendError } from '../http/routes';
 
@@ -30,6 +32,7 @@ const ACTION_KEEP_MS = 2 * 86_400_000;
 export interface GameService {
   engine: ProgressEngine;
   shop: ShopService;
+  events: RoomEventDirector;
   /** Đẩy trạng thái tiến độ mới nhất cho người chơi (sau khi công cụ khác sửa). */
   push(userId: string): void;
   contextFor(userId: string): PlayerContext;
@@ -88,8 +91,25 @@ export function attachGameService(
       playerCode: playerCodeOf(userId),
       timeZone: user?.timeZone ?? 'Asia/Ho_Chi_Minh',
       position: () => gateway.sessionOf(userId)?.room.positionOf(userId) ?? null,
+      coffeeOut: () => {
+        const room = gateway.sessionOf(userId)?.room;
+        return room ? events.coffeeOut(room.id) : false;
+      },
     };
   };
+
+  // Sự kiện ngẫu nhiên theo phòng: thưởng qua đúng luật XP (có giới hạn mỗi ngày).
+  const events = new RoomEventDirector({
+    now: ctx.now,
+    reward: (userId, _kind) => {
+      engine.grantRoomEvent(contextFor(userId), _kind);
+      push(userId);
+    },
+  });
+  const eventTimer = setInterval(() => {
+    events.tick(gateway.rooms.all());
+  }, 1000);
+  eventTimer.unref();
 
   const push = (userId: string): void => {
     const session = gateway.sessionOf(userId);
@@ -104,6 +124,8 @@ export function attachGameService(
 
   gateway.onSession((session: Session) => {
     push(session.userId);
+    const current = events.current(session.room.id);
+    if (current) session.send({ type: 'room_event', event: current });
     session.send({
       type: 'room_plants',
       plants: ctx.repos.plants.list(session.room.kind).map(toView),
@@ -111,6 +133,12 @@ export function attachGameService(
   });
   gateway.onSessionEnd((session: Session) => {
     engine.forget(session.userId);
+  });
+
+  gateway.addHandler((session, message) => {
+    if (message.type !== 'event_respond') return false;
+    events.respond(session.room, session.userId, message.id);
+    return true;
   });
 
   gateway.addHandler((session, message) => {
@@ -156,6 +184,7 @@ export function attachGameService(
   pruneTimer.unref();
   app.addHook('onClose', (_instance, done) => {
     clearInterval(missionTimer);
+    clearInterval(eventTimer);
     clearInterval(pruneTimer);
     done();
   });
@@ -193,11 +222,27 @@ export function attachGameService(
     return reply.send({ entries: ctx.repos.ledger.recent(user.id, 50) });
   });
 
-  if (ctx.config.devTools) registerDevRoutes(app, ctx, engine, push);
+  registerSocialRoutes(app, ctx, gateway);
 
-  return { engine, shop, push, contextFor };
+  if (ctx.config.devTools) {
+    registerDevRoutes(app, ctx, engine, push);
+    app.post('/api/dev/room-event', (request, reply) => {
+      const user = ctx.helpers.requireUser(request, reply);
+      if (!user) return reply;
+      const body = ctx.helpers.parse(devEventSchema, request.body, reply);
+      if (!body) return reply;
+      const room = gateway.sessionOf(user.id)?.room;
+      if (!room) return sendError(reply, 404, 'not_found');
+      return reply.send({ event: events.start(room, body.kind) });
+    });
+  }
+
+  return { engine, shop, events, push, contextFor };
 }
 
+const devEventSchema = z.strictObject({
+  kind: z.enum(['boss_walk', 'wifi_down', 'coffee_out', 'surprise_meeting']),
+});
 const devShiftSchema = z.strictObject({ days: z.number().int().min(-30).max(400) });
 const devGrantSchema = z.strictObject({
   xp: z.number().int().min(0).max(1_000_000).optional(),

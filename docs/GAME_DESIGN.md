@@ -69,6 +69,15 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - Thú cưng văn phòng.
 - Sự kiện sếp đi ngang.
 
+## Sự kiện và xã hội
+
+- Sự kiện phòng mỗi 5-10 phút: sếp đi ngang, mất wifi, hết cà phê, họp đột xuất. Không phạt, chỉ thưởng nhỏ.
+- Xếp hạng tuần/tháng theo XP, theo phòng ban hoặc tổng; có thể ẩn mình.
+- Tường than thở chung: ẩn danh, mỗi ngày một dòng, có lọc và báo cáo.
+- Bản đồ toà nhà: chuyển tầng một chạm.
+- Thẻ khoe thành tích (ảnh 1080×1350) không kèm thông tin định danh.
+- Lịch: thứ Hai uể oải, thứ Sáu hưng phấn, ngày lương (5 và 20), Tết.
+
 ## Phòng ban
 
 Mỗi phòng ban có buff riêng: **Dev**, **Sales**, **Marketing**, **Kế toán**, **HR**.

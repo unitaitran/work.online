@@ -283,3 +283,16 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Công quả là mini-game 5-10 giây**: tưới cây (giữ nút, thả trong vạch xanh), lau bàn (chà qua lại, nút khi đang ngồi ở bàn), dọn pantry (bấm 5 cốc, ở tủ lạnh), gỡ kẹt máy in (35% lần dùng máy in bị kẹt, bấm nhanh 12 lần). Server không chấm mini-game, chỉ kiểm tra đứng gần đúng chỗ, giới hạn 6 lần/ngày và cùng một chỗ cách nhau 5 phút.
 - **Tưới cây xong mọc một khóm hoa** cạnh chậu, lưu ở server theo loại phòng (mọi phòng văn phòng dùng chung), tối đa 30, cây cũ nhất tự mất.
 - **Nhiệm vụ ngày** chính là "việc sếp giao" (3 việc ngẫu nhiên mỗi ngày), làm mới lúc 4 giờ sáng giờ địa phương.
+
+## Phase 5B: sự kiện, xếp hạng, tường chung, thẻ khoe
+
+- **Sự kiện phòng mỗi 5-10 phút**, chỉ ở phòng văn phòng chung có người online, không phạt ai. Thưởng đi qua đúng `applyEvent` (loại `room-event`, 8 XP, tối đa 8 lần/ngày, có xu và sổ cái).
+  - _Sếp đi ngang_: hiện 3 giây, server nhận thêm 0,8 giây bù trễ mạng.
+  - _Mất wifi_: cần 4 lần gõ mỗi người online (5-40), mỗi người gõ tối đa 12 lần để cả phòng cùng làm; đủ thì **cả phòng** được thưởng.
+  - _Hết cà phê_: máy pha tạm nghỉ (server từ chối pha), người đầu tiên đứng ở máy pha bấm "Đổ hạt" được thưởng.
+  - _Họp đột xuất_: lúc hết giờ, ai đang ở trong phòng họp được thưởng (không cần bấm).
+- **Xếp hạng** theo XP kiếm được trong tuần (từ thứ Hai) / tháng (từ ngày 1), giờ Việt Nam, top 20 + hạng của mình. Chỉ trả tên, chức danh, XP (không id). Ẩn mình bằng cờ `leaderboard_hidden`.
+- **Tường than thở chung** thay tường cục bộ: 140 ký tự, một bài mỗi ngày (ngày trong game), lọc từ tục, số điện thoại, đường dẫn, email, thương hiệu. Không trả về người đăng. 3 báo cáo (mỗi người một lần, không tự báo cáo bài mình) thì tự ẩn. Trang `/admin` chỉ tồn tại khi đặt `ADMIN_KEY` (≥ 24 ký tự), so khoá bằng `timingSafeEqual`, nội dung gán bằng `textContent`.
+- **Bản đồ toà nhà**: mỗi phòng văn phòng chung là một tầng (`office-1` = Tầng 7...). Chuyển tầng qua WebSocket (`switch_room`), giữ kết nối, không cần tải lại.
+- **Thẻ khoe** 1080×1350 vẽ bằng canvas: ảnh nhân vật chụp từ renderer nhỏ riêng, chức danh, số liệu hôm nay (phím gõ được tính, ly cà phê, cuộc họp ≥ 1 phút, lần né sếp), chuỗi chấm công. **Không có tên hay mã nhân viên.** Số liệu ngày lưu trong `daily.stats` (tùy chọn, dữ liệu cũ coi như 0, không cần đổi phiên bản).
+- **Lịch theo ngày** (theo ngày trong game của server): Tết (2 ngày trước tới mùng 3, bảng ngày Tết 2025-2030), ngày lương (ngày 5 và 20), thứ Hai, thứ Sáu, cuối tuần. Đổi nhịp và cao độ nhạc, độ sáng, đèn lồng ngày Tết, lời chào và câu NPC.

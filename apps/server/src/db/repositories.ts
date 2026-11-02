@@ -108,6 +108,44 @@ export interface PlantRepo {
   trim(roomKind: string, max: number): number[];
 }
 
+export interface LeaderboardEntry {
+  userId: string;
+  name: string;
+  xp: number;
+  totalXp: number;
+  branch: string | null;
+}
+
+export interface SocialRepo {
+  setLeaderboardHidden(userId: string, hidden: boolean): void;
+  isLeaderboardHidden(userId: string): boolean;
+  /** XP kiếm được từ `since` (ms), không tính người đã ẩn, lọc theo phòng ban nếu có. */
+  leaderboard(since: number, department: string | null): LeaderboardEntry[];
+}
+
+export interface WallRow {
+  id: number;
+  userId: string;
+  day: string;
+  text: string;
+  createdAt: number;
+  reports: number;
+  hidden: boolean;
+}
+
+export interface WallRepo {
+  /** false nếu hôm nay người này đã đăng. */
+  add(userId: string, day: string, text: string, at: number): boolean;
+  visible(limit: number): WallRow[];
+  reported(limit: number): WallRow[];
+  get(id: number): WallRow | null;
+  reportedBy(userId: string, ids: readonly number[]): Set<number>;
+  /** Ghi báo cáo; trả số báo cáo mới, hoặc null nếu đã báo cáo rồi. */
+  report(postId: number, reporterId: string, at: number): number | null;
+  setHidden(id: number, hidden: boolean): void;
+  delete(id: number): void;
+}
+
 export interface Repositories {
   users: UserRepo;
   characters: CharacterRepo;
@@ -117,6 +155,8 @@ export interface Repositories {
   ledger: LedgerRepo;
   inventory: InventoryRepo;
   plants: PlantRepo;
+  social: SocialRepo;
+  wall: WallRepo;
   /** Chạy nhiều thao tác trong một transaction. */
   transaction<T>(fn: () => T): T;
 }
@@ -211,6 +251,35 @@ export function createSqliteRepositories(db: Db): Repositories {
       'SELECT id FROM room_plants WHERE room_kind = ? ORDER BY id DESC LIMIT -1 OFFSET ?',
     ),
     plantDelete: db.prepare('DELETE FROM room_plants WHERE id = ?'),
+    setHidden: db.prepare('UPDATE users SET leaderboard_hidden = ? WHERE id = ?'),
+    getHidden: db.prepare('SELECT leaderboard_hidden AS h FROM users WHERE id = ?'),
+    board: db.prepare(
+      `SELECT a.user_id AS userId, COALESCE(c.name, '') AS name, SUM(a.xp) AS xp,
+              p.xp AS totalXp, p.branch AS branch
+       FROM activity_log a
+       JOIN users u ON u.id = a.user_id
+       JOIN progress p ON p.user_id = a.user_id
+       LEFT JOIN characters c ON c.user_id = a.user_id
+       WHERE a.at >= @since AND a.xp > 0 AND u.leaderboard_hidden = 0
+         AND (@department IS NULL OR p.department = @department)
+       GROUP BY a.user_id
+       ORDER BY xp DESC, a.user_id
+       LIMIT 500`,
+    ),
+    wallAdd: db.prepare(
+      'INSERT OR IGNORE INTO wall_posts (user_id, day, text, created_at) VALUES (?, ?, ?, ?)',
+    ),
+    wallVisible: db.prepare('SELECT * FROM wall_posts WHERE hidden = 0 ORDER BY id DESC LIMIT ?'),
+    wallReported: db.prepare(
+      'SELECT * FROM wall_posts WHERE reports > 0 ORDER BY hidden DESC, reports DESC, id DESC LIMIT ?',
+    ),
+    wallGet: db.prepare('SELECT * FROM wall_posts WHERE id = ?'),
+    wallReport: db.prepare(
+      'INSERT OR IGNORE INTO wall_reports (post_id, reporter_id, at) VALUES (?, ?, ?)',
+    ),
+    wallBump: db.prepare('UPDATE wall_posts SET reports = reports + 1 WHERE id = ?'),
+    wallSetHidden: db.prepare('UPDATE wall_posts SET hidden = ? WHERE id = ?'),
+    wallDelete: db.prepare('DELETE FROM wall_posts WHERE id = ?'),
     logRecent: db.prepare(
       'SELECT user_id, at, kind, xp, coins, detail FROM activity_log WHERE user_id = ? ORDER BY id DESC LIMIT ?',
     ),
@@ -388,6 +457,65 @@ export function createSqliteRepositories(db: Db): Repositories {
     },
   };
 
+  const social: SocialRepo = {
+    setLeaderboardHidden(userId, hidden) {
+      q.setHidden.run(hidden ? 1 : 0, userId);
+    },
+    isLeaderboardHidden: (userId) =>
+      (q.getHidden.get(userId) as { h: number } | undefined)?.h === 1,
+    leaderboard: (since, department) => q.board.all({ since, department }) as LeaderboardEntry[],
+  };
+
+  interface WallDbRow {
+    id: number;
+    user_id: string;
+    day: string;
+    text: string;
+    created_at: number;
+    reports: number;
+    hidden: number;
+  }
+  const toWall = (row: WallDbRow): WallRow => ({
+    id: row.id,
+    userId: row.user_id,
+    day: row.day,
+    text: row.text,
+    createdAt: row.created_at,
+    reports: row.reports,
+    hidden: row.hidden === 1,
+  });
+  const wall: WallRepo = {
+    add: (userId, day, text, at) => q.wallAdd.run(userId, day, text, at).changes === 1,
+    visible: (limit) => (q.wallVisible.all(limit) as WallDbRow[]).map(toWall),
+    reported: (limit) => (q.wallReported.all(limit) as WallDbRow[]).map(toWall),
+    get(id) {
+      const row = q.wallGet.get(id) as WallDbRow | undefined;
+      return row ? toWall(row) : null;
+    },
+    reportedBy(userId, ids) {
+      if (ids.length === 0) return new Set();
+      const rows = db
+        .prepare(
+          `SELECT post_id FROM wall_reports WHERE reporter_id = ? AND post_id IN (${ids.map(() => '?').join(',')})`,
+        )
+        .all(userId, ...ids) as { post_id: number }[];
+      return new Set(rows.map((row) => row.post_id));
+    },
+    report(postId, reporterId, at) {
+      return db.transaction(() => {
+        if (q.wallReport.run(postId, reporterId, at).changes === 0) return null;
+        q.wallBump.run(postId);
+        return (q.wallGet.get(postId) as WallDbRow | undefined)?.reports ?? null;
+      })();
+    },
+    setHidden(id, hidden) {
+      q.wallSetHidden.run(hidden ? 1 : 0, id);
+    },
+    delete(id) {
+      q.wallDelete.run(id);
+    },
+  };
+
   return {
     users,
     characters,
@@ -397,6 +525,8 @@ export function createSqliteRepositories(db: Db): Repositories {
     ledger,
     inventory,
     plants,
+    social,
+    wall,
     transaction: (fn) => db.transaction(fn)(),
   };
 }

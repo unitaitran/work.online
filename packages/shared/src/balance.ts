@@ -17,6 +17,8 @@ export const BALANCE = {
   chore: 12,
   /** Xin quẻ: chỉ lần đầu mỗi ngày. */
   fortune: 10,
+  /** Tham gia thành công một sự kiện phòng. */
+  roomEvent: 8,
   /** Hoàn thành một việc sếp giao. */
   mission: 40,
   /** Ngồi họp ở phòng họp: XP mỗi phút trọn, tối đa mỗi lần ngồi. */
@@ -27,6 +29,7 @@ export const BALANCE = {
     chore: 6,
     taskDone: 5,
     meetingMinutes: 30,
+    roomEvent: 8,
   },
 
   /** Xu (điểm trong game): tỉ lệ theo XP thực nhận và thưởng thêm khi xong việc sếp giao. */

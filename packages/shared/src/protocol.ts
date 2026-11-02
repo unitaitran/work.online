@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { clientActionSchema, type ActionServerMessage } from './actions';
 import type { Appearance } from './character';
+import type { RoomEventKind, RoomEventView } from './social';
 import type { Branch } from './levels';
 
 /** Đường dẫn WebSocket trên server (dev: Vite chuyển tiếp tới server). Token ở query `?token=`. */
@@ -133,6 +134,18 @@ export const clientLeaveSchema = z.strictObject({ type: z.literal('leave') });
 /** Người chơi vừa đổi nhân vật hoặc trang bị: server đọc lại hồ sơ và báo cả phòng. */
 export const clientProfileChangedSchema = z.strictObject({ type: z.literal('profile_changed') });
 
+/** Tham gia sự kiện phòng đang diễn ra (giả vờ bận, gõ router, đổ hạt cà phê...). */
+export const clientEventRespondSchema = z.strictObject({
+  type: z.literal('event_respond'),
+  id: z.number().int().nonnegative(),
+});
+
+/** Chuyển sang phòng khác (bản đồ toà nhà). */
+export const clientSwitchRoomSchema = z.strictObject({
+  type: z.literal('switch_room'),
+  roomId: z.string().min(1).max(64),
+});
+
 export const clientMessageSchema = z.discriminatedUnion('type', [
   clientStateSchema,
   clientEmoteSchema,
@@ -142,6 +155,8 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   clientLeaveSchema,
   clientProfileChangedSchema,
   clientActionSchema,
+  clientEventRespondSchema,
+  clientSwitchRoomSchema,
 ]);
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
@@ -173,6 +188,17 @@ export type ServerMessage =
   | { type: 'kicked'; reason: KickReason }
   | { type: 'pong'; t: number; serverTime: number }
   | { type: 'error'; code: ServerErrorCode }
+  | { type: 'room_event'; event: RoomEventView }
+  | { type: 'room_event_progress'; id: number; progress: number }
+  | {
+      type: 'room_event_end';
+      id: number;
+      kind: RoomEventKind;
+      success: boolean;
+      /** Mình có được thưởng không. */
+      rewarded: boolean;
+    }
+  | { type: 'switch_failed'; reason: 'full' | 'not_found' | 'forbidden' }
   | { type: 'room_plants'; plants: PlantView[] }
   | { type: 'plant_added'; plant: PlantView }
   | { type: 'plant_removed'; ids: number[] }

@@ -96,6 +96,27 @@ export class RoomManager {
     }));
   }
 
+  all(): Room[] {
+    return [...this.rooms.values()];
+  }
+
+  /** Chuyển người chơi sang phòng khác (bản đồ toà nhà). */
+  move(
+    userId: string,
+    roomId: string,
+    profile: Parameters<Room['join']>[0]['profile'],
+  ): { ok: true; room: Room } | { ok: false; reason: 'full' | 'not_found' } {
+    const from = this.roomOf(userId);
+    const to = this.rooms.get(roomId);
+    if (!from || !to) return { ok: false, reason: 'not_found' };
+    if (from === to) return { ok: true, room: to };
+    if (!to.hasRoom()) return { ok: false, reason: 'full' };
+    const conn = from.detach(userId);
+    if (!conn) return { ok: false, reason: 'not_found' };
+    to.join({ userId, profile }, conn);
+    return { ok: true, room: to };
+  }
+
   get(id: string): Room | null {
     return this.rooms.get(id) ?? null;
   }

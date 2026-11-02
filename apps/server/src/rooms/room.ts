@@ -143,6 +143,17 @@ export class Room {
     this.broadcast({ type: 'player_join', player: snapshot(member) }, member);
   }
 
+  /** Tách người chơi khỏi phòng mà KHÔNG đóng kết nối (để chuyển sang phòng khác). */
+  detach(userId: string): Connection | null {
+    const member = this.members.get(userId);
+    if (!member) return null;
+    this.members.delete(userId);
+    this.broadcast({ type: 'player_leave', sid: member.profile.sid }, member);
+    for (const other of this.members.values()) other.sent.delete(member.profile.sid);
+    if (this.members.size === 0) this.options.onEmpty?.(this);
+    return member.conn;
+  }
+
   /** Mất kết nối: ẩn khỏi người khác nhưng giữ chỗ RESERVE_MS. */
   disconnect(userId: string, conn: Connection): void {
     const member = this.members.get(userId);

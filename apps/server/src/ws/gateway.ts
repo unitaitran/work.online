@@ -35,6 +35,7 @@ export type MessageHandler = (session: Session, message: ClientMessage) => boole
 
 export interface Session {
   userId: string;
+  /** Phòng hiện tại (đổi khi chuyển phòng). */
   room: Room;
   send(message: ServerMessage): void;
 }
@@ -53,6 +54,8 @@ export interface Gateway extends Presence {
   onSession(listener: SessionListener): void;
   /** Gọi khi một phiên đóng. */
   onSessionEnd(listener: SessionListener): void;
+  /** Quyền vào phòng riêng (công ty, Phase 6). */
+  setAccessCheck(check: (userId: string, room: Room) => boolean): void;
 }
 
 /**
@@ -71,6 +74,7 @@ export function attachWebSocketGateway(
   const handlers: MessageHandler[] = [];
   const sessions = new Map<string, Session>();
   const joinListeners: SessionListener[] = [];
+  let canEnter: (userId: string, room: Room) => boolean = () => false;
   const endListeners: SessionListener[] = [];
 
   const wss = new WebSocketServer({
@@ -211,6 +215,22 @@ export function attachWebSocketGateway(
       case 'profile_changed':
         room.updateProfile(userId, publicProfile(ctx.repos, userId));
         return;
+      case 'switch_room': {
+        const target = rooms.get(message.roomId);
+        // Phòng riêng (công ty) do module công ty kiểm tra quyền; ở đây chỉ phòng chung.
+        if (target && target.kind !== 'office' && !canEnter(userId, target)) {
+          session.send({ type: 'switch_failed', reason: 'forbidden' });
+          return;
+        }
+        const moved = rooms.move(userId, message.roomId, publicProfile(ctx.repos, userId));
+        if (!moved.ok) {
+          session.send({ type: 'switch_failed', reason: moved.reason });
+          return;
+        }
+        session.room = moved.room;
+        for (const listener of joinListeners) listener(session);
+        return;
+      }
       default:
         for (const handler of handlers) if (handler(session, message)) return;
     }
@@ -238,6 +258,9 @@ export function attachWebSocketGateway(
     },
     onSessionEnd(listener) {
       endListeners.push(listener);
+    },
+    setAccessCheck(check) {
+      canEnter = check;
     },
   };
 }

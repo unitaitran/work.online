@@ -430,7 +430,9 @@ describe('mã lưu và migrate', () => {
   });
 
   it('migrate v2 (có chức danh, kỳ đánh giá) → v3: bỏ trường cũ, lần giúp thành uy tín', () => {
-    const { coins: _c, reputation: _r, ...rest } = sample();
+    // Dữ liệu v2 thật chưa có số liệu ngày (stats).
+    const { stats: _stats, ...dailyV2 } = sample().daily;
+    const { coins: _c, reputation: _r, ...rest } = { ...sample(), daily: dailyV2 };
     const v2 = {
       ...rest,
       version: 2,
@@ -442,7 +444,7 @@ describe('mã lưu và migrate', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.migratedFrom).toBe(2);
-    expect(r.state).toEqual({ ...sample(), coins: 0, reputation: 3 });
+    expect(r.state).toEqual({ ...sample(), daily: dailyV2, coins: 0, reputation: 3 });
     expect('title' in r.state).toBe(false);
   });
 

@@ -29,8 +29,6 @@ import {
 import { fortuneFor, lastFortuneDay, saveFortuneDay } from './fortune/fortune';
 import { mountFortunePanel } from './fortune/fortunePanel';
 import { mountTaskFlipPanel } from './taskFlip/taskFlipPanel';
-import { addVent, loadVents, saveVents } from './ventWall/ventWall';
-import { mountVentWallPanel } from './ventWall/ventWallPanel';
 
 /** Những gì hoạt động cần từ cảnh 3D. */
 export interface ActivityScene {
@@ -60,6 +58,10 @@ export interface OfficeActivitiesOptions {
   store: KeyValueStore | null;
   bus: ActivityBus;
   progress: ActivityProgress;
+  /** Tường than thở chung (server). */
+  openWall(): void;
+  /** Đang có sự kiện "hết cà phê": bấm máy pha để đổ hạt; trả true nếu đã xử lý. */
+  coffeeOut(): boolean;
   playerId: string;
   playerName: string;
   floorName: string;
@@ -99,10 +101,10 @@ export class OfficeActivities {
         this.openTaskFlip();
         return true;
       case 'ventwall':
-        this.openVentWall();
+        this.o.openWall();
         return true;
       case 'coffee':
-        this.brewCoffee();
+        if (!this.o.coffeeOut()) this.brewCoffee();
         return true;
       // Công quả: tưới cây, dọn pantry (tủ lạnh), gỡ kẹt máy in; mỗi việc là một mini-game.
       case 'plant':
@@ -318,26 +320,6 @@ export class OfficeActivities {
       onCompleted: () => {
         this.o.play('ting');
         this.o.hud.showToast(STRINGS.taskFlip.doneToast);
-      },
-    });
-  }
-
-  private openVentWall(): void {
-    const modal = this.openPanel(STRINGS.vent.title);
-    mountVentWallPanel(modal.body, {
-      entries: loadVents(this.o.store),
-      onPost: (text, anonymous) => {
-        const now = clock.now();
-        const entries = addVent(loadVents(this.o.store), {
-          id: `${String(now)}-${Math.random().toString(36).slice(2, 7)}`,
-          text,
-          author: anonymous ? null : this.o.playerName,
-          at: now,
-        });
-        saveVents(this.o.store, entries);
-        // Sự kiện không chứa nội dung than thở, chỉ độ dài và lựa chọn ẩn danh.
-        this.o.bus.emit(makeEvent('vent', now, 0, { length: Array.from(text).length, anonymous }));
-        return entries;
       },
     });
   }

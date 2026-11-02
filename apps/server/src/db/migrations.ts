@@ -107,4 +107,18 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX room_plants_kind ON room_plants(room_kind, id);
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE users ADD COLUMN leaderboard_hidden INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX activity_log_at ON activity_log(at);
+      CREATE TABLE wall_reports (
+        post_id INTEGER NOT NULL REFERENCES wall_posts(id) ON DELETE CASCADE,
+        reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (post_id, reporter_id)
+      );
+      CREATE INDEX wall_posts_created ON wall_posts(created_at);
+    `,
+  },
 ];

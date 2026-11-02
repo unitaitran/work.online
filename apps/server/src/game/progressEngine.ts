@@ -56,6 +56,8 @@ export interface PlayerContext {
   timeZone: string;
   /** Vị trí hiện tại theo server (null nếu không ở phòng nào). */
   position(): Vec2 | null;
+  /** Phòng đang có sự kiện "hết cà phê" (máy pha tạm nghỉ). */
+  coffeeOut?(): boolean;
 }
 
 interface LiveState {
@@ -173,7 +175,9 @@ export class ProgressEngine {
         break;
       case 'coffee_brew':
         if (!near('coffee')) return { ok: false, reason: 'too_far' };
-        if (live.coffeeBrewAt !== null) return { ok: false, reason: 'not_allowed' };
+        if (live.coffeeBrewAt !== null || player.coffeeOut?.()) {
+          return { ok: false, reason: 'not_allowed' };
+        }
         live.coffeeBrewAt = now;
         break;
       case 'coffee_gift':
@@ -276,6 +280,25 @@ export class ProgressEngine {
     // Chỉ hành động hợp lệ mới tính vào khoảng nghỉ (tin sai bị chặn bởi giới hạn tần suất WS).
     live.lastAt.set(action.kind, now);
     if (!event) return { ok: true, state, outcome: null, today };
+    return { ok: true, ...this.applyAndSave(userId, state, event, today, now, fortune), today };
+  }
+
+  /** Thưởng tham gia sự kiện phòng (qua đúng luật XP, giới hạn ngày và sổ cái). */
+  grantRoomEvent(player: PlayerContext, kind: string): ActionOutcome {
+    const now = this.now(player.userId);
+    const today = this.today(player.userId, player.timeZone);
+    const event = makeEvent('room-event', now, 0, { kind });
+    return this.applyAndSave(player.userId, this.state(player.userId), event, today, now).outcome;
+  }
+
+  private applyAndSave(
+    userId: string,
+    state: ProgressState,
+    event: ActivityEvent,
+    today: string,
+    now: number,
+    fortune?: ActionOutcome['fortune'],
+  ): { state: ProgressState; outcome: ActionOutcome } {
     const result = applyEvent(state, event, { today, now });
     this.repos.transaction(() => {
       this.save(userId, result.state);
@@ -309,7 +332,7 @@ export class ProgressEngine {
       completedMission: result.completedMission,
       ...(fortune ? { fortune } : {}),
     };
-    return { ok: true, state: result.state, outcome, today };
+    return { state: result.state, outcome };
   }
 
   /** Sếp giao việc (gọi định kỳ cho người đang online). */

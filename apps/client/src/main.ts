@@ -8,8 +8,13 @@ import {
   QUICK_CHATS,
   titleFor,
   titleName,
+  dayMood,
+  type BuildingResponse,
   type InventoryResponse,
+  type LeaderboardResponse,
+  type WallPost,
   type ProgressState,
+  type RoomEventView,
   type ServerMessage,
 } from '@dilam/shared';
 import { ActivityBus } from './activities/events';
@@ -48,7 +53,12 @@ import { openModal } from './ui/modal';
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
 import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
+import { drawBragCard, shareOrDownload } from './ui/bragCard';
+import { mountBuildingPanel } from './ui/buildingPanel';
+import { mountLeaderboardPanel } from './ui/leaderboardPanel';
+import { mountRoomEventBanner } from './ui/roomEventBanner';
 import { mountShopPanel } from './ui/shopPanel';
+import { mountWallPanel } from './ui/wallPanel';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
@@ -342,6 +352,9 @@ function start(): void {
       onOpenShop: () => {
         openShop();
       },
+      onOpenMore: () => {
+        openHub();
+      },
       onWipe: () => {
         activities?.wipeDesk();
       },
@@ -354,6 +367,14 @@ function start(): void {
       playerId,
       playerName: profile.name,
       floorName: STRINGS.office.floorName,
+      openWall: () => {
+        openWall();
+      },
+      coffeeOut: () => {
+        if (eventState?.kind !== 'coffee_out') return false;
+        respondEvent();
+        return true;
+      },
       progress: {
         checkIn: () => progress.state.checkIn,
         act: async (action) => {
@@ -442,6 +463,7 @@ function start(): void {
     const onRoomMessage = (message: ServerMessage): void => {
       switch (message.type) {
         case 'welcome':
+          serverOffset = message.serverTime - Date.now();
           scene.remotes.clear();
           for (const player of message.players) scene.remotes.add(player);
           updateOnline();
@@ -491,6 +513,29 @@ function start(): void {
         case 'progress':
         case 'mission_assigned':
           progress.receive(message);
+          break;
+        case 'room_event':
+          eventState = message.event;
+          banner.show(message.event, serverOffset);
+          audio.play('alert');
+          break;
+        case 'room_event_progress':
+          banner.progress(message.id, message.progress);
+          break;
+        case 'room_event_end': {
+          const texts = STRINGS.events[message.kind];
+          if (eventState?.id === message.id) eventState = null;
+          banner.end(message.id, message.success ? texts.win : texts.lose);
+          if (message.rewarded) {
+            audio.play('ting');
+            officeHudView.showToast(STRINGS.events.rewarded(''));
+          }
+          break;
+        }
+        case 'switch_failed':
+          officeHudView.showToast(
+            message.reason === 'full' ? STRINGS.building.full : STRINGS.building.failed,
+          );
           break;
         case 'room_plants':
           scene.plants.set(message.plants);
@@ -588,6 +633,174 @@ function start(): void {
       });
     };
 
+    // ---------- Sự kiện phòng (Phase 5B) ----------
+    let serverOffset = 0;
+    let eventState: RoomEventView | null = null;
+    const coffeeSpot = scene.getInteractables().find((item) => item.kind === 'coffee');
+    const respondEvent = (): void => {
+      const ev = eventState;
+      if (!ev) return;
+      if (ev.kind === 'coffee_out' && coffeeSpot) {
+        const p = scene.getPlayerPosition();
+        if (Math.hypot(p.x - coffeeSpot.approach.x, p.z - coffeeSpot.approach.z) > 2.4) {
+          officeHudView.showToast(STRINGS.events.needCoffee);
+          return;
+        }
+      }
+      room.send({ type: 'event_respond', id: ev.id });
+      if (ev.kind === 'wifi_down') audio.play('keyboard');
+    };
+    const banner = mountRoomEventBanner(hudRoot, () => {
+      respondEvent();
+    });
+
+    // ---------- Xếp hạng, tường chung, bản đồ toà nhà, thẻ khoe (Phase 5B) ----------
+    const openWall = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.wall.title);
+      mountWallPanel(modal.body, {
+        list: async () => {
+          const r = await api.request<{ posts: WallPost[] }>('GET', '/api/wall');
+          return r.ok ? r.value.posts : null;
+        },
+        post: async (text) => {
+          const r = await api.request<{ posts: WallPost[] }>('POST', '/api/wall', { text });
+          return r.ok
+            ? { ok: true, posts: r.value.posts }
+            : { ok: false, reason: r.reason ?? r.error };
+        },
+        report: async (id) => {
+          const r = await api.request<{ posts: WallPost[] }>(
+            'POST',
+            `/api/wall/${String(id)}/report`,
+          );
+          return r.ok ? r.value.posts : null;
+        },
+      });
+    };
+    const openLeaderboard = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.board.title);
+      mountLeaderboardPanel(modal.body, {
+        load: async (period, department) => {
+          const r = await api.request<LeaderboardResponse>(
+            'GET',
+            `/api/leaderboard?period=${period}&department=${department}`,
+          );
+          return r.ok ? r.value : null;
+        },
+        setHidden: async (hidden) =>
+          (await api.request('PUT', '/api/me/privacy', { hideFromLeaderboard: hidden })).ok,
+      });
+    };
+    const openBuilding = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.building.title);
+      mountBuildingPanel(modal.body, {
+        load: async () => {
+          const r = await api.request<BuildingResponse>('GET', '/api/building');
+          return r.ok ? r.value : null;
+        },
+        go: (roomId) => {
+          room.send({ type: 'switch_room', roomId });
+          modal.close();
+        },
+        label: (info) => (info.kind === 'office' ? STRINGS.building.office : info.name),
+      });
+    };
+    const openBrag = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.brag.title);
+      const img = el('img', { className: 'brag-preview', attrs: { alt: STRINGS.brag.title } });
+      const share = el('button', {
+        className: 'button button-primary',
+        text: STRINGS.brag.share,
+        attrs: { type: 'button' },
+      });
+      const download = el('button', {
+        className: 'button button-soft',
+        text: STRINGS.brag.download,
+        attrs: { type: 'button' },
+      });
+      modal.body.append(
+        img,
+        el('div', { className: 'activity-actions', children: [download, share] }),
+      );
+      const state = progress.state;
+      void drawBragCard({
+        appearance: profile.appearance,
+        equipped,
+        level: progress.level,
+        title: titleName(progress.title, state.branch),
+        streak: state.checkIn.streak,
+        stats: state.daily.day === progress.today ? state.daily.stats : undefined,
+        day: progress.today ?? '',
+      }).then((canvas) => {
+        img.src = canvas.toDataURL('image/png');
+        const name = `di-lam-online-${progress.today ?? 'hom-nay'}.png`;
+        share.addEventListener('click', () => {
+          void shareOrDownload(canvas, name);
+        });
+        download.addEventListener('click', () => {
+          const a = document.createElement('a');
+          a.href = img.src;
+          a.download = name;
+          a.click();
+        });
+        Object.assign(window, { __lastBrag: canvas });
+      });
+    };
+    const openHub = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.hub.title);
+      const h = STRINGS.hub;
+      const entries: [string, () => void][] = [
+        [h.leaderboard, openLeaderboard],
+        [h.wall, openWall],
+        [h.building, openBuilding],
+        [h.brag, openBrag],
+      ];
+      modal.body.append(
+        el('div', {
+          className: 'choice-cards',
+          children: entries.map(([label, open]) => {
+            const b = el('button', {
+              className: 'choice-card',
+              attrs: { type: 'button' },
+              children: [el('strong', { text: label })],
+            });
+            b.addEventListener('click', () => {
+              modal.close();
+              open();
+            });
+            return b;
+          }),
+        }),
+      );
+    };
+
+    // ---------- Lịch theo ngày: nhạc, ánh sáng, lời thoại ----------
+    let moodDay: string | null = null;
+    let moodTimer: number | undefined;
+    const applyMood = (): void => {
+      const today = progress.today;
+      if (!today || today === moodDay) return;
+      moodDay = today;
+      const mood = dayMood(today);
+      scene.setMood(mood);
+      audio.setMood(mood);
+      const greeting = STRINGS.moods.greeting[mood];
+      if (greeting) officeHudView.showToast(greeting);
+      const lines = STRINGS.moods.npcLines[mood] ?? [];
+      window.clearInterval(moodTimer);
+      if (lines.length > 0) {
+        moodTimer = window.setInterval(() => {
+          const npcs = scene.getNpcStatuses();
+          const npc = createNpcRoster()[Math.floor(Math.random() * npcs.length)];
+          const line = lines[Math.floor(Math.random() * lines.length)];
+          if (npc && line) scene.npcSay(npc.id, line, 5);
+        }, 75_000);
+      }
+    };
+    const offMood = progress.onChange(() => {
+      applyMood();
+    });
+
     const openSocial = (): void => {
       const modal = officeActivities.openPanel(STRINGS.social.open);
       mountSocialPanel(modal.body, {
@@ -679,6 +892,9 @@ function start(): void {
     teardown = () => {
       window.clearInterval(periodTimer);
       window.clearInterval(stateTimer);
+      window.clearInterval(moodTimer);
+      offMood();
+      banner.dispose();
       room.stop();
       progress.setSender(null);
       scene.remotes.clear();

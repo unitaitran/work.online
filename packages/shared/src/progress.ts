@@ -26,7 +26,20 @@ export interface DailyState {
   missions: Mission[];
   /** Thời điểm sếp giao việc kế tiếp (null = chưa hẹn). */
   nextMissionAt: number | null;
+  /** Số liệu trong ngày (thẻ khoe thành tích). Thiếu ở dữ liệu cũ thì coi như 0. */
+  stats?: DailyStats | undefined;
 }
+
+export interface DailyStats {
+  /** Số phím gõ được tính trong các phiên tập trung. */
+  keys: number;
+  coffees: number;
+  meetings: number;
+  /** Số lần "giả vờ bận" kịp khi sếp đi ngang. */
+  dodged: number;
+}
+
+export const EMPTY_DAILY_STATS: DailyStats = { keys: 0, coffees: 0, meetings: 0, dodged: 0 };
 
 export interface LogEntry {
   at: number;
@@ -75,7 +88,15 @@ export function createProgress(now: number): ProgressState {
 }
 
 export function emptyDaily(day: string | null): DailyState {
-  return { day, earned: 0, counts: {}, fortuneClaimed: false, missions: [], nextMissionAt: null };
+  return {
+    day,
+    earned: 0,
+    counts: {},
+    fortuneClaimed: false,
+    missions: [],
+    nextMissionAt: null,
+    stats: { ...EMPTY_DAILY_STATS },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +142,9 @@ const dailySchema = z.object({
   fortuneClaimed: z.boolean(),
   missions: z.array(missionSchema).max(10),
   nextMissionAt: z.number().nullable(),
+  stats: z
+    .object({ keys: nonNegInt, coffees: nonNegInt, meetings: nonNegInt, dodged: nonNegInt })
+    .optional(),
 });
 
 const logSchema = z
