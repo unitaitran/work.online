@@ -69,6 +69,16 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - Thú cưng văn phòng.
 - Sự kiện sếp đi ngang.
 
+## Công ty
+
+- Senior (cấp 150), đã rời công ty, đủ vốn thì mở công ty: chọn ngành (công nghệ, quán cà phê, thương mại, sáng tạo), tên, màu, biểu tượng.
+- 5 giai đoạn: Garage, Co-working, Công ty nhỏ, Công ty vừa, Tập đoàn. Lên giai đoạn cần đủ số dự án, uy tín, nhân viên NPC và quỹ dự trữ.
+- Nhận dự án, làm bằng các hoạt động sẵn có trong văn phòng công ty, hoặc để nhân viên NPC làm theo giờ thật.
+- Sự kiện công ty có lựa chọn: khách huỷ hợp đồng, deadline gấp, nhân viên xin nghỉ.
+- IPO ở giai đoạn Tập đoàn: huy hiệu vĩnh viễn, chọn ngành mới, bắt đầu lại với thưởng nhỏ.
+- Người chưa lên Senior có thể nộp đơn hoặc dùng mã mời vào làm ở công ty người chơi khác; chủ duyệt, giao việc, thăng chức, cho nghỉ, chặn.
+- Thỉnh thoảng có lời mời từ công ty khác: lên ngay một cấp nhưng đổi môi trường và giảm nhẹ uy tín.
+
 ## Sự kiện và xã hội
 
 - Sự kiện phòng mỗi 5-10 phút: sếp đi ngang, mất wifi, hết cà phê, họp đột xuất. Không phạt, chỉ thưởng nhỏ.

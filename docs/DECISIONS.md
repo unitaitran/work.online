@@ -296,3 +296,17 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Bản đồ toà nhà**: mỗi phòng văn phòng chung là một tầng (`office-1` = Tầng 7...). Chuyển tầng qua WebSocket (`switch_room`), giữ kết nối, không cần tải lại.
 - **Thẻ khoe** 1080×1350 vẽ bằng canvas: ảnh nhân vật chụp từ renderer nhỏ riêng, chức danh, số liệu hôm nay (phím gõ được tính, ly cà phê, cuộc họp ≥ 1 phút, lần né sếp), chuỗi chấm công. **Không có tên hay mã nhân viên.** Số liệu ngày lưu trong `daily.stats` (tùy chọn, dữ liệu cũ coi như 0, không cần đổi phiên bản).
 - **Lịch theo ngày** (theo ngày trong game của server): Tết (2 ngày trước tới mùng 3, bảng ngày Tết 2025-2030), ngày lương (ngày 5 và 20), thứ Hai, thứ Sáu, cuối tuần. Đổi nhịp và cao độ nhạc, độ sáng, đèn lồng ngày Tết, lời chào và câu NPC.
+
+## Phase 6: mở công ty và vào làm ở công ty người chơi khác
+
+- **Điều kiện mở**: cấp 150 (Senior), không thuộc công ty nào (rời Văn phòng Mây Hồng hoặc công ty đang làm), đủ vốn, chưa sở hữu công ty. Prompt gốc ghi "cấp 8" theo hệ 10 cấp cũ; nay tương ứng Senior.
+- **Người được nộp đơn**: chưa lên Senior (prompt gốc "cấp 1-7"). Senior thì tự mở công ty.
+- **Tên công ty** qua bộ lọc từ tục + danh sách thương hiệu thật, không trùng (so không dấu, không hoa thường), tối đa 32 ký tự. Không tải ảnh: chọn 1 trong 8 màu và 8 biểu tượng.
+- **Toà nhà**: mỗi toà tối đa 30 công ty, mỗi công ty một tầng; tầng trống đầu tiên được cấp lúc mở.
+- **Phòng công ty** là phòng riêng `company:<id>` (cùng bố cục văn phòng, thêm biển hiệu vẽ bằng canvas), chỉ chủ và thành viên vào được, sức chứa theo giai đoạn (6/10/20/30/40).
+- **Tính theo giờ thật nhưng gộp tối đa 24 giờ mỗi lần** (tính lại mỗi khi có người xem hoặc làm việc), offline lâu không bị phạt, quỹ không bao giờ âm.
+- **Sự kiện công ty** khoảng 1/3 số ngày, chọn theo hạt giống (công ty, ngày), 2 lựa chọn, không có kết cục thua.
+- **Quyền chủ**: duyệt/từ chối đơn, mã mời (dùng một lần, 3 ngày), giao việc (thêm vào "việc sếp giao" trong ngày của nhân viên, vẫn tối đa 3 việc/ngày nên không vượt luật), thăng chức trong công ty (vai trò), cho nghỉ, chặn. Chủ không cộng thẳng XP cho ai: thăng chức đi qua sự kiện `company-promotion` của luật (30 XP, tối đa 1 lần/ngày, chỉ khi đã vào ≥ 3 ngày và không nghi tài khoản phụ).
+- **Chống lạm dụng**: 5 đơn/ngày mỗi người, 10 mã mời/ngày mỗi công ty. IP được băm bằng HMAC với khoá bí mật lưu trong DB (`server_settings`), không lưu IP thật; trùng IP băm với chủ thì đánh dấu nghi tài khoản phụ (không nhận thưởng thăng chức).
+- **Offer**: chỉ từ công ty NPC tự đặt tên (`NPC_COMPANIES`), mỗi 3 ngày một lời mời cho người đang làm ở Mây Hồng / công ty NPC / công ty người chơi còn ở Garage hoặc Co-working. Nhận lời: lên ngay một cấp (luật `acceptOffer` trong shared), đổi công ty, giảm 10% uy tín.
+- **Bảng tin công ty** chỉ có thông báo hệ thống (khai trương, dự án xong, thành viên vào/rời/thăng chức, nâng cấp, IPO, sự kiện), không có chat tự do.

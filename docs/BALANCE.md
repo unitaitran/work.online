@@ -33,3 +33,20 @@ Giới hạn mềm: 190 XP/ngày, phần vượt chỉ nhận 25%. Phòng ban nh
 Chức danh tự lên theo cấp (13 bậc, xem GAME_DESIGN). Với nhịp 190 XP/ngày: bậc 5 (Chuyên viên, cấp 35) sau khoảng 1 ngày, bậc 9 (cấp 95) khoảng 3 ngày, Senior (cấp 150) đúng 5 ngày.
 
 Xu: 50% XP thực nhận + 20 xu mỗi việc sếp giao, tức khoảng 95–155 xu mỗi ngày chơi đủ.
+
+## Công ty (Phase 6)
+
+Mô phỏng `simulateCompany` (`packages/shared/src/companySim.ts`): người chơi làm việc trong phòng công ty mỗi ngày (điểm công việc = XP thực nhận), luôn nhận dự án khó nhất được phép, tuyển và thăng chức NPC khi dư quỹ, nâng cấp ngay khi đủ điều kiện.
+
+|      Điểm công việc / ngày | Co-working | Công ty nhỏ | Công ty vừa | Tập đoàn |    IPO |
+| -------------------------: | ---------: | ----------: | ----------: | -------: | -----: |
+|             100 (chơi nhẹ) |    ngày 10 |          24 |          41 |       59 |     75 |
+| **190 (đủ giới hạn ngày)** |      **7** |      **18** |      **31** |   **47** | **62** |
+|     300 (cả nhóm cùng làm) |          5 |          12 |          24 |       39 |     52 |
+
+Mục tiêu "khoảng 2 tháng từ lúc mở công ty đến IPO" đạt ở nhịp chơi đều (62 ngày). Test `company.test.ts` giữ IPO trong khoảng 45-75 ngày.
+
+- Vốn mở công ty: max(800, 25% tổng xu đã kiếm từ hoạt động), chuyển thành quỹ ban đầu.
+- NPC: thực tập sinh 1,2 điểm/giờ (lương 0,4 xu/giờ), nhân viên 2,2 (0,8), cao cấp 3,4 (1,3). Chỉ làm và nhận lương khi có dự án. Quỹ không đủ thì chỉ làm phần được trả.
+- Dự án độ khó d: cần 160·d^1,35 điểm, thưởng 150·d^1,5 xu và 3d uy tín.
+- IPO: thưởng cho chủ 5% quỹ, huy hiệu vĩnh viễn, công ty về Garage với quỹ 800 xu.

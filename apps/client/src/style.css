@@ -2273,3 +2273,106 @@ button.office-badge:focus-visible {
     animation: none;
   }
 }
+
+/* ---------- Công ty (Phase 6) ---------- */
+
+.company-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.company-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.company-name {
+  font-size: 1.05rem;
+}
+
+.company-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.company-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.company-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.company-actions .button,
+.company-list .button {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
+.company-offer {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff4e5;
+}
+
+.company-offer p {
+  margin: 6px 0;
+}
+
+.company-form {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.company-form label {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.company-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.company-swatch {
+  width: 32px;
+  height: 32px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.company-swatch[aria-checked='true'] {
+  border-color: var(--ink);
+}
+
+.company-swatch:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.company-badges {
+  font-weight: 700;
+  color: #b07a00;
+}

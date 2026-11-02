@@ -41,6 +41,7 @@ import { BubbleLayer } from '../ui/bubbles';
 import { RemotePlayers } from './remotePlayers';
 import { RoomPlants } from './roomPlants';
 import { buildLanterns } from './lanterns';
+import { CompanySign, type SignInfo } from './companySign';
 import type { BufferGeometry, Group } from 'three';
 import type { DayMood } from '@dilam/shared';
 import { Companions } from '../avatar/companions';
@@ -253,6 +254,16 @@ export class OfficeScene implements SceneController {
   }
 
   private moodGroup: Group | null = null;
+  private sign: CompanySign | null = null;
+
+  /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
+  setCompanySign(info: SignInfo | null): void {
+    this.sign?.dispose();
+    this.sign = null;
+    if (!info) return;
+    this.sign = new CompanySign(this.options.layout, info);
+    this.scene.add(this.sign.group);
+  }
 
   /**
    * Không khí trong ngày (lịch): Tết treo đèn lồng đỏ, ngày lương ánh vàng ấm,
@@ -488,6 +499,7 @@ export class OfficeScene implements SceneController {
     this.pointer.dispose();
     this.remotes.dispose();
     this.plants.dispose();
+    this.sign?.dispose();
     this.companions?.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();

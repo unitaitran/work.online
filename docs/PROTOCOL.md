@@ -123,6 +123,31 @@ Lý do từ chối: `too_fast` (cùng loại quá dày), `too_far`, `not_started
 | GET         | `/api/building`                                                                               | các phòng chung (tầng, số người) và phòng hiện tại                                           |
 | GET         | `/admin`, `/api/admin/wall`, `DELETE /api/admin/wall/:id`, `POST /api/admin/wall/:id/restore` | chỉ khi có `ADMIN_KEY`, header `x-admin-key`                                                 |
 
+## REST công ty (Phase 6)
+
+Mọi endpoint ghi là `POST`, có giới hạn tần suất; lỗi nghiệp vụ trả `422 rejected` với `reason` (ví dụ `level`, `employed`, `capital`, `brand`, `profanity`, `name_taken`, `limit`, `banned`, `bad_code`, `too_senior`, `not_ready`), không phải chủ thì `403`.
+
+| Đường dẫn                                               | Body                              | Ghi chú                                                                 |
+| ------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| `GET /api/company/me`                                   |                                   | công ty đang thuộc (chi tiết), điều kiện mở, lời mời làm việc, huy hiệu |
+| `GET /api/company/directory`                            |                                   | danh bạ công ty                                                         |
+| `GET /api/company/info/:id`                             |                                   | thông tin công khai (biển hiệu)                                         |
+| `/api/company/found`                                    | `{ name, industry, color, icon }` | mở công ty                                                              |
+| `/api/company/project`                                  | `{ offerId }`                     | nhận dự án mời thầu hôm nay                                             |
+| `/api/company/hire`, `/api/company/staff/promote`       | `{ staffId }`                     | NPC                                                                     |
+| `/api/company/event`                                    | `{ choice: 0 \| 1 }`              | sự kiện công ty hôm nay                                                 |
+| `/api/company/upgrade`, `/api/company/ipo`              | `{ industry }` (IPO)              |                                                                         |
+| `/api/company/apply`                                    | `{ companyId }`                   | nộp đơn                                                                 |
+| `/api/company/applications`                             | `{ applicationId, approve }`      | chủ duyệt                                                               |
+| `/api/company/invite` → `{ code }`, `/api/company/join` | `{ code }`                        | mã mời                                                                  |
+| `/api/company/leave`, `/api/company/rejoin-default`     |                                   | rời công ty / về Mây Hồng                                               |
+| `/api/company/kick`                                     | `{ code, ban? }`                  | cho nghỉ (và chặn)                                                      |
+| `/api/company/promote`                                  | `{ code }`                        | thăng chức trong công ty                                                |
+| `/api/company/assign`                                   | `{ code, templateId }`            | giao việc                                                               |
+| `/api/company/offer`                                    | `{ offerId, accept }`             | lời mời từ công ty NPC                                                  |
+
+Vào phòng công ty qua WebSocket: `switch_room { roomId: "company:<id>" }` (không phải thành viên thì `switch_failed: forbidden`); về văn phòng chung: `switch_room { roomId: "office" }`.
+
 ### Phát triển
 
 Server chạy với cờ `--dev` (`npm run dev`) có thêm `POST /api/dev/shift-day { days }` (tua ngày riêng cho tài khoản) và `POST /api/dev/grant { xp?, coins? }`. Thêm `POST /api/dev/room-event { kind }` để gọi ngay một sự kiện phòng. Bản chạy thật không có các API này.

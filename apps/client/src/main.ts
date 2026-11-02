@@ -9,7 +9,9 @@ import {
   titleFor,
   titleName,
   dayMood,
+  COMPANY_COLORS,
   type BuildingResponse,
+  type CompanyPublic,
   type InventoryResponse,
   type LeaderboardResponse,
   type WallPost,
@@ -55,6 +57,7 @@ import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
 import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
 import { drawBragCard, shareOrDownload } from './ui/bragCard';
 import { mountBuildingPanel } from './ui/buildingPanel';
+import { mountCompanyPanel, type CallResult } from './ui/companyPanel';
 import { mountLeaderboardPanel } from './ui/leaderboardPanel';
 import { mountRoomEventBanner } from './ui/roomEventBanner';
 import { mountShopPanel } from './ui/shopPanel';
@@ -464,6 +467,8 @@ function start(): void {
       switch (message.type) {
         case 'welcome':
           serverOffset = message.serverTime - Date.now();
+          roomKind = message.room.replace(/-\d+$/, '');
+          updateSign();
           scene.remotes.clear();
           for (const player of message.players) scene.remotes.add(player);
           updateOnline();
@@ -633,6 +638,51 @@ function start(): void {
       });
     };
 
+    // ---------- Công ty (Phase 6): phòng riêng có biển hiệu ----------
+    let roomKind = 'office';
+    const updateSign = (): void => {
+      if (!roomKind.startsWith('company:')) {
+        scene.setCompanySign(null);
+        return;
+      }
+      const id = roomKind.slice('company:'.length);
+      void api
+        .request<CompanyPublic>('GET', `/api/company/info/${encodeURIComponent(id)}`)
+        .then((r) => {
+          if (!r.ok || roomKind !== `company:${id}`) return;
+          const c = r.value;
+          scene.setCompanySign({
+            name: c.name,
+            color: COMPANY_COLORS[c.color] ?? 0xff8a65,
+            glyph: STRINGS.company.iconGlyph[c.icon] ?? '★',
+            subtitle: `${STRINGS.company.industries[c.industry] ?? ''} · ${STRINGS.company.stages[c.stage] ?? ''}`,
+          });
+        });
+    };
+    const openCompany = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.company.title);
+      modal.body.closest('.modal')?.classList.add('modal-wide');
+      mountCompanyPanel(modal.body, {
+        get: async <T>(path: string) => {
+          const r = await api.request<T>('GET', path);
+          return r.ok ? r.value : null;
+        },
+        post: async <T>(path: string, body?: unknown): Promise<CallResult<T>> => {
+          const r = await api.request<T>('POST', path, body ?? {});
+          return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason ?? r.error };
+        },
+        enterRoom: (companyId) => {
+          room.send({ type: 'switch_room', roomId: `company:${companyId}` });
+          modal.close();
+        },
+        backToOffice: () => {
+          room.send({ type: 'switch_room', roomId: 'office' });
+          modal.close();
+        },
+        currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
+      });
+    };
+
     // ---------- Sự kiện phòng (Phase 5B) ----------
     let serverOffset = 0;
     let eventState: RoomEventView | null = null;
@@ -754,6 +804,7 @@ function start(): void {
         [h.wall, openWall],
         [h.building, openBuilding],
         [h.brag, openBrag],
+        [h.company, openCompany],
       ];
       modal.body.append(
         el('div', {
