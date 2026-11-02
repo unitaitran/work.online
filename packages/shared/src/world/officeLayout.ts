@@ -307,8 +307,9 @@ export const OFFICE_FLOOR: OfficeLayout = {
     coatRack: { minX: -10, maxX: -9.45, minZ: -0.6, maxZ: 1.6 },
     pedestals: [],
   },
-  // Máy in trên lối đi cạnh tường kính bắc (giữa giá sách và dãy bàn), mặt quay về phía nam.
-  printer: box(4.9, -5.1, 0.8, 0.6),
+  // Máy in áp sát đầu bắc của dãy bàn thứ 4 (dãy bàn ở x = 4 kết thúc ở z = -3,75),
+  // mặt quay về phía bắc, người dùng đứng trên lối đi cạnh tường kính.
+  printer: box(4, -4.1, 0.8, 0.6),
   cabinets: [],
   entrance: { doorX: -7.25, doorWidth: 1.5, reader: box(-6.4, 6.15, 0.3, 0.3) },
   fortuneShelf: box(-9.35, -5.9, 0.55, 0.55),
@@ -480,9 +481,9 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
   list.push({
     id: 'printer',
     kind: 'printer',
-    // Đứng phía nam (phía dãy bàn), quay mặt về hướng bắc nhìn vào máy in.
-    approach: { x: (printer.minX + printer.maxX) / 2, z: printer.maxZ + APPROACH_GAP + 0.1 },
-    facing: Math.PI,
+    // Đứng phía bắc (lối đi cạnh tường kính), quay mặt về hướng nam nhìn vào máy in.
+    approach: { x: (printer.minX + printer.maxX) / 2, z: printer.minZ - APPROACH_GAP - 0.1 },
+    facing: 0,
     pose: 'stand',
     pick: pickFromAabb(printer, 0.75),
   });

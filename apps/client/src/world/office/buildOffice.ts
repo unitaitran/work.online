@@ -1548,7 +1548,7 @@ function boardPieces(layout: OfficeLayout): Piece[] {
       ),
     );
   }
-  // Máy in: mặt trước (khay giấy, đèn) quay về phía nam, nơi người chơi đứng dùng.
+  // Máy in: mặt trước (khay giấy, đèn) quay về phía bắc, nơi người chơi đứng dùng.
   // Khay giấy nằm gọn trong khối máy, không thò ra ngoài vùng va chạm.
   const printer = layout.printer;
   pieces.push(boxPiece(printer, 0, 0.55, 0x2b2b31));
@@ -1565,8 +1565,8 @@ function boardPieces(layout: OfficeLayout): Piece[] {
       {
         minX: printer.minX + 0.15,
         maxX: printer.maxX - 0.15,
-        minZ: printer.maxZ - 0.22,
-        maxZ: printer.maxZ - 0.02,
+        minZ: printer.minZ + 0.02,
+        maxZ: printer.minZ + 0.22,
       },
       0.55,
       0.57,
@@ -1575,7 +1575,7 @@ function boardPieces(layout: OfficeLayout): Piece[] {
   );
   pieces.push(
     piece(new SphereGeometry(0.02, 6, 4), 0x6cc28a, {
-      position: [printer.maxX - 0.1, 0.75, printer.maxZ - 0.1],
+      position: [printer.maxX - 0.1, 0.75, printer.minZ + 0.1],
     }),
   );
   for (const cabinet of layout.cabinets) pieces.push(boxPiece(cabinet, 0, 1.2, BLACK));
