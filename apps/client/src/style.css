@@ -2694,3 +2694,87 @@ button.office-badge:focus-visible {
 .building-companies {
   margin-top: 12px;
 }
+
+/* ---------- Góc nhìn văn phòng ---------- */
+
+.view-button {
+  position: absolute;
+  right: 12px;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 208px);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 30%);
+  pointer-events: auto;
+}
+
+.view-panel {
+  position: absolute;
+  right: 12px;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 256px);
+  width: min(300px, calc(100% - 24px));
+  padding: 14px;
+  border-radius: 16px;
+  background: rgb(18 18 22 / 92%);
+  color: #f3eeee;
+  border: 1px solid #e5393566;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 40%);
+  pointer-events: auto;
+}
+
+.view-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.view-switch {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #3a3a42;
+  background: #24242a;
+  color: #f3eeee;
+  cursor: pointer;
+}
+
+.view-switch[aria-pressed='true'] {
+  background: #c62828;
+  border-color: #ff5a50;
+}
+
+.view-switch:focus-visible {
+  outline: 3px solid #ff8a80;
+  outline-offset: 2px;
+}
+
+.view-reset {
+  grid-column: span 2;
+}
+
+.view-info {
+  margin: 10px 0 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ff8a80;
+}
+
+.view-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b9b3b6;
+}
+
+@media (max-width: 600px) {
+  .view-button {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 282px);
+  }
+
+  .view-panel {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 330px);
+  }
+}

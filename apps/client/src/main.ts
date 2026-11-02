@@ -64,6 +64,7 @@ import { STRINGS } from './strings';
 import { showAuthScreen } from './ui/authScreen';
 import { mountCreatorPanel } from './ui/creatorPanel';
 import { mountLobbyPanel } from './ui/lobbyPanel';
+import { mountViewPanel } from './ui/viewPanel';
 import { el } from './ui/dom';
 import { showCoachMarks } from './ui/coachMarks';
 import { openModal, type Modal } from './ui/modal';
@@ -630,6 +631,7 @@ function start(): void {
       },
     });
     officeHud = hud;
+    const viewPanel = mountViewPanel(hudRoot, scene);
     const officeActivities = new OfficeActivities({
       root: hudRoot,
       store,
@@ -1274,6 +1276,7 @@ function start(): void {
       officeHud = null;
       office = null;
       officeHudRef.dispose();
+      viewPanel.dispose();
       engine.setController(null);
     };
   };

@@ -7,7 +7,8 @@ export function buildLanterns(layout: OfficeLayout, material: Material): Group {
   const pieces: Piece[] = [];
   const y = layout.wallHeight - 0.55;
   const z = layout.bounds.minZ + 0.45;
-  for (let x = layout.window.minX + 1.5; x < layout.window.maxX - 1; x += 3) {
+  const xs = layout.windows.spans.flatMap((span) => [span.minX + 0.5, span.maxX - 0.5]);
+  for (const x of xs) {
     pieces.push(
       piece(new CylinderGeometry(0.006, 0.006, 0.5, 4), 0x8a1c1c, { position: [x, y + 0.42, z] }),
       piece(new CylinderGeometry(0.07, 0.07, 0.04, 10), 0xd8b25a, { position: [x, y + 0.2, z] }),

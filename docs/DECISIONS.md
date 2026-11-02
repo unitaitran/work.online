@@ -335,3 +335,14 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Phòng CEO** nằm trong bố cục chung (`ceoRoom` trong `packages/shared`), có ở mọi phòng (văn phòng chung và phòng công ty). Thẻ CEO = chủ của chính phòng công ty đang đứng; server tính lúc vào phòng và dùng bộ vật cản riêng (không có cánh cửa) khi kiểm tra vị trí, nên client sửa mã cũng không vào được. Người không có thẻ không được "nhảy" vào chỗ ngồi trong phòng. NPC luôn coi cửa là đóng. Ở văn phòng chung phòng CEO luôn khoá (chưa có CEO người chơi cho Mây Hồng).
 - Chậu cây ở góc cửa kính và một điểm đi dạo của NPC dời ra ngoài để nhường chỗ cho phòng CEO; vị trí "ngắm thành phố" dời sang trái cửa phòng.
 - **Đồng hồ treo tường**: giờ Việt Nam cố định UTC+7 (không có giờ mùa hè), tính từ `Date.now()` nên đúng cả khi máy người chơi đặt múi giờ khác.
+
+## Văn phòng mặt bằng v2 (20 × 13 m, tông đen xám)
+
+- **Toạ độ**: game x = X sơ đồ − 10, z = 6,5 − Z sơ đồ (cửa sổ phía bắc ở −Z, lối vào phía nam ở +Z như quy ước cũ). Các phòng phía nam kéo sát tường nam (sơ đồ ghi 0,5 m khoảng trống phía sau, ở game là góc chết nên bỏ).
+- **Dãy bàn**: theo góp ý, 4 dãy dọc theo trục Z (hướng sếp nhìn ra), bàn dài liền khối, người ngồi hai bên quay mặt vào nhau, 3 cặp mỗi dãy (24 chỗ). Lối đi giữa hai dãy 1,5 m để nhân vật (bán kính 0,28 m) đi và ngồi được. Va chạm vẫn tính theo từng chỗ (mỗi chỗ một hộp 0,75 × 1,5 m, liền nhau).
+- **Màu**: đen xám chủ đạo, đỏ chỉ cho decor. Dải LED viền trần màu trắng ấm. Tường dùng họa tiết vữa vẽ bằng canvas, UV tính theo toạ độ thế giới để liền mạch.
+- **Logo**: biển chữ neon trắng trên tường sảnh (chỗ đồng hồ cũ). Không dùng tên hay logo thương hiệu thật (AGENTS.md mục 7): văn phòng chung hiện "Mây Hồng", phòng công ty hiện tên công ty người chơi đặt.
+- **Tượng gấu** là gấu đỏ cách điệu dựng từ khối tròn, không có chữ hay logo của thương hiệu nào.
+- **Vách đặc giữa các phòng** tự mờ khi nhân vật đứng trong phòng phía nam hoặc camera ở sau vách, để không che tầm nhìn. "Xuyên thấu" làm mờ cả tường bao (độ đục 0,25).
+- **Đèn thật** (2 đèn rọi, đèn cây, đèn phòng sếp, đèn đỏ hắt tượng gấu) chỉ bật ở mức đồ họa vừa/cao; mức thấp dùng vệt sáng giả (mặt phẳng cộng màu) và bóng đèn tự sáng.
+- Bảng "lật task" và "tường than thở" chuyển lên tường tây cạnh dãy ngồi (2 bảng dán note). Ống quẻ KPI ở góc tây bắc.

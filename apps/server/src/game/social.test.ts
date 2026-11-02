@@ -308,9 +308,10 @@ describe('sự kiện phòng (mô phỏng 40 người)', () => {
     // Đi bộ từng bước hợp lệ vào phòng họp qua cửa kính, rồi ngồi.
     let p = { x: OFFICE_FLOOR.spawn.x, z: OFFICE_FLOOR.spawn.z };
     for (const target of [
-      { x: 6.9, z: 0 },
-      { x: 6.9, z: -4.2 },
-      { x: 8.1, z: -4.6 },
+      { x: OFFICE_FLOOR.spawn.x, z: 1.61 },
+      { x: 3.1, z: 1.61 },
+      { x: 3.1, z: 2.55 },
+      { x: 2.4, z: 2.55 },
     ]) {
       while (Math.hypot(target.x - p.x, target.z - p.z) > 0.01) {
         const d = Math.hypot(target.x - p.x, target.z - p.z);
@@ -321,8 +322,8 @@ describe('sự kiện phòng (mô phỏng 40 người)', () => {
       }
     }
     advance(200);
-    room.updateState('u1', 8.1, -5.4 + 0.25, Math.PI, 'sit');
-    expect(room.positionOf('u1')).toEqual({ x: 8.1, z: -5.4 + 0.25 });
+    room.updateState('u1', 2.4, 3.1, 0, 'sit');
+    expect(room.positionOf('u1')).toEqual({ x: 2.4, z: 3.1 });
     advance(60_800);
     director.tick([room]);
     expect(rewards).toEqual(['u1']);

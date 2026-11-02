@@ -23,30 +23,33 @@ export interface PeriodLighting {
   sunIntensity: number;
 }
 
-/** Ánh sáng trong phòng theo buổi: đêm thì nắng gần tắt, đèn trần ấm thay vào. */
+/**
+ * Văn phòng tông đen: nền ngoài tối, ánh sáng chung dịu; ánh sáng ban ngày lạnh vào từ cửa sổ
+ * phía bắc, tối thì gần tắt (đèn thả, đèn cây ấm thay vào).
+ */
 export const PERIOD_LIGHTING: Readonly<Record<DayPeriod, PeriodLighting>> = {
   morning: {
-    background: 0xfdf3e7,
-    hemiSky: 0xfff6ea,
-    hemiGround: 0xc9a98a,
-    hemiIntensity: 1.7,
-    sunColor: 0xffffff,
-    sunIntensity: 2.1,
+    background: 0x111116,
+    hemiSky: 0xe6ecff,
+    hemiGround: 0x3a2222,
+    hemiIntensity: 1.35,
+    sunColor: 0xdfe9ff,
+    sunIntensity: 1.6,
   },
   afternoon: {
-    background: 0xfbe6d2,
-    hemiSky: 0xffe9d2,
-    hemiGround: 0xc49478,
-    hemiIntensity: 1.55,
-    sunColor: 0xffc58f,
-    sunIntensity: 1.9,
+    background: 0x141114,
+    hemiSky: 0xffe8d6,
+    hemiGround: 0x3d2420,
+    hemiIntensity: 1.3,
+    sunColor: 0xffd3a6,
+    sunIntensity: 1.45,
   },
   night: {
-    background: 0x2a2a44,
-    hemiSky: 0xfff0dc,
-    hemiGround: 0x6d5a6a,
-    hemiIntensity: 1.35,
-    sunColor: 0x9fb4ff,
-    sunIntensity: 0.55,
+    background: 0x08080c,
+    hemiSky: 0xd8ccff,
+    hemiGround: 0x2a1818,
+    hemiIntensity: 1.05,
+    sunColor: 0x8fa2ff,
+    sunIntensity: 0.4,
   },
 };

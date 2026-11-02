@@ -1,9 +1,16 @@
-// Dựng một tầng văn phòng từ OfficeLayout.
-// Đồ lặp lại (bàn, ghế, cây, màn hình) dùng InstancedMesh: mỗi loại 1 draw call.
-// Đồ chỉ có một cái (pantry, sofa, phòng họp...) gộp chung vào 1 mesh màu đỉnh.
+// Dựng một tầng văn phòng từ OfficeLayout, tông đen xám, điểm đỏ ở vài món decor (20 × 13 m).
+// Đồ lặp lại (bàn, ghế, cây, màn hình, đèn thả) dùng InstancedMesh: mỗi loại 1 draw call.
+// Đồ chỉ có một cái gộp chung vào vài mesh màu đỉnh. Vệt sáng đèn, dải LED đỏ, màn hình
+// dùng MeshBasicMaterial (tự sáng) thay cho nhiều đèn thật để máy yếu vẫn chạy.
+// Màu đỏ (RED...) chỉ dùng cho decor: tượng gấu, hộp quà, gối, tranh, vật trên bục.
 import {
+  AdditiveBlending,
   BoxGeometry,
+  BufferAttribute,
+  CanvasTexture as CanvasTextureClass,
+  CapsuleGeometry,
   CircleGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -12,38 +19,87 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshPhongMaterial,
   PlaneGeometry,
+  PointLight,
   Quaternion,
   SphereGeometry,
-  Vector3,
-  CanvasTexture as CanvasTextureClass,
+  SpotLight,
   SRGBColorSpace,
+  TorusGeometry,
+  TorusKnotGeometry,
+  Vector3,
   type BufferGeometry,
   type CanvasTexture,
   type Material,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mergePieces, piece, type Piece } from '../../engine/meshBuilder';
+import { seededRng } from '../../npc/schedule';
 import { STRINGS } from '../../strings';
 import type { Aabb } from '../collision';
-import { createFloorTileTexture } from '../textures';
-import { ceoDoor, ceoGlassWalls, glassWalls, PLANT_SIZE, type OfficeLayout } from './layout';
-import { createCityTexture, createScreenTextures, drawCityscape } from './officeTextures';
+import {
+  ceoDoor,
+  deskBox,
+  deskRotation,
+  deskSeatDir,
+  glassWalls,
+  PLANT_SIZE,
+  type OfficeLayout,
+} from './layout';
+import {
+  createCityTexture,
+  createDarkFloorTexture,
+  createGlassTexture,
+  createLabelTexture,
+  createLightPoolTexture,
+  createPlasterTexture,
+  createScreenTextures,
+  drawCityscape,
+} from './officeTextures';
 import type { DayPeriod } from './period';
 
-const WALL = 0xf6e7d8;
-const BASEBOARD = 0xc9a684;
-const WOOD = 0xd9a46c;
-const WHITE = 0xf2efe9;
-const DARK = 0x3a3f4b;
-const FRAME = 0xb8c2cc;
-const GLASS_HEIGHT = 2.2;
+// ---------- Bảng màu đen xám (đỏ chỉ cho decor) ----------
+/** Tường vữa xám: màu đỉnh nhân với họa tiết vữa (createPlasterTexture). */
+const WALL = 0xdcdcdf;
+const WALL_INNER = 0xd2d2d6;
+const BASEBOARD = 0x0c0c0e;
+const BLACK = 0x121215;
+const CHARCOAL = 0x2a2a30;
+const METAL = 0x5d6068;
+const STEEL = 0xa7abb2;
+const RED = 0xc62828;
+const RED_DARK = 0x8e1b1f;
+const RED_SOFT = 0xe0524f;
+const WOOD = 0x6b4a33;
+const WOOD_DARK = 0x3b2618;
+const CREAM = 0xf1ece3;
+const GOLD = 0xd9a441;
+const FRAME = 0x0e0e10;
+/** Dải LED trắng ấm (không dùng đỏ). */
+const NEON = 0xe9dfcf;
+const GRAY = 0x3d3d45;
+const GRAY_LIGHT = 0x5a5a63;
+const SEAT = 0x34343c;
+const SEAT_BACK = 0x2a2a31;
+const WARM = 0xffd29a;
+
+/** Chiều cao vách kính và vách đặc giữa các phòng. */
+const GLASS_HEIGHT = 2.7;
+const PARTITION_HEIGHT = 2.85;
 
 export interface BuiltOffice {
   readonly group: Group;
   setPeriod(period: DayPeriod): void;
   update(dt: number): void;
-  /** Cửa phòng CEO: mở (có thẻ) thì cánh kính trượt sang bên, đèn máy quẹt thẻ xanh. */
+  /** Cửa phòng sếp: mở (có thẻ) thì cánh kính trượt sang bên, đèn máy quẹt thẻ xanh. */
   setCeoDoorOpen(open: boolean): void;
+  /** Xuyên thấu: tường và vách mờ đi (độ đục 0,25). */
+  setXray(on: boolean): void;
+  /** Đèn thật (đèn rọi, đèn cây): tắt ở mức đồ họa thấp, chỉ còn vệt sáng giả. */
+  setRealLights(on: boolean): void;
+  /** Vách đặc giữa các phòng mờ đi (đang đứng trong phòng / camera ở sau vách). */
+  setPartitionsFaded(on: boolean): void;
 }
 
 function boxPiece(b: Aabb, y0: number, y1: number, color: number): Piece {
@@ -52,10 +108,14 @@ function boxPiece(b: Aabb, y0: number, y1: number, color: number): Piece {
   });
 }
 
+function centerOf(b: Aabb): { x: number; z: number } {
+  return { x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 };
+}
+
 function instanced(
   geometry: BufferGeometry,
   material: Material,
-  transforms: readonly { x: number; z: number; rotY?: number }[],
+  transforms: readonly { x: number; z: number; y?: number; rotY?: number }[],
 ): InstancedMesh {
   const mesh = new InstancedMesh(geometry, material, transforms.length);
   const matrix = new Matrix4();
@@ -64,7 +124,7 @@ function instanced(
   const scale = new Vector3(1, 1, 1);
   transforms.forEach((t, i) => {
     q.setFromAxisAngle(up, t.rotY ?? 0);
-    mesh.setMatrixAt(i, matrix.compose(new Vector3(t.x, 0, t.z), q, scale));
+    mesh.setMatrixAt(i, matrix.compose(new Vector3(t.x, t.y ?? 0, t.z), q, scale));
   });
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
@@ -79,82 +139,184 @@ function instanced(
 const MONITOR_LIFT = 0.36;
 const MONITOR_STAND = MONITOR_LIFT - 0.19;
 
-/** Bàn làm việc, tâm ở gốc toạ độ; người ngồi phía +Z. */
-function deskGeometry(w: number, d: number, h: number): BufferGeometry {
+/**
+ * Đồ trên bàn cho một chỗ ngồi (màn hình, bàn phím, chuột, cốc, giấy), tâm ở gốc toạ độ;
+ * người ngồi phía +Z. Mặt bàn dài liền khối của cả dãy dựng riêng (benchPieces).
+ */
+function deskItemsGeometry(w: number, d: number, h: number): BufferGeometry {
   const monitorY = h + MONITOR_LIFT;
   return mergePieces([
-    piece(new BoxGeometry(w, 0.04, d), WOOD, { position: [0, h - 0.02, 0] }),
-    piece(new BoxGeometry(0.05, h - 0.04, d - 0.06), WHITE, {
-      position: [-w / 2 + 0.05, (h - 0.04) / 2, 0],
-    }),
-    piece(new BoxGeometry(0.05, h - 0.04, d - 0.06), WHITE, {
-      position: [w / 2 - 0.05, (h - 0.04) / 2, 0],
-    }),
-    piece(new BoxGeometry(w - 0.1, h * 0.5, 0.03), WHITE, {
-      position: [0, h * 0.5, -d / 2 + 0.05],
-    }),
     // Màn hình (phần vỏ; mặt hiển thị là InstancedMesh riêng).
-    piece(new BoxGeometry(0.62, 0.38, 0.04), DARK, { position: [0, monitorY, -d / 2 + 0.15] }),
-    // Chân đế cao (kiểu tay đỡ màn hình) và đế tròn.
-    piece(new CylinderGeometry(0.025, 0.03, MONITOR_STAND, 8), DARK, {
+    piece(new BoxGeometry(0.64, 0.4, 0.035), 0x0b0b0d, { position: [0, monitorY, -d / 2 + 0.15] }),
+    piece(new CylinderGeometry(0.025, 0.03, MONITOR_STAND, 8), METAL, {
       position: [0, h + MONITOR_STAND / 2, -d / 2 + 0.15],
     }),
-    piece(new CylinderGeometry(0.09, 0.1, 0.02, 14), DARK, {
+    piece(new CylinderGeometry(0.09, 0.1, 0.02, 14), METAL, {
       position: [0, h + 0.01, -d / 2 + 0.15],
     }),
-    piece(new BoxGeometry(0.36, 0.015, 0.12), 0x4a4f5c, { position: [0, h + 0.008, d / 2 - 0.17] }),
-    piece(new BoxGeometry(0.06, 0.012, 0.09), 0xe6e6ea, {
-      position: [0.27, h + 0.006, d / 2 - 0.17],
+    piece(new BoxGeometry(0.38, 0.015, 0.12), 0x2f2f36, { position: [0, h + 0.008, d / 2 - 0.17] }),
+    piece(new BoxGeometry(0.07, 0.012, 0.1), 0x3a3a42, {
+      position: [0.29, h + 0.006, d / 2 - 0.17],
     }),
-    piece(new CylinderGeometry(0.035, 0.03, 0.08, 10), 0xffffff, {
+    piece(new CylinderGeometry(0.035, 0.03, 0.08, 10), CREAM, {
       position: [w / 2 - 0.2, h + 0.04, -0.02],
     }),
-    piece(new BoxGeometry(0.2, 0.03, 0.27), 0xfdfaf0, {
-      position: [-w / 2 + 0.25, h + 0.015, 0],
+    piece(new BoxGeometry(0.2, 0.03, 0.27), CREAM, {
+      position: [-w / 2 + 0.26, h + 0.015, 0],
       rotation: [0, 0.2, 0],
     }),
   ]);
 }
 
+/**
+ * Bàn dài liền khối cho mỗi dãy: một mặt bàn đen chạy suốt dãy, vách ngăn thấp ở giữa, chân
+ * khung kim loại ở hai đầu và giữa, máng dây dưới mặt bàn.
+ */
+function benchPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const h = layout.desk.height;
+  const rows = new Map<number, Aabb>();
+  for (const desk of layout.desks) {
+    const b = deskBox(layout, desk);
+    const key = Math.round(((b.minX + b.maxX) / 2 - (desk.side * (b.maxX - b.minX)) / 2) * 100);
+    const row = rows.get(key);
+    rows.set(
+      key,
+      row
+        ? {
+            minX: Math.min(row.minX, b.minX),
+            maxX: Math.max(row.maxX, b.maxX),
+            minZ: Math.min(row.minZ, b.minZ),
+            maxZ: Math.max(row.maxZ, b.maxZ),
+          }
+        : b,
+    );
+  }
+  for (const row of rows.values()) {
+    const cx = (row.minX + row.maxX) / 2;
+    const length = row.maxZ - row.minZ;
+    pieces.push(boxPiece(row, h - 0.045, h, BLACK));
+    // Viền xám mảnh hai mép dài.
+    for (const x of [row.minX, row.maxX]) {
+      pieces.push(
+        boxPiece(
+          { minX: x - 0.006, maxX: x + 0.006, minZ: row.minZ, maxZ: row.maxZ },
+          h - 0.04,
+          h - 0.01,
+          GRAY_LIGHT,
+        ),
+      );
+    }
+    // Vách ngăn giữa dãy (xám mờ, khung đen).
+    pieces.push(
+      boxPiece(
+        { minX: cx - 0.012, maxX: cx + 0.012, minZ: row.minZ + 0.05, maxZ: row.maxZ - 0.05 },
+        h,
+        h + 0.36,
+        GRAY,
+      ),
+    );
+    pieces.push(
+      boxPiece(
+        { minX: cx - 0.018, maxX: cx + 0.018, minZ: row.minZ + 0.05, maxZ: row.maxZ - 0.05 },
+        h + 0.36,
+        h + 0.38,
+        FRAME,
+      ),
+    );
+    // Chân khung chữ ∏ mỗi 1,5 m và máng dây.
+    const legs = Math.max(2, Math.round(length / 1.5) + 1);
+    for (let i = 0; i < legs; i += 1) {
+      const z = row.minZ + 0.06 + (i * (length - 0.12)) / (legs - 1);
+      pieces.push(
+        boxPiece(
+          { minX: row.minX + 0.05, maxX: row.maxX - 0.05, minZ: z - 0.03, maxZ: z + 0.03 },
+          h - 0.08,
+          h - 0.045,
+          CHARCOAL,
+        ),
+      );
+      for (const x of [row.minX + 0.08, row.maxX - 0.08]) {
+        pieces.push(
+          boxPiece(
+            { minX: x - 0.03, maxX: x + 0.03, minZ: z - 0.03, maxZ: z + 0.03 },
+            0,
+            h - 0.08,
+            CHARCOAL,
+          ),
+        );
+      }
+    }
+    pieces.push(
+      boxPiece(
+        { minX: cx - 0.1, maxX: cx + 0.1, minZ: row.minZ + 0.1, maxZ: row.maxZ - 0.1 },
+        h - 0.16,
+        h - 0.1,
+        0x1e1e23,
+      ),
+    );
+  }
+  return pieces;
+}
+
 /** Màn hình hiển thị (mặt phẳng), cùng toạ độ với deskGeometry. */
 function screenGeometry(d: number, h: number): BufferGeometry {
-  const geometry = new PlaneGeometry(0.56, 0.33);
-  geometry.translate(0, h + MONITOR_LIFT, -d / 2 + 0.15 + 0.021);
+  const geometry = new PlaneGeometry(0.58, 0.34);
+  geometry.translate(0, h + MONITOR_LIFT, -d / 2 + 0.15 + 0.019);
   return geometry;
 }
 
-/** Ghế văn phòng, người ngồi quay mặt về -Z (lưng tựa ở phía +Z). */
+/** Ghế văn phòng xám than chân đen; người ngồi quay mặt về -Z (lưng tựa ở phía +Z). */
 function chairGeometry(): BufferGeometry {
   return mergePieces([
-    piece(new BoxGeometry(0.36, 0.06, 0.34), 0x5c8fa8, { position: [0, 0.24, 0] }),
-    piece(new BoxGeometry(0.34, 0.3, 0.05), 0x5c8fa8, {
-      position: [0, 0.44, 0.19],
+    piece(new BoxGeometry(0.38, 0.07, 0.36), SEAT, { position: [0, 0.24, 0] }),
+    piece(new BoxGeometry(0.36, 0.34, 0.05), SEAT_BACK, {
+      position: [0, 0.46, 0.2],
       rotation: [-0.12, 0, 0],
     }),
-    piece(new CylinderGeometry(0.025, 0.025, 0.2, 8), 0x9aa3ad, { position: [0, 0.12, 0] }),
-    piece(new BoxGeometry(0.42, 0.03, 0.05), 0x6b737d, { position: [0, 0.025, 0] }),
-    piece(new BoxGeometry(0.05, 0.03, 0.42), 0x6b737d, { position: [0, 0.025, 0] }),
+    piece(new CylinderGeometry(0.025, 0.025, 0.2, 8), METAL, { position: [0, 0.12, 0] }),
+    piece(new BoxGeometry(0.44, 0.03, 0.05), BLACK, { position: [0, 0.025, 0] }),
+    piece(new BoxGeometry(0.05, 0.03, 0.44), BLACK, { position: [0, 0.025, 0] }),
   ]);
 }
 
 function plantGeometry(): BufferGeometry {
   const r = PLANT_SIZE / 2;
   return mergePieces([
-    piece(new CylinderGeometry(r * 0.75, r * 0.55, 0.34, 14), 0xe08a6d, { position: [0, 0.17, 0] }),
-    piece(new CylinderGeometry(r * 0.7, r * 0.7, 0.02, 14), 0x6b4a32, { position: [0, 0.33, 0] }),
-    piece(new SphereGeometry(r * 0.95, 12, 9), 0x77b07a, {
-      position: [0, 0.62, 0],
-      scale: [1, 1.15, 1],
+    piece(new CylinderGeometry(r * 0.75, r * 0.6, 0.42, 16), BLACK, { position: [0, 0.21, 0] }),
+    piece(new CylinderGeometry(r * 0.77, r * 0.77, 0.03, 16), METAL, { position: [0, 0.4, 0] }),
+    piece(new CylinderGeometry(r * 0.7, r * 0.7, 0.02, 14), 0x3b2a1e, { position: [0, 0.41, 0] }),
+    piece(new SphereGeometry(r * 0.95, 12, 9), 0x3f7d4e, {
+      position: [0, 0.74, 0],
+      scale: [1, 1.2, 1],
     }),
-    piece(new SphereGeometry(r * 0.6, 10, 8), 0x8cc58c, { position: [r * 0.3, 0.92, r * 0.1] }),
-    piece(new SphereGeometry(r * 0.5, 10, 8), 0x6aa56e, { position: [-r * 0.35, 0.82, -r * 0.15] }),
+    piece(new SphereGeometry(r * 0.6, 10, 8), 0x54975f, { position: [r * 0.3, 1.06, r * 0.1] }),
+    piece(new SphereGeometry(r * 0.5, 10, 8), 0x356b42, { position: [-r * 0.35, 0.95, -r * 0.15] }),
   ]);
 }
+
+/** Đèn thả: chao đen, dây treo lên trần (3,2 m). Bóng đèn là mesh riêng (tự sáng). */
+const PENDANT_Y = 2.35;
+function pendantGeometry(ceiling: number): BufferGeometry {
+  return mergePieces([
+    piece(new CylinderGeometry(0.006, 0.006, ceiling - PENDANT_Y, 4), FRAME, {
+      position: [0, (ceiling + PENDANT_Y) / 2, 0],
+    }),
+    piece(new CylinderGeometry(0.06, 0.2, 0.2, 18, 1, true), BLACK, {
+      position: [0, PENDANT_Y - 0.1, 0],
+    }),
+    piece(new TorusGeometry(0.2, 0.008, 6, 24), METAL, {
+      position: [0, PENDANT_Y - 0.2, 0],
+      rotation: [Math.PI / 2, 0, 0],
+    }),
+  ]);
+}
+
+// ---------- Tường ----------
 
 function wallPieces(layout: OfficeLayout): Piece[] {
   const { minX, maxX, minZ, maxZ } = layout.bounds;
   const h = layout.wallHeight;
-  const w = layout.window;
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
   const width = maxX - minX;
@@ -174,178 +336,634 @@ function wallPieces(layout: OfficeLayout): Piece[] {
     plane(width, h, cx, h / 2, maxZ, Math.PI),
     plane(depth, h, minX, h / 2, cz, Math.PI / 2),
     plane(depth, h, maxX, h / 2, cz, -Math.PI / 2),
-    // Tường kính phía sau: phần dưới, phần trên và hai mép ngoài khung cửa.
-    plane(width, w.bottom, cx, w.bottom / 2, minZ, 0),
-    plane(width, h - w.top, cx, (h + w.top) / 2, minZ, 0),
-    plane(w.minX - minX, w.top - w.bottom, (minX + w.minX) / 2, (w.top + w.bottom) / 2, minZ, 0),
-    plane(maxX - w.maxX, w.top - w.bottom, (maxX + w.maxX) / 2, (w.top + w.bottom) / 2, minZ, 0),
   ];
-  // Len chân tường (nhô vào 2 cm).
+  // Tường bắc có 3 ô cửa sổ: dải dưới, dải trên và các mảng giữa các ô.
+  const { spans, bottom, top } = layout.windows;
+  pieces.push(plane(width, bottom, cx, bottom / 2, minZ, 0));
+  pieces.push(plane(width, h - top, cx, (h + top) / 2, minZ, 0));
+  let x = minX;
+  for (const span of [...spans, { minX: maxX, maxX }]) {
+    if (span.minX > x) {
+      pieces.push(
+        plane(span.minX - x, top - bottom, (x + span.minX) / 2, (top + bottom) / 2, minZ, 0),
+      );
+    }
+    x = span.maxX;
+  }
+  // Len chân tường đen.
   const walls = [
     { x: cx, z: maxZ - 0.02, rotY: Math.PI, length: width },
     { x: cx, z: minZ + 0.02, rotY: 0, length: width },
     { x: minX + 0.02, z: cz, rotY: Math.PI / 2, length: depth },
     { x: maxX - 0.02, z: cz, rotY: -Math.PI / 2, length: depth },
   ];
-  for (const wall of walls)
-    pieces.push(plane(wall.length, 0.14, wall.x, 0.07, wall.z, wall.rotY, BASEBOARD));
+  for (const wall of walls) {
+    pieces.push(plane(wall.length, 0.12, wall.x, 0.06, wall.z, wall.rotY, BASEBOARD));
+  }
   return pieces;
 }
 
-/** Đồ chỉ có một cái: gộp tất cả vào một mesh. */
-function staticPieces(layout: OfficeLayout): Piece[] {
+/** Vách đặc giữa các phòng: mesh riêng để tự mờ khi camera hoặc nhân vật ở sau vách. */
+function partitionPieces(layout: OfficeLayout): Piece[] {
+  return layout.partitions.solid.flatMap((wall) => [
+    boxPiece(wall, 0, PARTITION_HEIGHT, WALL_INNER),
+    boxPiece(wall, 0, 0.12, BASEBOARD),
+  ]);
+}
+
+/** Dải LED trắng ấm tự sáng: viền trần, đỉnh vách, mép quầy. */
+function neonPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { minX, maxX, minZ, maxZ } = layout.bounds;
+  // Đường LED trên đỉnh tường bao (viền trần).
+  const top = layout.wallHeight - 0.02;
+  pieces.push(
+    boxPiece({ minX, maxX, minZ: minZ + 0.02, maxZ: minZ + 0.05 }, top - 0.02, top, NEON),
+  );
+  pieces.push(
+    boxPiece({ minX: minX + 0.02, maxX: minX + 0.05, minZ, maxZ }, top - 0.02, top, NEON),
+  );
+  pieces.push(
+    boxPiece({ minX: maxX - 0.05, maxX: maxX - 0.02, minZ, maxZ }, top - 0.02, top, NEON),
+  );
+  for (const wall of layout.partitions.solid) {
+    pieces.push(boxPiece(wall, PARTITION_HEIGHT, PARTITION_HEIGHT + 0.02, NEON));
+  }
+  const { counter } = layout.pantry;
+  pieces.push(
+    boxPiece({ ...counter, maxX: counter.minX + 0.012 }, 0.06, 0.08, NEON),
+    boxPiece({ ...counter, maxX: counter.minX + 0.012 }, 0.9, 0.915, NEON),
+  );
+  return pieces;
+}
+
+// ---------- Đồ tĩnh ----------
+
+function windowPieces(layout: OfficeLayout): Piece[] {
   const pieces: Piece[] = [];
   const { minZ } = layout.bounds;
-  const w = layout.window;
+  const { spans, bottom, top } = layout.windows;
+  for (const span of spans) {
+    const sill = { minX: span.minX - 0.05, maxX: span.maxX + 0.05, minZ, maxZ: minZ + 0.14 };
+    pieces.push(boxPiece(sill, bottom - 0.05, bottom, FRAME));
+    pieces.push(boxPiece({ ...sill, maxZ: minZ + 0.06 }, top, top + 0.06, FRAME));
+    for (const x of [span.minX, (span.minX + span.maxX) / 2, span.maxX]) {
+      pieces.push(
+        boxPiece({ minX: x - 0.03, maxX: x + 0.03, minZ, maxZ: minZ + 0.06 }, bottom, top, FRAME),
+      );
+    }
+  }
+  return pieces;
+}
 
-  // Khung cửa kính: bậu, khung trên và các thanh dọc mỗi 2,5 m.
-  const sill = { minX: w.minX, maxX: w.maxX, minZ, maxZ: minZ + 0.16 };
-  pieces.push(boxPiece(sill, w.bottom - 0.04, w.bottom, 0xe9e3da));
-  pieces.push(boxPiece({ ...sill, maxZ: minZ + 0.06 }, w.top, w.top + 0.05, FRAME));
-  for (let x = w.minX; x <= w.maxX + 0.01; x += 2.5) {
+function floorPatches(layout: OfficeLayout): Piece[] {
+  const patch = (b: Aabb, color: number, y = 0.004): Piece => boxPiece(b, 0.001, y, color);
+  const { pantry, lounge, ceoRoom, meeting } = layout;
+  const door = layout.entrance;
+  const inset = (b: Aabb, d: number): Aabb => ({
+    minX: b.minX + d,
+    maxX: b.maxX - d,
+    minZ: b.minZ + d,
+    maxZ: b.maxZ - d,
+  });
+  return [
+    patch(ceoRoom.bounds, 0x26262b),
+    patch(
+      {
+        minX: ceoRoom.desk.minX - 0.5,
+        maxX: ceoRoom.desk.maxX + 0.5,
+        minZ: ceoRoom.desk.minZ - 0.6,
+        maxZ: ceoRoom.desk.maxZ + 1.0,
+      },
+      0x34343b,
+      0.007,
+    ),
+    patch(meeting.bounds, 0x1f2024),
+    patch(lounge.bounds, 0x232327),
+    patch(lounge.rug, 0x3a3a41, 0.007),
+    patch(inset(lounge.rug, 0.15), 0x45454d, 0.009),
+    patch(pantry.floor, 0x2e2e33),
+    // Thảm xám than ở lối vào.
+    patch(
+      {
+        minX: door.doorX - 0.9,
+        maxX: door.doorX + 0.9,
+        minZ: layout.bounds.maxZ - 1.4,
+        maxZ: layout.bounds.maxZ - 0.05,
+      },
+      0x34343b,
+      0.007,
+    ),
+  ];
+}
+
+function glassFramePieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  for (const glass of [...glassWalls(layout), ceoDoor(layout)]) {
+    const alongX = glass.maxX - glass.minX > glass.maxZ - glass.minZ;
+    const posts = alongX
+      ? [
+          { ...glass, maxX: glass.minX + 0.05 },
+          { ...glass, minX: glass.maxX - 0.05 },
+        ]
+      : [
+          { ...glass, maxZ: glass.minZ + 0.05 },
+          { ...glass, minZ: glass.maxZ - 0.05 },
+        ];
+    if (glass === ceoDoor(layout)) continue;
+    for (const post of posts) pieces.push(boxPiece(post, 0, GLASS_HEIGHT, FRAME));
+    pieces.push(boxPiece(glass, GLASS_HEIGHT - 0.04, GLASS_HEIGHT + 0.03, FRAME));
+    pieces.push(boxPiece(glass, 0, 0.06, FRAME));
+  }
+  // Khung trên khoảng cửa phòng sếp.
+  pieces.push(boxPiece(ceoDoor(layout), GLASS_HEIGHT - 0.04, GLASS_HEIGHT + 0.03, FRAME));
+  return pieces;
+}
+
+function ceoPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { desk: cd, cabinet, reader, bounds } = layout.ceoRoom;
+  const top = 0.45;
+  const cx = (cd.minX + cd.maxX) / 2;
+  // Bàn sếp 2,6 × 1,0 m: mặt gỗ sẫm, hộc đen hai bên, tấm chắn trước có dải đỏ.
+  pieces.push(boxPiece(cd, top - 0.05, top, WOOD_DARK));
+  pieces.push(boxPiece({ ...cd, maxX: cd.minX + 0.5 }, 0, top - 0.05, BLACK));
+  pieces.push(boxPiece({ ...cd, minX: cd.maxX - 0.5 }, 0, top - 0.05, BLACK));
+  pieces.push(boxPiece({ ...cd, maxZ: cd.minZ + 0.05 }, 0.04, top - 0.05, BLACK));
+  pieces.push(
+    boxPiece(
+      { minX: cd.minX + 0.5, maxX: cd.maxX - 0.5, minZ: cd.minZ - 0.004, maxZ: cd.minZ + 0.01 },
+      0.2,
+      0.23,
+      METAL,
+    ),
+  );
+  // Màn hình lớn quay về phía người ngồi (+Z), bàn phím, biển tên vàng, cốc đỏ.
+  pieces.push(
+    boxPiece(
+      { minX: cx - 0.42, maxX: cx + 0.42, minZ: cd.minZ + 0.18, maxZ: cd.minZ + 0.22 },
+      top + 0.22,
+      top + 0.7,
+      0x0b0b0d,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cx - 0.04, maxX: cx + 0.04, minZ: cd.minZ + 0.18, maxZ: cd.minZ + 0.24 },
+      top,
+      top + 0.24,
+      METAL,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cx - 0.22, maxX: cx + 0.22, minZ: cd.maxZ - 0.3, maxZ: cd.maxZ - 0.17 },
+      top,
+      top + 0.015,
+      0x2f2f36,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cd.maxX - 0.55, maxX: cd.maxX - 0.2, minZ: cd.maxZ - 0.16, maxZ: cd.maxZ - 0.08 },
+      top,
+      top + 0.07,
+      GOLD,
+    ),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.04, 0.035, 0.1, 10), CREAM, {
+      position: [cd.minX + 0.3, top + 0.05, cd.maxZ - 0.3],
+    }),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cd.minX + 0.6, maxX: cd.minX + 0.9, minZ: cd.maxZ - 0.4, maxZ: cd.maxZ - 0.2 },
+      top,
+      top + 0.03,
+      CREAM,
+    ),
+  );
+  // Ghế sếp: lưng cao da đen, viền đỏ (người ngồi quay mặt về -Z).
+  const chairZ = cd.maxZ + 0.3;
+  pieces.push(piece(new BoxGeometry(0.5, 0.09, 0.46), BLACK, { position: [cx, 0.27, chairZ] }));
+  pieces.push(
+    piece(new BoxGeometry(0.48, 0.62, 0.07), BLACK, {
+      position: [cx, 0.62, chairZ + 0.24],
+      rotation: [-0.1, 0, 0],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.5, 0.03, 0.08), METAL, {
+      position: [cx, 0.94, chairZ + 0.27],
+      rotation: [-0.1, 0, 0],
+    }),
+  );
+  for (const side of [-1, 1]) {
     pieces.push(
-      boxPiece({ minX: x - 0.03, maxX: x + 0.03, minZ, maxZ: minZ + 0.06 }, w.bottom, w.top, FRAME),
+      piece(new BoxGeometry(0.05, 0.05, 0.36), CHARCOAL, {
+        position: [cx + side * 0.27, 0.42, chairZ],
+      }),
     );
   }
-
-  // Thảm và nền các khu (mỏng, nằm sát sàn).
-  const floorPatch = (b: Aabb, color: number): Piece => boxPiece(b, 0.001, 0.008, color);
-  pieces.push(floorPatch(layout.meeting.bounds, 0x9db7c9));
-  pieces.push(floorPatch(layout.pantry.floor, 0xf4efe6));
-  pieces.push(floorPatch(layout.lounge.rug, 0xf3b9a7));
-  pieces.push(floorPatch(layout.ceoRoom.bounds, 0xc9a98a));
-
-  // Phòng họp: bàn dài, khung kính.
-  const table = layout.meeting.table;
-  pieces.push(boxPiece(table, 0.4, 0.45, 0xf0e2cf));
   pieces.push(
-    boxPiece(
-      {
-        minX: table.minX + 0.4,
-        maxX: table.minX + 0.5,
-        minZ: table.minZ + 0.3,
-        maxZ: table.maxZ - 0.3,
-      },
-      0,
-      0.4,
-      DARK,
-    ),
+    piece(new CylinderGeometry(0.03, 0.03, 0.22, 8), METAL, { position: [cx, 0.13, chairZ] }),
   );
   pieces.push(
-    boxPiece(
-      {
-        minX: table.maxX - 0.5,
-        maxX: table.maxX - 0.4,
-        minZ: table.minZ + 0.3,
-        maxZ: table.maxZ - 0.3,
-      },
-      0,
-      0.4,
-      DARK,
-    ),
+    piece(new CylinderGeometry(0.28, 0.28, 0.03, 5), BLACK, { position: [cx, 0.02, chairZ] }),
   );
-  for (const glass of [...glassWalls(layout), ...ceoGlassWalls(layout)]) {
-    const posts =
-      glass.maxX - glass.minX > glass.maxZ - glass.minZ
-        ? [
-            { ...glass, maxX: glass.minX + 0.06 },
-            { ...glass, minX: glass.maxX - 0.06 },
-          ]
-        : [
-            { ...glass, maxZ: glass.minZ + 0.06 },
-            { ...glass, minZ: glass.maxZ - 0.06 },
-          ];
-    for (const post of posts) pieces.push(boxPiece(post, 0, GLASS_HEIGHT, FRAME));
-    pieces.push(boxPiece(glass, GLASS_HEIGHT - 0.05, GLASS_HEIGHT, FRAME));
-    pieces.push(boxPiece(glass, 0, 0.05, FRAME));
+  // Tủ cạnh bàn: thân đen, mặt gỗ, cửa có tay nắm vàng, trên có cúp vàng.
+  pieces.push(boxPiece(cabinet, 0, 0.82, BLACK));
+  pieces.push(boxPiece(cabinet, 0.82, 0.86, WOOD_DARK));
+  for (const z of [cabinet.minZ + 0.37, cabinet.maxZ - 0.37]) {
+    pieces.push(
+      boxPiece(
+        { minX: cabinet.minX - 0.01, maxX: cabinet.minX, minZ: z - 0.34, maxZ: z + 0.34 },
+        0.06,
+        0.78,
+        0x1b1b1f,
+      ),
+    );
+    pieces.push(
+      boxPiece(
+        { minX: cabinet.minX - 0.03, maxX: cabinet.minX - 0.01, minZ: z - 0.02, maxZ: z + 0.02 },
+        0.4,
+        0.55,
+        GOLD,
+      ),
+    );
   }
+  const cab = centerOf(cabinet);
+  pieces.push(
+    piece(new CylinderGeometry(0.07, 0.04, 0.12, 12), GOLD, {
+      position: [cab.x, 0.98, cab.z - 0.3],
+    }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.05, 0.06, 0.06, 12), WOOD_DARK, {
+      position: [cab.x, 0.89, cab.z - 0.3],
+    }),
+  );
+  pieces.push(
+    piece(new SphereGeometry(0.12, 12, 10), RED, { position: [cab.x, 0.98, cab.z + 0.35] }),
+  );
+  // Tranh lớn trên tường nam phòng sếp (mặt quay vào phòng).
+  const art = { x: cx, z: bounds.maxZ - 0.012 };
+  pieces.push(
+    piece(new PlaneGeometry(1.9, 1.05), GOLD, {
+      position: [art.x, 1.75, art.z],
+      rotation: [0, Math.PI, 0],
+    }),
+  );
+  pieces.push(
+    piece(new PlaneGeometry(1.8, 0.95), BLACK, {
+      position: [art.x, 1.75, art.z - 0.004],
+      rotation: [0, Math.PI, 0],
+    }),
+  );
+  pieces.push(
+    piece(new CircleGeometry(0.32, 32), RED, {
+      position: [art.x - 0.3, 1.8, art.z - 0.008],
+      rotation: [0, Math.PI, 0],
+    }),
+  );
+  pieces.push(
+    piece(new PlaneGeometry(0.9, 0.05), CREAM, {
+      position: [art.x + 0.25, 1.5, art.z - 0.008],
+      rotation: [0, Math.PI, 0.35],
+    }),
+  );
+  // Máy quẹt thẻ (mặt ngoài vách tây).
+  pieces.push(boxPiece(reader, 0.95, 1.25, BLACK));
+  return pieces;
+}
 
-  // Phòng CEO: bàn gỗ sẫm, màn hình quay về phía người ngồi (phía cửa kính), biển tên,
-  // máy quẹt thẻ gắn mặt ngoài vách trước.
-  const ceo = layout.ceoRoom;
-  const cd = ceo.desk;
-  const DESK_TOP = 0.43;
-  pieces.push(boxPiece(cd, DESK_TOP - 0.05, DESK_TOP, 0x7a4e32));
-  pieces.push(boxPiece({ ...cd, minZ: cd.maxZ - 0.06 }, 0.05, DESK_TOP - 0.05, 0x8d5e3c));
-  pieces.push(boxPiece({ ...cd, maxX: cd.minX + 0.08 }, 0, DESK_TOP - 0.05, 0x8d5e3c));
-  pieces.push(boxPiece({ ...cd, minX: cd.maxX - 0.08 }, 0, DESK_TOP - 0.05, 0x8d5e3c));
-  const cx = (cd.minX + cd.maxX) / 2;
+function meetingPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { table, bounds } = layout.meeting;
+  // Bàn họp 3 × 1,8 m mặt đen bóng, chân chữ T, dải đỏ quanh mép.
+  pieces.push(boxPiece(table, 0.4, 0.45, BLACK));
   pieces.push(
     boxPiece(
-      { minX: cx - 0.36, maxX: cx + 0.36, minZ: cd.maxZ - 0.2, maxZ: cd.maxZ - 0.15 },
-      DESK_TOP + 0.2,
-      DESK_TOP + 0.62,
-      DARK,
+      {
+        minX: table.minX + 0.02,
+        maxX: table.maxX - 0.02,
+        minZ: table.minZ - 0.005,
+        maxZ: table.maxZ + 0.005,
+      },
+      0.385,
+      0.4,
+      GRAY_LIGHT,
+    ),
+  );
+  for (const x of [table.minX + 0.55, table.maxX - 0.55]) {
+    pieces.push(
+      boxPiece(
+        { minX: x - 0.05, maxX: x + 0.05, minZ: table.minZ + 0.35, maxZ: table.maxZ - 0.35 },
+        0,
+        0.4,
+        CHARCOAL,
+      ),
+    );
+    pieces.push(
+      boxPiece(
+        { minX: x - 0.05, maxX: x + 0.05, minZ: table.minZ + 0.2, maxZ: table.maxZ - 0.2 },
+        0,
+        0.03,
+        CHARCOAL,
+      ),
+    );
+  }
+  const c = centerOf(table);
+  pieces.push(
+    boxPiece(
+      { minX: c.x - 0.2, maxX: c.x + 0.2, minZ: c.z - 0.12, maxZ: c.z + 0.12 },
+      0.45,
+      0.48,
+      0x2f2f36,
+    ),
+  );
+  for (const dx of [-0.9, 0.8]) {
+    pieces.push(
+      boxPiece(
+        { minX: c.x + dx - 0.12, maxX: c.x + dx + 0.12, minZ: c.z - 0.4, maxZ: c.z - 0.24 },
+        0.45,
+        0.455,
+        CREAM,
+      ),
+    );
+  }
+  // Tủ thấp dưới TV trên tường nam.
+  pieces.push(
+    boxPiece(
+      { minX: c.x - 1.1, maxX: c.x + 1.1, minZ: bounds.maxZ - 0.4, maxZ: bounds.maxZ - 0.02 },
+      0,
+      0.45,
+      BLACK,
     ),
   );
   pieces.push(
     boxPiece(
-      { minX: cx - 0.04, maxX: cx + 0.04, minZ: cd.maxZ - 0.2, maxZ: cd.maxZ - 0.14 },
-      DESK_TOP,
-      DESK_TOP + 0.22,
-      DARK,
+      { minX: c.x - 1.1, maxX: c.x + 1.1, minZ: bounds.maxZ - 0.41, maxZ: bounds.maxZ - 0.4 },
+      0.2,
+      0.22,
+      GRAY,
     ),
   );
   pieces.push(
     boxPiece(
-      { minX: cd.minX + 0.12, maxX: cd.minX + 0.42, minZ: cd.minZ + 0.08, maxZ: cd.minZ + 0.16 },
-      DESK_TOP,
-      DESK_TOP + 0.08,
-      0xf2c14e,
+      { minX: c.x - 0.95, maxX: c.x + 0.95, minZ: bounds.maxZ - 0.05, maxZ: bounds.maxZ - 0.02 },
+      1.05,
+      2.05,
+      0x0b0b0d,
     ),
   );
-  pieces.push(boxPiece(ceo.reader, 0.95, 1.25, DARK));
+  return pieces;
+}
 
-  // Pantry: quầy, máy pha cà phê, tủ lạnh, bàn tròn.
-  const { counter, coffee, fridge, table: pantryTable } = layout.pantry;
-  pieces.push(boxPiece(counter, 0, 0.56, 0xb7d3c4));
-  pieces.push(boxPiece(counter, 0.56, 0.6, 0xf6f3ee));
+function loungePieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { sofa, table, daybed, sideTable, lamp, seatXs } = layout.lounge;
+  // Sofa ba chỗ đỏ đô, chân đen, gối kem.
+  pieces.push(boxPiece({ ...sofa, maxZ: sofa.maxZ - 0.22 }, 0.05, 0.32, 0x2e2e35));
+  pieces.push(boxPiece({ ...sofa, minZ: sofa.maxZ - 0.22 }, 0.05, 0.78, 0x2e2e35));
+  pieces.push(boxPiece({ ...sofa, maxX: sofa.minX + 0.18 }, 0.05, 0.5, 0x26262c));
+  pieces.push(boxPiece({ ...sofa, minX: sofa.maxX - 0.18 }, 0.05, 0.5, 0x26262c));
+  pieces.push(boxPiece(sofa, 0, 0.05, BLACK));
+  for (const x of seatXs) {
+    pieces.push(
+      piece(new BoxGeometry(0.68, 0.1, 0.52), 0x4a4a53, { position: [x, 0.37, sofa.minZ + 0.3] }),
+    );
+    pieces.push(
+      piece(new BoxGeometry(0.6, 0.36, 0.12), 0x4a4a53, {
+        position: [x, 0.58, sofa.maxZ - 0.3],
+        rotation: [-0.18, 0, 0],
+      }),
+    );
+  }
+  for (const x of [sofa.minX + 0.4, sofa.maxX - 0.4]) {
+    pieces.push(
+      // Gối decor: một đỏ, một kem.
+      piece(new BoxGeometry(0.34, 0.3, 0.1), x < 6 ? RED : CREAM, {
+        position: [x, 0.58, sofa.maxZ - 0.38],
+        rotation: [-0.25, 0, x < 6 ? 0.2 : -0.2],
+      }),
+    );
+  }
+  // Bàn trà đen thấp, trên có khay và cốc.
+  pieces.push(boxPiece(table, 0.28, 0.32, BLACK));
   pieces.push(
-    piece(new BoxGeometry(0.34, 0.42, 0.36), 0x3d3f47, { position: [coffee.x, 0.81, coffee.z] }),
+    boxPiece(
+      {
+        minX: table.minX + 0.08,
+        maxX: table.maxX - 0.08,
+        minZ: table.minZ + 0.08,
+        maxZ: table.maxZ - 0.08,
+      },
+      0,
+      0.28,
+      CHARCOAL,
+    ),
+  );
+  const tc = centerOf(table);
+  pieces.push(
+    boxPiece(
+      { minX: tc.x - 0.2, maxX: tc.x + 0.1, minZ: tc.z - 0.1, maxZ: tc.z + 0.1 },
+      0.32,
+      0.335,
+      WOOD,
+    ),
   );
   pieces.push(
-    piece(new BoxGeometry(0.3, 0.12, 0.3), 0x2b2c31, {
-      position: [coffee.x, 0.62 + 0.42 + 0.06, coffee.z],
+    piece(new CylinderGeometry(0.035, 0.03, 0.08, 10), CREAM, {
+      position: [tc.x + 0.3, 0.36, tc.z],
     }),
   );
+  // Ghế dài nằm nghỉ: khung đen, nệm xám than, gối và chăn đỏ.
+  pieces.push(boxPiece(daybed, 0, 0.18, BLACK));
   pieces.push(
-    piece(new BoxGeometry(0.04, 0.08, 0.1), 0x9aa3ad, {
-      position: [coffee.x - 0.17, 0.82, coffee.z],
-    }),
+    boxPiece(
+      {
+        minX: daybed.minX + 0.04,
+        maxX: daybed.maxX - 0.04,
+        minZ: daybed.minZ + 0.04,
+        maxZ: daybed.maxZ - 0.04,
+      },
+      0.18,
+      0.32,
+      0x3a3a41,
+    ),
   );
   pieces.push(
-    piece(new CylinderGeometry(0.04, 0.035, 0.08, 10), 0xffffff, {
-      position: [coffee.x - 0.12, 0.64, coffee.z],
-    }),
+    boxPiece(
+      {
+        minX: daybed.minX + 0.08,
+        maxX: daybed.maxX - 0.08,
+        minZ: daybed.minZ + 0.06,
+        maxZ: daybed.minZ + 0.36,
+      },
+      0.32,
+      0.42,
+      RED_SOFT,
+    ),
   );
   pieces.push(
-    piece(new SphereGeometry(0.018, 6, 4), 0xff5a4f, {
-      position: [coffee.x - 0.172, 0.96, coffee.z + 0.1],
+    boxPiece(
+      {
+        minX: daybed.minX + 0.04,
+        maxX: daybed.maxX - 0.04,
+        minZ: daybed.maxZ - 0.75,
+        maxZ: daybed.maxZ - 0.1,
+      },
+      0.32,
+      0.35,
+      GRAY_LIGHT,
+    ),
+  );
+  pieces.push(
+    boxPiece({ ...daybed, minZ: daybed.minZ, maxZ: daybed.minZ + 0.06 }, 0.18, 0.62, BLACK),
+  );
+  // Bàn nhỏ tròn và đèn cây ấm.
+  const sc = centerOf(sideTable);
+  pieces.push(
+    piece(new CylinderGeometry(0.2, 0.2, 0.03, 20), BLACK, { position: [sc.x, 0.5, sc.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.025, 0.025, 0.48, 8), METAL, { position: [sc.x, 0.25, sc.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.14, 0.14, 0.02, 16), BLACK, { position: [sc.x, 0.01, sc.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.06, 0.05, 0.16, 10), 0x2f6b3c, { position: [sc.x, 0.6, sc.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.16, 0.16, 0.02, 16), BLACK, { position: [lamp.x, 0.01, lamp.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.015, 0.015, 1.45, 6), METAL, { position: [lamp.x, 0.74, lamp.z] }),
+  );
+  // Tranh đỏ trên tường nam phòng nghỉ.
+  const { maxZ } = layout.bounds;
+  const ax = (sofa.minX + sofa.maxX) / 2;
+  pieces.push(
+    piece(new PlaneGeometry(1.5, 0.7), BLACK, {
+      position: [ax, 1.55, maxZ - 0.012],
+      rotation: [0, Math.PI, 0],
     }),
   );
   for (let i = 0; i < 3; i += 1) {
     pieces.push(
-      piece(
-        new CylinderGeometry(0.035, 0.03, 0.07, 10),
-        [0xf28a8a, 0x8fc7ff, 0xffd479][i] ?? 0xffffff,
-        {
-          position: [coffee.x, 0.635, coffee.z + 0.5 + i * 0.12],
-        },
+      piece(new PlaneGeometry(0.36, 0.5), [RED, CREAM, RED_DARK][i] ?? RED, {
+        position: [ax - 0.45 + i * 0.45, 1.55, maxZ - 0.016],
+        rotation: [0, Math.PI, 0],
+      }),
+    );
+  }
+  return pieces;
+}
+
+function pantryPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { counter, coffee, microwave, water, fridge, tables } = layout.pantry;
+  const top = 0.92;
+  // Quầy đen, mặt đá sáng.
+  pieces.push(boxPiece(counter, 0, top - 0.04, BLACK));
+  pieces.push(boxPiece({ ...counter, minX: counter.minX - 0.03 }, top - 0.04, top, 0xd8d4cd));
+  // Kệ nổi mỏng sát tường phía trên (không che thiết bị khi nhìn từ trên).
+  pieces.push(boxPiece({ ...counter, minX: counter.maxX - 0.18 }, 1.85, 1.89, BLACK));
+  for (let z = counter.minZ + 0.6; z < counter.maxZ; z += 1.15) {
+    pieces.push(
+      boxPiece(
+        { minX: counter.minX - 0.005, maxX: counter.minX, minZ: z - 0.02, maxZ: z + 0.02 },
+        0.3,
+        0.7,
+        METAL,
       ),
     );
   }
-  pieces.push(boxPiece(fridge, 0, 1.35, 0xeaf1f5));
+  // Máy pha cà phê: thân thép, đầu đen, vòi, đèn đỏ.
+  pieces.push(
+    piece(new BoxGeometry(0.36, 0.46, 0.4), STEEL, { position: [coffee.x, top + 0.23, coffee.z] }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.38, 0.1, 0.42), BLACK, { position: [coffee.x, top + 0.51, coffee.z] }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.06, 0.08, 0.14), BLACK, {
+      position: [coffee.x - 0.2, top + 0.24, coffee.z],
+    }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.04, 0.035, 0.08, 10), CREAM, {
+      position: [coffee.x - 0.15, top + 0.04, coffee.z],
+    }),
+  );
+  pieces.push(
+    piece(new SphereGeometry(0.018, 6, 4), NEON, {
+      position: [coffee.x - 0.185, top + 0.4, coffee.z + 0.12],
+    }),
+  );
+  for (let i = 0; i < 3; i += 1) {
+    pieces.push(
+      piece(new CylinderGeometry(0.035, 0.03, 0.07, 10), [GRAY_LIGHT, CREAM, BLACK][i] ?? CREAM, {
+        position: [coffee.x - 0.05, top + 0.035, coffee.z + 0.42 + i * 0.12],
+      }),
+    );
+  }
+  // Lò vi sóng đen, cửa kính tối, đồng hồ số đỏ.
+  pieces.push(
+    piece(new BoxGeometry(0.42, 0.3, 0.55), BLACK, {
+      position: [microwave.x, top + 0.15, microwave.z],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.01, 0.2, 0.34), 0x30343c, {
+      position: [microwave.x - 0.215, top + 0.15, microwave.z - 0.06],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.01, 0.04, 0.09), NEON, {
+      position: [microwave.x - 0.215, top + 0.22, microwave.z + 0.19],
+    }),
+  );
+  // Cây nước: thân trắng, bình xanh.
+  pieces.push(
+    piece(new BoxGeometry(0.32, 0.5, 0.32), CREAM, { position: [water.x, top + 0.25, water.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.13, 0.13, 0.36, 16), 0x5aa6d6, {
+      position: [water.x, top + 0.68, water.z],
+    }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.06, 0.13, 0.08, 16), 0x5aa6d6, {
+      position: [water.x, top + 0.9, water.z],
+    }),
+  );
+  for (const [dz, color] of [
+    [-0.07, 0x3d8be0],
+    [0.07, RED],
+  ] as const) {
+    pieces.push(
+      piece(new BoxGeometry(0.04, 0.05, 0.04), color, {
+        position: [water.x - 0.17, top + 0.3, water.z + dz],
+      }),
+    );
+  }
+  // Tủ lạnh đen tay nắm thép.
+  pieces.push(boxPiece(fridge, 0, 1.75, 0x18181c));
   pieces.push(
     boxPiece(
       {
         minX: fridge.minX - 0.005,
         maxX: fridge.minX,
-        minZ: fridge.minZ + 0.05,
-        maxZ: fridge.maxZ - 0.05,
+        minZ: fridge.minZ + 0.04,
+        maxZ: fridge.maxZ - 0.04,
       },
-      0.88,
-      0.9,
-      0xb8c2cc,
+      1.15,
+      1.17,
+      METAL,
     ),
   );
   pieces.push(
@@ -354,75 +972,587 @@ function staticPieces(layout: OfficeLayout): Piece[] {
         minX: fridge.minX - 0.04,
         maxX: fridge.minX,
         minZ: fridge.minZ + 0.1,
-        maxZ: fridge.minZ + 0.14,
+        maxZ: fridge.minZ + 0.13,
       },
-      0.95,
+      0.5,
+      1.05,
+      STEEL,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      {
+        minX: fridge.minX - 0.04,
+        maxX: fridge.minX,
+        minZ: fridge.minZ + 0.1,
+        maxZ: fridge.minZ + 0.13,
+      },
       1.25,
-      0x9aa3ad,
+      1.6,
+      STEEL,
     ),
+  );
+  // Bàn đứng cao tròn, mỗi bàn hai ghế đôn đỏ.
+  for (const t of tables) {
+    const c = centerOf(t);
+    pieces.push(
+      piece(new CylinderGeometry(0.35, 0.35, 0.04, 24), BLACK, { position: [c.x, 0.78, c.z] }),
+    );
+    pieces.push(
+      piece(new CylinderGeometry(0.03, 0.03, 0.76, 8), METAL, { position: [c.x, 0.39, c.z] }),
+    );
+    pieces.push(
+      piece(new CylinderGeometry(0.2, 0.22, 0.03, 18), BLACK, { position: [c.x, 0.015, c.z] }),
+    );
+    pieces.push(
+      piece(new CylinderGeometry(0.035, 0.03, 0.08, 10), CREAM, {
+        position: [c.x + 0.1, 0.84, c.z - 0.05],
+      }),
+    );
+    for (const dx of [-0.6, 0.6]) {
+      pieces.push(
+        piece(new CylinderGeometry(0.15, 0.15, 0.06, 16), GRAY, {
+          position: [c.x + dx, 0.58, c.z],
+        }),
+      );
+      pieces.push(
+        piece(new CylinderGeometry(0.02, 0.02, 0.56, 6), METAL, {
+          position: [c.x + dx, 0.28, c.z],
+        }),
+      );
+      pieces.push(
+        piece(new TorusGeometry(0.12, 0.01, 4, 16), METAL, {
+          position: [c.x + dx, 0.22, c.z],
+          rotation: [Math.PI / 2, 0, 0],
+        }),
+      );
+    }
+  }
+  return pieces;
+}
+
+/** Gáy sách tông trầm (đen, xám, kem, xanh than...) và hộp quà đỏ/vàng (decor) trên giá đen. */
+const BOOK_COLORS = [
+  BLACK,
+  GRAY_LIGHT,
+  CREAM,
+  0x2b3a4f,
+  0x6b5a44,
+  0x8a8a92,
+  0x3d4a3e,
+  0xb9ae98,
+  0x4a3b3b,
+];
+function shelfPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const rng = seededRng(31);
+  const height = 2.0;
+  const levels = 5;
+  const SHELF = 0x111114;
+  layout.shelves.forEach((s, shelfIndex) => {
+    // Khung đen: hai vách, nóc, đế, các tầng, tấm lưng xám than.
+    pieces.push(boxPiece({ ...s, maxX: s.minX + 0.04 }, 0, height, SHELF));
+    pieces.push(boxPiece({ ...s, minX: s.maxX - 0.04 }, 0, height, SHELF));
+    pieces.push(boxPiece({ ...s, maxZ: s.minZ + 0.02 }, 0, height, 0x1c1c21));
+    pieces.push(boxPiece(s, height - 0.04, height, SHELF));
+    pieces.push(boxPiece(s, 0, 0.08, SHELF));
+    for (let level = 0; level < levels; level += 1) {
+      const y0 = 0.08 + level * ((height - 0.12) / levels);
+      pieces.push(boxPiece(s, y0, y0 + 0.025, SHELF));
+      const rowHeight = (height - 0.12) / levels - 0.04;
+      let x = s.minX + 0.06;
+      // Mỗi tầng: sách đứng, thỉnh thoảng một chồng sách nằm hoặc hộp quà.
+      const giftAt = (level + shelfIndex) % 2 === 0 ? Math.floor(rng() * 3) : -1;
+      let item = 0;
+      while (x < s.maxX - 0.08) {
+        if (item === giftAt) {
+          const gw = 0.24 + rng() * 0.1;
+          const gh = Math.min(rowHeight - 0.03, 0.18 + rng() * 0.1);
+          if (x + gw > s.maxX - 0.06) break;
+          const color = [RED, GOLD, CREAM, RED][Math.floor(rng() * 4)] ?? RED;
+          const ribbon = color === RED ? GOLD : RED;
+          const gz = s.maxZ - 0.17;
+          const gx = x + gw / 2;
+          const gy = y0 + 0.025;
+          pieces.push(
+            boxPiece(
+              { minX: x, maxX: x + gw, minZ: gz - 0.11, maxZ: gz + 0.11 },
+              gy,
+              gy + gh,
+              color,
+            ),
+          );
+          pieces.push(
+            boxPiece(
+              { minX: gx - 0.015, maxX: gx + 0.015, minZ: gz - 0.115, maxZ: gz + 0.115 },
+              gy,
+              gy + gh + 0.003,
+              ribbon,
+            ),
+          );
+          pieces.push(
+            boxPiece(
+              { minX: x - 0.003, maxX: x + gw + 0.003, minZ: gz - 0.015, maxZ: gz + 0.015 },
+              gy,
+              gy + gh + 0.003,
+              ribbon,
+            ),
+          );
+          for (const side of [-1, 1]) {
+            pieces.push(
+              piece(new SphereGeometry(0.035, 8, 6), ribbon, {
+                position: [gx + side * 0.03, gy + gh + 0.025, gz],
+                scale: [1, 0.6, 0.5],
+              }),
+            );
+          }
+          x += gw + 0.05;
+        } else if (rng() < 0.12) {
+          const sw = 0.26;
+          if (x + sw > s.maxX - 0.06) break;
+          let sy = y0 + 0.025;
+          for (let k = 0; k < 3; k += 1) {
+            const bh = 0.035 + rng() * 0.02;
+            pieces.push(
+              boxPiece(
+                {
+                  minX: x + k * 0.01,
+                  maxX: x + sw - k * 0.015,
+                  minZ: s.maxZ - 0.29,
+                  maxZ: s.maxZ - 0.06,
+                },
+                sy,
+                sy + bh,
+                BOOK_COLORS[Math.floor(rng() * BOOK_COLORS.length)] ?? CREAM,
+              ),
+            );
+            sy += bh;
+          }
+          x += sw + 0.04;
+        } else {
+          const bw = 0.035 + rng() * 0.035;
+          const bh = rowHeight * (0.7 + rng() * 0.28);
+          if (x + bw > s.maxX - 0.06) break;
+          const lean = rng() < 0.08 ? 0.12 : 0;
+          pieces.push(
+            piece(
+              new BoxGeometry(bw, bh, 0.2 + rng() * 0.06),
+              BOOK_COLORS[Math.floor(rng() * BOOK_COLORS.length)] ?? CREAM,
+              {
+                position: [x + bw / 2, y0 + 0.025 + bh / 2, s.maxZ - 0.17],
+                rotation: [0, 0, lean],
+              },
+            ),
+          );
+          x += bw + 0.004 + (lean ? 0.04 : 0);
+        }
+        item += 1;
+      }
+    }
+    // Trên nóc giá: vài hộp quà xếp chồng, nơ vàng/đỏ.
+    const w = s.maxX - s.minX;
+    const gifts: [number, number, number, number][] = [
+      [0.22, 0.32, 0.24, RED],
+      [0.55, 0.22, 0.18, GOLD],
+      [w - 0.3, 0.3, 0.28, CREAM],
+      [w - 0.3, 0.2, 0.15, RED],
+    ];
+    let stackY = height;
+    gifts.forEach(([dx, size, gh, color], gi) => {
+      if ((gi + shelfIndex) % 4 === 1 && gi !== 3) return;
+      const gx = s.minX + dx;
+      const gz = (s.minZ + s.maxZ) / 2;
+      const y0 = gi === 3 ? stackY : height;
+      const ribbon = color === RED ? GOLD : RED;
+      pieces.push(
+        boxPiece(
+          { minX: gx - size / 2, maxX: gx + size / 2, minZ: gz - size / 2, maxZ: gz + size / 2 },
+          y0,
+          y0 + gh,
+          color,
+        ),
+      );
+      pieces.push(
+        boxPiece(
+          {
+            minX: gx - 0.02,
+            maxX: gx + 0.02,
+            minZ: gz - size / 2 - 0.004,
+            maxZ: gz + size / 2 + 0.004,
+          },
+          y0,
+          y0 + gh + 0.004,
+          ribbon,
+        ),
+      );
+      pieces.push(
+        boxPiece(
+          {
+            minX: gx - size / 2 - 0.004,
+            maxX: gx + size / 2 + 0.004,
+            minZ: gz - 0.02,
+            maxZ: gz + 0.02,
+          },
+          y0,
+          y0 + gh + 0.004,
+          ribbon,
+        ),
+      );
+      for (const side of [-1, 1]) {
+        pieces.push(
+          piece(new SphereGeometry(0.045, 8, 6), ribbon, {
+            position: [gx + side * 0.04, y0 + gh + 0.03, gz],
+            scale: [1, 0.6, 0.55],
+            rotation: [0, 0, side * 0.5],
+          }),
+        );
+      }
+      if (gi === 2) stackY = height + gh;
+    });
+  });
+  return pieces;
+}
+
+/**
+ * Decor rải dọc tường tây từ cổng vào trong: kệ giày cạnh cổng, giá treo áo trên tường, bục
+ * trưng bày, bục ống quẻ KPI. Tượng gấu dựng riêng (bearGeometry).
+ */
+function decorPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { pedestals, bear, shoeRack, coatRack } = layout.decor;
+  // Kệ giày gỗ đen ba tầng, trên có vài đôi giày (một đôi đỏ).
+  const r = shoeRack;
+  pieces.push(boxPiece({ ...r, maxX: r.minX + 0.02 }, 0, 0.62, 0x1c1c21));
+  pieces.push(boxPiece({ ...r, maxZ: r.minZ + 0.03 }, 0, 0.62, BLACK));
+  pieces.push(boxPiece({ ...r, minZ: r.maxZ - 0.03 }, 0, 0.62, BLACK));
+  for (const y of [0.04, 0.24, 0.44, 0.6]) pieces.push(boxPiece(r, y - 0.02, y, BLACK));
+  // Giày sneaker: đế trắng, thân nhiều màu (một đôi đỏ), mũi tròn.
+  const shoeColors = [CREAM, BLACK, RED, GRAY_LIGHT, 0x2b3a4f, CREAM, BLACK, 0x6b5a44, GRAY_LIGHT];
+  shoeColors.forEach((color, i) => {
+    const level = Math.floor(i / 3);
+    const z = r.minZ + 0.2 + (i % 3) * 0.4;
+    const y = 0.04 + level * 0.2;
+    for (const dz of [-0.06, 0.06]) {
+      const sx = (r.minX + r.maxX) / 2 + 0.03;
+      pieces.push(
+        boxPiece(
+          { minX: sx - 0.13, maxX: sx + 0.13, minZ: z + dz - 0.045, maxZ: z + dz + 0.045 },
+          y,
+          y + 0.025,
+          0xf4f2ee,
+        ),
+      );
+      pieces.push(
+        piece(new CapsuleGeometry(0.04, 0.16, 3, 8), color, {
+          position: [sx, y + 0.06, z + dz],
+          rotation: [0, 0, Math.PI / 2],
+          scale: [1, 1, 1.05],
+        }),
+      );
+      pieces.push(
+        piece(new SphereGeometry(0.045, 8, 6), color, {
+          position: [sx - 0.07, y + 0.085, z + dz],
+          scale: [1, 0.8, 0.9],
+        }),
+      );
+    }
+  });
+  // Kệ treo một dãy áo: khung thép đen, thanh treo, áo khoác xám/đen/kem (một chiếc đỏ), kệ dưới.
+  const c = coatRack;
+  const railX = (c.minX + c.maxX) / 2;
+  for (const z of [c.minZ + 0.04, c.maxZ - 0.04]) {
+    pieces.push(
+      boxPiece(
+        { minX: railX - 0.02, maxX: railX + 0.02, minZ: z - 0.02, maxZ: z + 0.02 },
+        0,
+        1.65,
+        FRAME,
+      ),
+    );
+    pieces.push(
+      boxPiece({ minX: c.minX, maxX: c.maxX, minZ: z - 0.03, maxZ: z + 0.03 }, 0, 0.03, FRAME),
+    );
+  }
+  pieces.push(
+    piece(new CylinderGeometry(0.014, 0.014, c.maxZ - c.minZ, 8), STEEL, {
+      position: [railX, 1.62, (c.minZ + c.maxZ) / 2],
+      rotation: [Math.PI / 2, 0, 0],
+    }),
   );
   pieces.push(
     boxPiece(
-      {
-        minX: fridge.minX - 0.04,
-        maxX: fridge.minX,
-        minZ: fridge.minZ + 0.1,
-        maxZ: fridge.minZ + 0.14,
-      },
-      0.45,
-      0.8,
-      0x9aa3ad,
+      { minX: c.minX + 0.03, maxX: c.maxX - 0.03, minZ: c.minZ + 0.06, maxZ: c.maxZ - 0.06 },
+      0.22,
+      0.25,
+      0x1c1c21,
     ),
   );
-  const ptx = (pantryTable.minX + pantryTable.maxX) / 2;
-  const ptz = (pantryTable.minZ + pantryTable.maxZ) / 2;
-  pieces.push(
-    piece(new CylinderGeometry(0.45, 0.45, 0.04, 20), WHITE, { position: [ptx, 0.42, ptz] }),
-  );
-  pieces.push(piece(new CylinderGeometry(0.04, 0.04, 0.4, 8), DARK, { position: [ptx, 0.2, ptz] }));
-  pieces.push(
-    piece(new CylinderGeometry(0.22, 0.22, 0.02, 16), DARK, { position: [ptx, 0.01, ptz] }),
-  );
-
-  // Khu nghỉ trưa: sofa và bàn trà.
-  const { sofa, table: loungeTable } = layout.lounge;
-  pieces.push(boxPiece({ ...sofa, maxZ: sofa.maxZ - 0.25 }, 0, 0.3, 0xf0a7a0));
-  pieces.push(boxPiece({ ...sofa, minZ: sofa.maxZ - 0.25 }, 0, 0.7, 0xe8968f));
-  pieces.push(boxPiece({ ...sofa, maxX: sofa.minX + 0.2 }, 0, 0.45, 0xe8968f));
-  pieces.push(boxPiece({ ...sofa, minX: sofa.maxX - 0.2 }, 0, 0.45, 0xe8968f));
-  for (const x of layout.lounge.seatXs) {
+  const coatColors = [BLACK, GRAY_LIGHT, CREAM, 0x2b3a4f, RED, 0x55555e, BLACK, 0x6b5a44, GRAY];
+  const coatCount = coatColors.length;
+  coatColors.forEach((color, i) => {
+    const z = c.minZ + 0.2 + (i * (c.maxZ - c.minZ - 0.4)) / (coatCount - 1);
+    // Móc + áo (khối dẹt bo tròn, quay mặt ra phòng).
     pieces.push(
-      piece(new BoxGeometry(0.5, 0.12, 0.35), 0xffd0b8, {
-        position: [x, 0.5, sofa.maxZ - 0.33],
-        rotation: [-0.3, 0, 0],
+      piece(new TorusGeometry(0.03, 0.006, 4, 10), STEEL, {
+        position: [railX, 1.6, z],
+        rotation: [0, Math.PI / 2, 0],
+      }),
+    );
+    pieces.push(piece(new BoxGeometry(0.02, 0.04, 0.34), METAL, { position: [railX, 1.55, z] }));
+    pieces.push(
+      piece(new CapsuleGeometry(0.15, 0.5 + (i % 3) * 0.08, 4, 10), color, {
+        position: [railX, 1.12 - (i % 3) * 0.04, z],
+        scale: [0.45, 1, 1],
+      }),
+    );
+  });
+  // Vài hộp giày / túi trên kệ dưới.
+  for (const [dz, color] of [
+    [0.35, CREAM],
+    [0.9, BLACK],
+    [1.6, GRAY_LIGHT],
+  ] as const) {
+    pieces.push(
+      boxPiece(
+        {
+          minX: c.minX + 0.08,
+          maxX: c.maxX - 0.08,
+          minZ: c.minZ + dz - 0.18,
+          maxZ: c.minZ + dz + 0.18,
+        },
+        0.25,
+        0.42,
+        color,
+      ),
+    );
+  }
+  // Bục gấu đen viền thép.
+  pieces.push(boxPiece(bear, 0, 0.14, BLACK));
+  pieces.push(
+    boxPiece(
+      {
+        minX: bear.minX - 0.005,
+        maxX: bear.maxX + 0.005,
+        minZ: bear.minZ - 0.005,
+        maxZ: bear.maxZ + 0.005,
+      },
+      0.12,
+      0.14,
+      METAL,
+    ),
+  );
+  // Bục trưng bày xám nhạt đầu đen.
+  for (const p of pedestals) {
+    pieces.push(boxPiece(p, 0, 0.9, 0x6e6e76));
+    pieces.push(
+      boxPiece(
+        { minX: p.minX - 0.02, maxX: p.maxX + 0.02, minZ: p.minZ - 0.02, maxZ: p.maxZ + 0.02 },
+        0.9,
+        0.94,
+        BLACK,
+      ),
+    );
+  }
+  // Bục ống quẻ KPI (đen) với ống đỏ và thẻ tre.
+  const shelf = layout.fortuneShelf;
+  const f = centerOf(shelf);
+  pieces.push(boxPiece(shelf, 0, 0.85, BLACK));
+  pieces.push(boxPiece(shelf, 0.85, 0.88, METAL));
+  pieces.push(
+    piece(new CylinderGeometry(0.1, 0.09, 0.32, 16), RED, { position: [f.x, 1.04, f.z] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.105, 0.105, 0.04, 16), GOLD, { position: [f.x, 1.18, f.z] }),
+  );
+  for (let i = 0; i < 5; i += 1) {
+    pieces.push(
+      piece(new BoxGeometry(0.02, 0.22, 0.008), 0xe8cf9a, {
+        position: [f.x - 0.04 + i * 0.02, 1.26 + (i % 2) * 0.03, f.z + ((i % 3) - 1) * 0.025],
+        rotation: [0, 0, (i - 2) * 0.08],
       }),
     );
   }
-  pieces.push(boxPiece(loungeTable, 0.26, 0.3, WOOD));
-  pieces.push(
-    boxPiece(
-      {
-        ...loungeTable,
-        minX: loungeTable.minX + 0.1,
-        maxX: loungeTable.maxX - 0.1,
-        minZ: loungeTable.minZ + 0.1,
-        maxZ: loungeTable.maxZ - 0.1,
-      },
-      0,
-      0.26,
-      0xb98552,
-    ),
-  );
+  return pieces;
+}
 
-  // Máy in.
+/**
+ * Tượng gấu đỏ cách điệu (~1,2 m cả bục), dựng bằng khối tròn: thân, đầu, tai, mõm, tay chân.
+ * Không có chữ hay logo thương hiệu nào.
+ */
+function bearGeometry(): BufferGeometry {
+  const R = 0xd71f27;
+  const RD = 0xa3161d;
+  const pieces: Piece[] = [
+    // Chân.
+    piece(new CapsuleGeometry(0.1, 0.16, 4, 12), R, { position: [-0.11, 0.25, 0] }),
+    piece(new CapsuleGeometry(0.1, 0.16, 4, 12), R, { position: [0.11, 0.25, 0] }),
+    piece(new SphereGeometry(0.11, 14, 10), RD, {
+      position: [-0.11, 0.17, 0.05],
+      scale: [1, 0.6, 1.3],
+    }),
+    piece(new SphereGeometry(0.11, 14, 10), RD, {
+      position: [0.11, 0.17, 0.05],
+      scale: [1, 0.6, 1.3],
+    }),
+    // Thân tròn trịa.
+    piece(new SphereGeometry(0.24, 20, 16), R, { position: [0, 0.56, 0], scale: [1, 1.15, 0.9] }),
+    piece(new SphereGeometry(0.14, 16, 12), 0xef5a5f, {
+      position: [0, 0.54, 0.13],
+      scale: [1, 1.2, 0.5],
+    }),
+    // Tay.
+    piece(new CapsuleGeometry(0.075, 0.22, 4, 10), R, {
+      position: [-0.27, 0.6, 0.02],
+      rotation: [0, 0, -0.45],
+    }),
+    piece(new CapsuleGeometry(0.075, 0.22, 4, 10), R, {
+      position: [0.27, 0.6, 0.02],
+      rotation: [0, 0, 0.45],
+    }),
+    // Đầu, tai, mõm.
+    piece(new SphereGeometry(0.22, 22, 18), R, {
+      position: [0, 0.98, 0],
+      scale: [1.05, 0.95, 0.95],
+    }),
+    piece(new SphereGeometry(0.075, 14, 10), R, { position: [-0.16, 1.15, -0.01] }),
+    piece(new SphereGeometry(0.075, 14, 10), R, { position: [0.16, 1.15, -0.01] }),
+    piece(new SphereGeometry(0.045, 10, 8), 0xef5a5f, {
+      position: [-0.16, 1.15, 0.04],
+      scale: [1, 1, 0.4],
+    }),
+    piece(new SphereGeometry(0.045, 10, 8), 0xef5a5f, {
+      position: [0.16, 1.15, 0.04],
+      scale: [1, 1, 0.4],
+    }),
+    piece(new SphereGeometry(0.09, 14, 10), 0xf07a7d, {
+      position: [0, 0.93, 0.17],
+      scale: [1.2, 0.8, 0.8],
+    }),
+    piece(new SphereGeometry(0.028, 8, 6), 0x1a0a0a, { position: [0, 0.96, 0.24] }),
+    piece(new SphereGeometry(0.026, 8, 6), 0x1a0a0a, { position: [-0.08, 1.03, 0.19] }),
+    piece(new SphereGeometry(0.026, 8, 6), 0x1a0a0a, { position: [0.08, 1.03, 0.19] }),
+  ];
+  return mergePieces(pieces);
+}
+
+function entrancePieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { maxZ } = layout.bounds;
+  const facingIn: [number, number, number] = [0, Math.PI, 0];
+  const { doorX, doorWidth, reader } = layout.entrance;
+  const doorTop = 2.4;
+  pieces.push(
+    piece(new PlaneGeometry(doorWidth + 0.2, doorTop + 0.1), FRAME, {
+      position: [doorX, (doorTop + 0.1) / 2, maxZ - 0.01],
+      rotation: facingIn,
+    }),
+  );
+  for (const side of [-1, 1]) {
+    pieces.push(
+      piece(new PlaneGeometry(doorWidth / 2 - 0.06, doorTop - 0.12), 0x3b4650, {
+        position: [doorX + side * (doorWidth / 4), (doorTop - 0.12) / 2 + 0.05, maxZ - 0.02],
+        rotation: facingIn,
+      }),
+    );
+    pieces.push(
+      piece(new PlaneGeometry(0.04, 0.6), STEEL, {
+        position: [doorX + side * 0.1, 1.1, maxZ - 0.03],
+        rotation: facingIn,
+      }),
+    );
+  }
+  pieces.push(
+    piece(new PlaneGeometry(doorWidth + 0.2, 0.03), NEON, {
+      position: [doorX, doorTop + 0.12, maxZ - 0.02],
+      rotation: facingIn,
+    }),
+  );
+  // Máy chấm công: trụ đen, màn hình xanh, đèn xanh lá.
+  const r = centerOf(reader);
+  pieces.push(
+    piece(new CylinderGeometry(0.05, 0.08, 0.9, 10), CHARCOAL, { position: [r.x, 0.45, r.z] }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.22, 0.3, 0.1), BLACK, {
+      position: [r.x, 1.0, r.z],
+      rotation: [-0.35, 0, 0],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.14, 0.1, 0.02), 0x8fd3ff, {
+      position: [r.x, 1.03, r.z - 0.06],
+      rotation: [-0.35, 0, 0],
+    }),
+  );
+  pieces.push(
+    piece(new SphereGeometry(0.018, 6, 4), 0x6cc28a, { position: [r.x + 0.07, 0.9, r.z - 0.04] }),
+  );
+  return pieces;
+}
+
+function boardPieces(layout: OfficeLayout): Piece[] {
+  const pieces: Piece[] = [];
+  const { minX } = layout.bounds;
+  // Hai bảng dán note trên tường tây cạnh dãy ngồi (mặt quay vào phòng, +X): khung đen, nền
+  // bần / trắng, giấy note nhiều màu nhạt, vài ghim đỏ.
+  const facingEast: [number, number, number] = [0, Math.PI / 2, 0];
+  const rng = seededRng(57);
+  const noteColors = [0xfff3a8, 0xffffff, 0xd7ecff, 0xffe0e6, 0xe9ffe3, 0xfff3a8, 0xf1ece3];
+  const boards: [{ minZ: number; maxZ: number }, number][] = [
+    [layout.taskBoard, 0xf3f1ec],
+    [layout.ventBoard, 0xa8774f],
+  ];
+  for (const [b, surface] of boards) {
+    const bz = (b.minZ + b.maxZ) / 2;
+    const width = b.maxZ - b.minZ;
+    pieces.push(
+      piece(new PlaneGeometry(width + 0.1, 1.1), FRAME, {
+        position: [minX + 0.01, 1.45, bz],
+        rotation: facingEast,
+      }),
+    );
+    pieces.push(
+      piece(new PlaneGeometry(width, 1.0), surface, {
+        position: [minX + 0.02, 1.45, bz],
+        rotation: facingEast,
+      }),
+    );
+    for (let i = 0; i < 12; i += 1) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const z = b.minZ + 0.22 + col * ((width - 0.44) / 3) + (rng() - 0.5) * 0.06;
+      const y = 1.78 - row * 0.32 + (rng() - 0.5) * 0.05;
+      pieces.push(
+        piece(new PlaneGeometry(0.22, 0.2), noteColors[i % noteColors.length] ?? 0xffffff, {
+          position: [minX + 0.03 + i * 0.0004, y, z],
+          rotation: [0, Math.PI / 2, (rng() - 0.5) * 0.25],
+        }),
+      );
+      if (i % 3 === 0) {
+        pieces.push(
+          piece(new SphereGeometry(0.014, 6, 4), RED, { position: [minX + 0.04, y + 0.07, z] }),
+        );
+      }
+    }
+    // Khay bút dưới bảng.
+    pieces.push(
+      boxPiece(
+        { minX, maxX: minX + 0.08, minZ: b.minZ + 0.1, maxZ: b.maxZ - 0.1 },
+        0.88,
+        0.91,
+        METAL,
+      ),
+    );
+  }
+  // Máy in (góc đông nam).
   const printer = layout.printer;
-  pieces.push(boxPiece(printer, 0, 0.5, 0xdedfe3));
+  pieces.push(boxPiece(printer, 0, 0.55, 0x2b2b31));
   pieces.push(
     boxPiece(
       { ...printer, minX: printer.minX + 0.05, maxX: printer.maxX - 0.05 },
-      0.5,
-      0.7,
-      0xc7c9cf,
+      0.55,
+      0.74,
+      0x3a3a42,
     ),
   );
   pieces.push(
@@ -433,189 +1563,44 @@ function staticPieces(layout: OfficeLayout): Piece[] {
         minZ: printer.minZ - 0.2,
         maxZ: printer.minZ + 0.05,
       },
-      0.5,
-      0.52,
-      0xffffff,
+      0.55,
+      0.57,
+      CREAM,
     ),
   );
   pieces.push(
     piece(new SphereGeometry(0.02, 6, 4), 0x6cc28a, {
-      position: [printer.maxX - 0.1, 0.71, printer.minZ + 0.1],
+      position: [printer.maxX - 0.1, 0.75, printer.minZ + 0.1],
     }),
   );
-
-  // Tủ hồ sơ sát tường trái.
-  for (const cabinet of layout.cabinets) {
-    pieces.push(boxPiece(cabinet, 0, 1.2, 0x9cb8c9));
-    for (let i = 0; i < 3; i += 1) {
-      const y = 0.2 + i * 0.38;
-      pieces.push(
-        boxPiece(
-          {
-            minX: cabinet.maxX,
-            maxX: cabinet.maxX + 0.02,
-            minZ: cabinet.minZ + 0.1,
-            maxZ: cabinet.maxZ - 0.1,
-          },
-          y,
-          y + 0.3,
-          0xbcd3e0,
-        ),
-      );
-    }
-  }
-
-  // Tranh trang trí trên tường trước: mặt phẳng một phía quay vào phòng, nên giống tường,
-  // nhìn từ ngoài vào (camera vòng ra sau tường) thì không thấy.
-  const { maxZ } = layout.bounds;
-  const facingIn: [number, number, number] = [0, Math.PI, 0];
-  [
-    [-6, 0xffd479],
-    [-1, 0x8fc7ff],
-    [8, 0xf28a8a],
-  ].forEach(([x = 0, color = 0xffffff]) => {
-    pieces.push(
-      piece(new PlaneGeometry(1.1, 0.75), 0xffffff, {
-        position: [x, 1.7, maxZ - 0.01],
-        rotation: facingIn,
-      }),
-    );
-    pieces.push(
-      piece(new PlaneGeometry(0.9, 0.55), color, {
-        position: [x, 1.7, maxZ - 0.02],
-        rotation: facingIn,
-      }),
-    );
-    pieces.push(
-      piece(new CircleGeometry(0.12, 16), 0xffffff, {
-        position: [x + 0.18, 1.75, maxZ - 0.03],
-        rotation: facingIn,
-      }),
-    );
-  });
-
-  // Cửa ra vào (hai cánh kính, khung tối) và máy quẹt thẻ chấm công.
-  const { doorX, doorWidth, reader } = layout.entrance;
-  const doorTop = 2.2;
-  pieces.push(
-    piece(new PlaneGeometry(doorWidth + 0.16, doorTop + 0.08), 0x5d6670, {
-      position: [doorX, (doorTop + 0.08) / 2, maxZ - 0.01],
-      rotation: facingIn,
-    }),
-  );
-  for (const side of [-1, 1]) {
-    pieces.push(
-      piece(new PlaneGeometry(doorWidth / 2 - 0.06, doorTop - 0.1), 0xb9d7e6, {
-        position: [doorX + side * (doorWidth / 4), (doorTop - 0.1) / 2 + 0.04, maxZ - 0.02],
-        rotation: facingIn,
-      }),
-    );
-    pieces.push(
-      piece(new PlaneGeometry(0.04, 0.5), 0xd0d4d8, {
-        position: [doorX + side * 0.1, 1.05, maxZ - 0.03],
-        rotation: facingIn,
-      }),
-    );
-  }
-  const rx = (reader.minX + reader.maxX) / 2;
-  const rz = (reader.minZ + reader.maxZ) / 2;
-  pieces.push(
-    piece(new CylinderGeometry(0.05, 0.08, 0.9, 10), 0x6b737d, { position: [rx, 0.45, rz] }),
-  );
-  pieces.push(
-    piece(new BoxGeometry(0.22, 0.3, 0.1), 0x3d3f47, {
-      position: [rx, 1.0, rz],
-      rotation: [-0.35, 0, 0],
-    }),
-  );
-  pieces.push(
-    piece(new BoxGeometry(0.14, 0.1, 0.02), 0x8fd3ff, {
-      position: [rx, 1.03, rz - 0.06],
-      rotation: [-0.35, 0, 0],
-    }),
-  );
-  pieces.push(
-    piece(new SphereGeometry(0.018, 6, 4), 0x6cc28a, { position: [rx + 0.07, 0.9, rz - 0.04] }),
-  );
-
-  // Kệ nhỏ sát tường trái, trên có ống quẻ KPI màu đỏ với các thẻ tre.
-  const shelf = layout.fortuneShelf;
-  const sx = (shelf.minX + shelf.maxX) / 2;
-  const sz = (shelf.minZ + shelf.maxZ) / 2;
-  pieces.push(boxPiece(shelf, 0, 0.55, 0xb98552));
-  pieces.push(boxPiece(shelf, 0.55, 0.59, WOOD));
-  pieces.push(
-    piece(new CylinderGeometry(0.1, 0.09, 0.32, 16), 0xd94b4b, { position: [sx, 0.75, sz] }),
-  );
-  pieces.push(
-    piece(new CylinderGeometry(0.105, 0.105, 0.04, 16), 0xf2c14e, { position: [sx, 0.88, sz] }),
-  );
-  for (let i = 0; i < 5; i += 1) {
-    pieces.push(
-      piece(new BoxGeometry(0.02, 0.22, 0.008), 0xe8cf9a, {
-        position: [sx - 0.04 + i * 0.02, 0.96 + (i % 2) * 0.03, sz + ((i % 3) - 1) * 0.025],
-        rotation: [0, 0, (i - 2) * 0.08],
-      }),
-    );
-  }
-
-  // Bảng việc trên tường phải: bảng trắng có giấy nhớ màu (mặt phẳng quay vào phòng).
-  const { maxX } = layout.bounds;
-  const board = layout.taskBoard;
-  const bz = (board.minZ + board.maxZ) / 2;
-  const facingWest: [number, number, number] = [0, -Math.PI / 2, 0];
-  pieces.push(
-    piece(new PlaneGeometry(board.maxZ - board.minZ + 0.1, 1.0), 0x9aa3ad, {
-      position: [maxX - 0.01, 1.45, bz],
-      rotation: facingWest,
-    }),
-  );
-  pieces.push(
-    piece(new PlaneGeometry(board.maxZ - board.minZ, 0.9), 0xfbfbf8, {
-      position: [maxX - 0.02, 1.45, bz],
-      rotation: facingWest,
-    }),
-  );
-  const notes = [0xffd479, 0x8fc7ff, 0xf28a8a, 0x9fe0a8, 0xffd479, 0xd6b4ff];
-  notes.forEach((color, i) => {
-    const col = i % 3;
-    const row = Math.floor(i / 3);
-    pieces.push(
-      piece(new PlaneGeometry(0.32, 0.26), color, {
-        position: [maxX - 0.03, 1.66 - row * 0.4, board.maxZ - 0.35 - col * 0.55],
-        rotation: [0, -Math.PI / 2, (i % 2 ? 1 : -1) * 0.06],
-      }),
-    );
-  });
-
-  // Tường than thở: bảng ghim bần trên tường trước, dán những mẩu giấy nhỏ.
-  const vent = layout.ventBoard;
-  const vx = (vent.minX + vent.maxX) / 2;
-  pieces.push(
-    piece(new PlaneGeometry(vent.maxX - vent.minX + 0.1, 1.0), 0x8a5a3b, {
-      position: [vx, 1.45, maxZ - 0.01],
-      rotation: facingIn,
-    }),
-  );
-  pieces.push(
-    piece(new PlaneGeometry(vent.maxX - vent.minX, 0.9), 0xc79a6b, {
-      position: [vx, 1.45, maxZ - 0.02],
-      rotation: facingIn,
-    }),
-  );
-  [0xffffff, 0xfff3c4, 0xffe0e6, 0xe3f2ff, 0xffffff, 0xe9ffe3, 0xfff3c4].forEach((color, i) => {
-    pieces.push(
-      piece(new PlaneGeometry(0.26, 0.18), color, {
-        position: [
-          vent.minX + 0.2 + (i % 4) * 0.33,
-          1.68 - Math.floor(i / 4) * 0.36 - (i % 2) * 0.06,
-          maxZ - 0.03,
-        ],
-        rotation: [0, Math.PI, ((i % 3) - 1) * 0.1],
-      }),
-    );
-  });
+  for (const cabinet of layout.cabinets) pieces.push(boxPiece(cabinet, 0, 1.2, BLACK));
   return pieces;
+}
+
+function staticPieces(layout: OfficeLayout): Piece[] {
+  return [
+    ...windowPieces(layout),
+    ...floorPatches(layout),
+    ...glassFramePieces(layout),
+    ...ceoPieces(layout),
+    ...meetingPieces(layout),
+    ...loungePieces(layout),
+    ...pantryPieces(layout),
+    ...shelfPieces(layout),
+    ...decorPieces(layout),
+    ...benchPieces(layout),
+    ...entrancePieces(layout),
+    ...boardPieces(layout),
+  ];
+}
+
+/** Một tấm phẳng có toạ độ UV lấy một đoạn [u0, u1] của họa tiết (để 3 ô cửa nối liền cảnh). */
+function windowPlane(width: number, height: number, u0: number, u1: number): PlaneGeometry {
+  const geometry = new PlaneGeometry(width, height);
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < uv.count; i += 1) uv.setX(i, uv.getX(i) === 0 ? u0 : u1);
+  uv.needsUpdate = true;
+  return geometry;
 }
 
 export function buildOffice(
@@ -628,28 +1613,69 @@ export function buildOffice(
   const width = maxX - minX;
   const depth = maxZ - minZ;
 
-  const floorTexture = createFloorTileTexture();
+  // Sàn xám đậm hơi bóng (Phong: có vệt phản chiếu đèn).
+  const floorTexture = createDarkFloorTexture();
   floorTexture.repeat.set(width / 2, depth / 2);
   const floor = new Mesh(
     new PlaneGeometry(width, depth),
-    new MeshLambertMaterial({ map: floorTexture }),
+    new MeshPhongMaterial({ map: floorTexture, shininess: 60, specular: new Color(0x3a3a40) }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
   floor.receiveShadow = true;
   group.add(floor);
 
-  const walls = new Mesh(mergePieces(wallPieces(layout)), material);
+  // Tường + vách đặc: vật liệu riêng để bật "xuyên thấu".
+  const plaster = createPlasterTexture();
+  const wallMaterial = new MeshLambertMaterial({ vertexColors: true, map: plaster });
+  const walls = new Mesh(addPlanarUv(mergePieces(wallPieces(layout)), 3), wallMaterial);
   walls.receiveShadow = true;
   group.add(walls);
-
-  const cityTexture: CanvasTexture = createCityTexture(period);
-  const w = layout.window;
-  const windowMesh = new Mesh(
-    new PlaneGeometry(w.maxX - w.minX, w.top - w.bottom),
-    new MeshBasicMaterial({ map: cityTexture }),
+  const partitionMaterial = new MeshLambertMaterial({ vertexColors: true, map: plaster });
+  const partitions = new Mesh(
+    addPlanarUv(mergePieces(partitionPieces(layout)), 3),
+    partitionMaterial,
   );
-  windowMesh.position.set((w.minX + w.maxX) / 2, (w.top + w.bottom) / 2, minZ + 0.005);
+  partitions.castShadow = true;
+  partitions.receiveShadow = true;
+  group.add(partitions);
+  let xray = false;
+  let faded = false;
+  let partitionOpacity = 1;
+  const applyOpacity = (material: MeshLambertMaterial, opacity: number): void => {
+    const transparent = opacity < 0.999;
+    if (material.transparent !== transparent) {
+      material.transparent = transparent;
+      material.depthWrite = !transparent;
+      material.needsUpdate = true;
+    }
+    material.opacity = opacity;
+  };
+
+  const neon = new Mesh(
+    mergePieces(neonPieces(layout)),
+    new MeshBasicMaterial({ vertexColors: true }),
+  );
+  group.add(neon);
+
+  // Cửa sổ: 3 ô dùng chung một họa tiết thành phố, UV nối liền.
+  const cityTexture: CanvasTexture = createCityTexture(period);
+  const w = layout.windows;
+  const first = w.spans[0]?.minX ?? minX;
+  const last = w.spans.at(-1)?.maxX ?? maxX;
+  const windowGeometry = mergeTextured(
+    w.spans.map((span) => {
+      const g = windowPlane(
+        span.maxX - span.minX,
+        w.top - w.bottom,
+        (span.minX - first) / (last - first),
+        (span.maxX - first) / (last - first),
+      );
+      g.translate((span.minX + span.maxX) / 2, (w.top + w.bottom) / 2, minZ + 0.005);
+      return g;
+    }),
+  );
+  const windowMesh = new Mesh(windowGeometry, new MeshBasicMaterial({ map: cityTexture }));
   group.add(windowMesh);
 
   const statics = new Mesh(mergePieces(staticPieces(layout)), material);
@@ -657,8 +1683,54 @@ export function buildOffice(
   statics.receiveShadow = true;
   group.add(statics);
 
+  // Tượng gấu đỏ bóng (vật liệu Phong riêng cho độ bóng).
+  const bearSpot = centerOf(layout.decor.bear);
+  const bear = new Mesh(
+    bearGeometry(),
+    new MeshPhongMaterial({ vertexColors: true, shininess: 90, specular: new Color(0x664444) }),
+  );
+  bear.position.set(bearSpot.x, 0.14, bearSpot.z);
+  bear.rotation.y = Math.PI / 2 - 0.35;
+  bear.castShadow = true;
+  group.add(bear);
+  // Vật trang trí trên bục: nút xoắn đỏ bóng và cúp vàng.
+  const [pedA, pedB] = layout.decor.pedestals;
+  const ornamentPieces: Piece[] = [
+    ...(pedA
+      ? [
+          piece(new TorusKnotGeometry(0.11, 0.035, 64, 8), RED, {
+            position: [centerOf(pedA).x, 1.1, centerOf(pedA).z],
+          }),
+        ]
+      : []),
+    ...(pedB
+      ? [
+          piece(new CylinderGeometry(0.1, 0.05, 0.16, 16), GOLD, {
+            position: [centerOf(pedB).x, 1.12, centerOf(pedB).z],
+          }),
+          piece(new CylinderGeometry(0.02, 0.02, 0.08, 8), GOLD, {
+            position: [centerOf(pedB).x, 1.0, centerOf(pedB).z],
+          }),
+          piece(new CylinderGeometry(0.07, 0.08, 0.04, 12), BLACK, {
+            position: [centerOf(pedB).x, 0.96, centerOf(pedB).z],
+          }),
+          piece(new TorusGeometry(0.05, 0.01, 6, 12), GOLD, {
+            position: [centerOf(pedB).x + 0.1, 1.13, centerOf(pedB).z],
+            rotation: [0, Math.PI / 2, 0],
+          }),
+        ]
+      : []),
+  ];
+  if (ornamentPieces.length > 0) group.add(new Mesh(mergePieces(ornamentPieces), bear.material));
+
   const { width: dw, depth: dd, height: dh } = layout.desk;
-  const desks = instanced(deskGeometry(dw, dd, dh), material, layout.desks);
+  // Đồ trên bàn mỗi chỗ ngồi (mặt bàn dài liền khối nằm trong mesh tĩnh); xoay theo phía ngồi.
+  const deskPlaces = layout.desks.map((desk) => ({
+    x: desk.x,
+    z: desk.z,
+    rotY: deskRotation(desk),
+  }));
+  const desks = instanced(deskItemsGeometry(dw, dd, dh), material, deskPlaces);
   desks.castShadow = true;
   desks.receiveShadow = true;
   group.add(desks);
@@ -666,26 +1738,45 @@ export function buildOffice(
   const screenTextures = createScreenTextures();
   const screenGeo = screenGeometry(dd, dh);
   screenTextures.forEach((texture, variant) => {
-    const placed = layout.desks.filter((desk) => desk.screen === variant);
+    const placed = layout.desks
+      .filter((desk) => desk.screen === variant)
+      .map((desk) => ({ x: desk.x, z: desk.z, rotY: deskRotation(desk) }));
     if (placed.length === 0) return;
     const geometry = variant === 0 ? screenGeo : screenGeo.clone();
     group.add(instanced(geometry, new MeshBasicMaterial({ map: texture }), placed));
   });
+  // TV phòng họp và màn hình sếp: biểu đồ / mã nguồn tự sáng.
+  const tvTexture = screenTextures[2];
+  if (tvTexture) {
+    const { table, bounds } = layout.meeting;
+    const tv = new Mesh(new PlaneGeometry(1.8, 0.92), new MeshBasicMaterial({ map: tvTexture }));
+    tv.position.set((table.minX + table.maxX) / 2, 1.55, bounds.maxZ - 0.055);
+    tv.rotation.y = Math.PI;
+    group.add(tv);
+  }
+  const ceoDesk = layout.ceoRoom.desk;
+  const sheet = screenTextures[1];
+  if (sheet) {
+    const screen = new Mesh(new PlaneGeometry(0.78, 0.43), new MeshBasicMaterial({ map: sheet }));
+    screen.position.set((ceoDesk.minX + ceoDesk.maxX) / 2, 0.45 + 0.46, ceoDesk.minZ + 0.225);
+    group.add(screen);
+  }
 
-  // Ghế bàn làm việc (sát mép bàn, phía người ngồi) và ghế phòng họp quay vào bàn.
+  // Ghế: bàn làm việc (phía bắc bàn, quay mặt về nam) và ghế phòng họp quay vào bàn.
   const chairs = instanced(chairGeometry(), material, [
-    ...layout.desks.map((desk) => ({ x: desk.x, z: desk.z + dd / 2 + 0.28 })),
+    ...layout.desks.map((desk) => {
+      const dir = deskSeatDir(desk);
+      return {
+        x: desk.x + dir.x * (dd / 2 + 0.28),
+        z: desk.z + dir.z * (dd / 2 + 0.28),
+        rotY: deskRotation(desk),
+      };
+    }),
     ...layout.meeting.seats.map((seat) => ({
       x: seat.x,
       z: seat.z - Math.cos(seat.facing) * 0.03,
       rotY: seat.facing - Math.PI,
     })),
-    // Ghế CEO: sau bàn, quay mặt ra văn phòng (+Z).
-    {
-      x: (layout.ceoRoom.desk.minX + layout.ceoRoom.desk.maxX) / 2,
-      z: layout.ceoRoom.desk.minZ - 0.28,
-      rotY: -Math.PI,
-    },
   ]);
   chairs.castShadow = true;
   chairs.receiveShadow = true;
@@ -695,67 +1786,120 @@ export function buildOffice(
   plants.castShadow = true;
   group.add(plants);
 
-  // Kính phòng họp: một mesh trong suốt, nhìn được cả hai mặt.
-  const glassPieces = [...glassWalls(layout), ...ceoGlassWalls(layout)].map((glass) => {
+  // Đèn thả trên mỗi bàn + trên bàn họp, bàn sếp; bóng đèn tự sáng; vệt sáng ấm trên mặt bàn.
+  // Mỗi cặp bàn quay lưng vào nhau một đèn thả ở giữa dãy.
+  const pairSpots = [
+    ...new Map(
+      layout.desks.map((desk) => {
+        const x = desk.x - desk.side * (dd / 2);
+        return [`${x.toFixed(2)}|${desk.z.toFixed(2)}`, { x, z: desk.z }];
+      }),
+    ).values(),
+  ];
+  const lampSpots = [
+    ...pairSpots,
+    {
+      x: (layout.meeting.table.minX + layout.meeting.table.maxX) / 2 - 0.75,
+      z: centerOf(layout.meeting.table).z,
+    },
+    {
+      x: (layout.meeting.table.minX + layout.meeting.table.maxX) / 2 + 0.75,
+      z: centerOf(layout.meeting.table).z,
+    },
+    centerOf(ceoDesk),
+    ...layout.pantry.tables.map(centerOf),
+  ];
+  const h = layout.wallHeight;
+  group.add(instanced(pendantGeometry(h), material, lampSpots));
+  const bulbGeometry = new CircleGeometry(0.17, 20);
+  bulbGeometry.rotateX(Math.PI / 2);
+  bulbGeometry.translate(0, PENDANT_Y - 0.17, 0);
+  group.add(
+    instanced(bulbGeometry, new MeshBasicMaterial({ color: WARM, side: DoubleSide }), lampSpots),
+  );
+  const poolGeometry = new PlaneGeometry(1.7, 1.7);
+  poolGeometry.rotateX(-Math.PI / 2);
+  const poolMaterial = new MeshBasicMaterial({
+    map: createLightPoolTexture(),
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  });
+  const pools = instanced(poolGeometry, poolMaterial, [
+    ...pairSpots.map((p) => ({ ...p, y: dh + 0.004 })),
+    ...lampSpots.slice(pairSpots.length).map((p) => ({ ...p, y: 0.47 })),
+  ]);
+  pools.renderOrder = 1;
+  group.add(pools);
+  // Bóng đèn cây trong phòng nghỉ (chao ấm tự sáng).
+  const { lamp } = layout.lounge;
+  const lampShade = new Mesh(
+    new CylinderGeometry(0.14, 0.2, 0.26, 18, 1, true),
+    new MeshBasicMaterial({ color: 0xffc98a, side: DoubleSide }),
+  );
+  lampShade.position.set(lamp.x, 1.55, lamp.z);
+  group.add(lampShade);
+
+  // Kính: hơi xanh, có vệt phản chiếu chéo; nhìn được cả hai mặt.
+  const glassTexture = createGlassTexture();
+  const glassPieces = glassWalls(layout).map((glass) => {
     const alongX = glass.maxX - glass.minX > glass.maxZ - glass.minZ;
     const length = alongX ? glass.maxX - glass.minX : glass.maxZ - glass.minZ;
-    return piece(new PlaneGeometry(length, GLASS_HEIGHT - 0.1), 0xffffff, {
-      position: [(glass.minX + glass.maxX) / 2, GLASS_HEIGHT / 2, (glass.minZ + glass.maxZ) / 2],
-      rotation: [0, alongX ? 0 : Math.PI / 2, 0],
-    });
+    const g = new PlaneGeometry(length, GLASS_HEIGHT - 0.1);
+    const uv = g.getAttribute('uv');
+    for (let i = 0; i < uv.count; i += 1) uv.setX(i, uv.getX(i) * length * 0.4);
+    uv.needsUpdate = true;
+    g.rotateY(alongX ? 0 : Math.PI / 2);
+    g.translate((glass.minX + glass.maxX) / 2, GLASS_HEIGHT / 2, (glass.minZ + glass.maxZ) / 2);
+    return g;
   });
-  const glass = new Mesh(
-    mergePieces(glassPieces),
-    new MeshBasicMaterial({
-      color: 0xbfe6ff,
-      transparent: true,
-      opacity: 0.22,
-      side: DoubleSide,
-      depthWrite: false,
-    }),
-  );
+  const glassMaterial = new MeshBasicMaterial({
+    map: glassTexture,
+    color: 0xbfd6e2,
+    transparent: true,
+    opacity: 0.32,
+    side: DoubleSide,
+    depthWrite: false,
+  });
+  const glass = new Mesh(mergeTextured(glassPieces), glassMaterial);
   glass.renderOrder = 2;
   group.add(glass);
 
-  // Cửa kính phòng CEO (một tấm, trượt sang phải khi mở) + biển "Phòng CEO" + đèn máy quẹt thẻ.
+  // Cửa kính phòng sếp (một tấm trên vách tây, trượt dọc trục Z khi mở) + biển + đèn quẹt thẻ.
   const door = ceoDoor(layout);
-  const doorWidth = door.maxX - door.minX;
-  const doorMesh = new Mesh(
-    mergePieces([
-      piece(new PlaneGeometry(doorWidth - 0.04, GLASS_HEIGHT - 0.12), 0xd7efff, {
-        position: [0, GLASS_HEIGHT / 2, 0],
-      }),
-    ]),
-    glass.material,
-  );
+  const doorLength = door.maxZ - door.minZ;
+  const doorPane = new PlaneGeometry(doorLength - 0.04, GLASS_HEIGHT - 0.12);
+  doorPane.translate(0, GLASS_HEIGHT / 2, 0);
+  const doorMesh = new Mesh(doorPane, glassMaterial);
   doorMesh.renderOrder = 2;
   const doorFrame = new Mesh(
     mergePieces([
       boxPiece(
-        { minX: -doorWidth / 2, maxX: -doorWidth / 2 + 0.05, minZ: -0.03, maxZ: 0.03 },
+        { minX: -doorLength / 2, maxX: -doorLength / 2 + 0.05, minZ: -0.03, maxZ: 0.03 },
         0,
         GLASS_HEIGHT - 0.06,
         FRAME,
       ),
       boxPiece(
-        { minX: doorWidth / 2 - 0.05, maxX: doorWidth / 2, minZ: -0.03, maxZ: 0.03 },
+        { minX: doorLength / 2 - 0.05, maxX: doorLength / 2, minZ: -0.03, maxZ: 0.03 },
         0,
         GLASS_HEIGHT - 0.06,
         FRAME,
       ),
       boxPiece(
-        { minX: doorWidth / 2 - 0.16, maxX: doorWidth / 2 - 0.12, minZ: 0.03, maxZ: 0.07 },
+        { minX: -doorLength / 2 + 0.12, maxX: -doorLength / 2 + 0.16, minZ: -0.07, maxZ: 0.07 },
         0.8,
         1.2,
-        0xd6dde4,
+        STEEL,
       ),
     ]),
     material,
   );
   const doorGroup = new Group();
   doorGroup.add(doorMesh, doorFrame);
-  const doorClosedX = (door.minX + door.maxX) / 2;
-  doorGroup.position.set(doorClosedX, 0, (door.minZ + door.maxZ) / 2 + 0.06);
+  doorGroup.rotation.y = Math.PI / 2;
+  const doorClosedZ = (door.minZ + door.maxZ) / 2;
+  doorGroup.position.set((door.minX + door.maxX) / 2 - 0.06, 0, doorClosedZ);
   group.add(doorGroup);
 
   const plaque = createPlaqueTexture(STRINGS.ceo.plaque);
@@ -763,24 +1907,57 @@ export function buildOffice(
     new PlaneGeometry(1.1, 0.3),
     new MeshBasicMaterial({ map: plaque, transparent: true }),
   );
-  plaqueMesh.position.set(
-    doorClosedX + 0.6,
-    GLASS_HEIGHT + 0.22,
-    layout.ceoRoom.bounds.maxZ + 0.04,
-  );
+  plaqueMesh.position.set(door.minX - 0.03, GLASS_HEIGHT - 0.25, doorClosedZ);
+  plaqueMesh.rotation.y = -Math.PI / 2;
   group.add(plaqueMesh);
 
   const led = new Mesh(
-    new BoxGeometry(0.06, 0.06, 0.02),
+    new BoxGeometry(0.02, 0.06, 0.06),
     new MeshBasicMaterial({ color: 0xe5534b }),
   );
   const reader = layout.ceoRoom.reader;
-  led.position.set((reader.minX + reader.maxX) / 2, 1.18, reader.maxZ + 0.011);
+  led.position.set(reader.minX - 0.011, 1.18, (reader.minZ + reader.maxZ) / 2);
   group.add(led);
+
+  // Nhãn thiết bị pantry trên tường đông (một tấm, ba chữ).
+  const { counter, coffee, water } = layout.pantry;
+  const labelZ0 = coffee.z - 0.6;
+  const labelZ1 = water.z + 0.6;
+  const labels = STRINGS.pantryLabels;
+  const labelTexture = createLabelTexture(labels, { width: 1536, height: 110, font: 44 });
+  const labelMesh = new Mesh(
+    new PlaneGeometry(labelZ1 - labelZ0, 0.3),
+    new MeshBasicMaterial({ map: labelTexture, transparent: true }),
+  );
+  labelMesh.position.set(counter.maxX - 0.02, 1.55, (labelZ0 + labelZ1) / 2);
+  labelMesh.rotation.y = -Math.PI / 2;
+  // Ba nhãn chia đều theo chiều dài; vị trí thiết bị cũng xếp đều (cà phê, lò, nước).
+  group.add(labelMesh);
+
+  // Đèn thật (tuỳ mức đồ họa): đèn rọi ấm trên khu bàn, đèn cây phòng nghỉ, đèn phòng sếp,
+  // đèn đỏ hắt lên tượng gấu.
+  const realLights = new Group();
+  const deskCenter = layout.desks.reduce(
+    (acc, d) => ({ x: acc.x + d.x / layout.desks.length, z: acc.z + d.z / layout.desks.length }),
+    { x: 0, z: 0 },
+  );
+  for (const dx of [-2.6, 2.2]) {
+    const spot = new SpotLight(0xffd7a8, 26, 12, 0.85, 0.7, 1.6);
+    spot.position.set(deskCenter.x + dx, h - 0.1, deskCenter.z);
+    spot.target.position.set(deskCenter.x + dx, 0, deskCenter.z);
+    realLights.add(spot, spot.target);
+  }
+  const loungeLight = new PointLight(0xffb36b, 5, 4.5, 1.6);
+  loungeLight.position.set(lamp.x, 1.55, lamp.z);
+  const ceoLight = new PointLight(0xffd2a0, 4, 5, 1.6);
+  ceoLight.position.set((ceoDesk.minX + ceoDesk.maxX) / 2, 2.3, (ceoDesk.minZ + ceoDesk.maxZ) / 2);
+  const bearLight = new PointLight(0xff3b30, 4, 3.2, 1.6);
+  bearLight.position.set(bearSpot.x + 0.9, 1.9, bearSpot.z + 0.4);
+  realLights.add(loungeLight, ceoLight, bearLight);
+  group.add(realLights);
 
   let doorOpen = false;
   let doorOffset = 0;
-
   const codeTexture = screenTextures[0];
   let currentPeriod = period;
   return {
@@ -794,35 +1971,85 @@ export function buildOffice(
     update(dt) {
       // Mã trên màn hình cuộn chậm cho văn phòng có "sức sống".
       if (codeTexture) codeTexture.offset.y = (codeTexture.offset.y + dt * 0.04) % 1;
-      const target = doorOpen ? doorWidth - 0.08 : 0;
+      const fadeTarget = xray || faded ? 0.25 : 1;
+      if (partitionOpacity !== fadeTarget) {
+        const step = dt * 3;
+        partitionOpacity =
+          Math.abs(fadeTarget - partitionOpacity) <= step
+            ? fadeTarget
+            : partitionOpacity + Math.sign(fadeTarget - partitionOpacity) * step;
+        applyOpacity(partitionMaterial, partitionOpacity);
+        partitions.renderOrder = partitionOpacity < 1 ? 3 : 0;
+      }
+      const target = doorOpen ? doorLength - 0.08 : 0;
       if (doorOffset !== target) {
         const step = dt * 2.5;
         doorOffset =
           Math.abs(target - doorOffset) <= step
             ? target
             : doorOffset + Math.sign(target - doorOffset) * step;
-        doorGroup.position.x = doorClosedX + doorOffset;
+        doorGroup.position.z = doorClosedZ + doorOffset;
       }
     },
     setCeoDoorOpen(open) {
       doorOpen = open;
       led.material.color.setHex(open ? 0x4caf50 : 0xe5534b);
     },
+    setXray(on) {
+      xray = on;
+      applyOpacity(wallMaterial, on ? 0.25 : 1);
+      walls.renderOrder = on ? 3 : 0;
+    },
+    setPartitionsFaded(on) {
+      faded = on;
+    },
+    setRealLights(on) {
+      realLights.visible = on;
+    },
   };
 }
 
-/** Biển tên nhỏ vẽ bằng canvas (chữ trắng trên nền gỗ sẫm). */
+/**
+ * Gắn UV theo mặt phẳng toạ độ thế giới (tường dọc X dùng (x, y), dọc Z dùng (z, y), mặt
+ * ngang dùng (x, z)), `scale` mét cho một lần lặp họa tiết: vữa liền mạch trên mọi bức tường.
+ */
+function addPlanarUv(geometry: BufferGeometry, scale: number): BufferGeometry {
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const uv = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i += 1) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+    const nx = Math.abs(normal.getX(i));
+    const nz = Math.abs(normal.getZ(i));
+    const [u, v] = nx > 0.5 ? [z, y] : nz > 0.5 ? [x, y] : [x, z];
+    uv[i * 2] = u / scale;
+    uv[i * 2 + 1] = v / scale;
+  }
+  geometry.setAttribute('uv', new BufferAttribute(uv, 2));
+  return geometry;
+}
+
+/** Gộp các tấm có UV (cửa sổ, kính) thành một geometry. */
+function mergeTextured(geometries: BufferGeometry[]): BufferGeometry {
+  const merged = mergeGeometries(geometries, false);
+  for (const g of geometries) g.dispose();
+  return merged;
+}
+
+/** Biển tên nhỏ vẽ bằng canvas (chữ trắng trên nền đen viền đỏ). */
 function createPlaqueTexture(text: string): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 72;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#5d3b26';
+    ctx.fillStyle = '#111114';
     ctx.beginPath();
     ctx.roundRect(4, 4, 248, 64, 14);
     ctx.fill();
-    ctx.strokeStyle = '#f2c14e';
+    ctx.strokeStyle = '#8a8a93';
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.fillStyle = '#fff6e5';

@@ -219,32 +219,38 @@ describe('WebSocket: kiểm tra vị trí', () => {
     const back = await a.waitFor('correct');
     expect(back).toEqual({ type: 'correct', x, z });
 
-    // Đứng sát một bàn rồi "đi xuyên" qua bàn.
+    // Đứng sát một bàn (chỗ đứng phía tây của dãy đầu) rồi "đi xuyên" qua bàn.
     const desk = OFFICE_FLOOR.desks[4];
     if (!desk) throw new Error('no desk');
-    const deskFront = desk.z + OFFICE_FLOOR.desk.depth / 2 + 0.3;
-    // Dịch chuyển tới trước bàn theo từng bước hợp lệ.
+    const deskEdge = desk.x - OFFICE_FLOOR.desk.depth / 2;
+    const deskFront = deskEdge - 0.6;
     let px = x;
     let pz = z;
-    while (Math.hypot(desk.x - px, deskFront - pz) > 0.05) {
-      const dx = desk.x - px;
-      const dz = deskFront - pz;
-      const d = Math.hypot(dx, dz);
-      const step = Math.min(d, 0.4);
-      px += (dx / d) * step;
-      pz += (dz / d) * step;
-      clock += 200;
-      a.send({ type: 'state', x: px, z: pz, facing: 0, pose: 'walk' });
-      // Chờ server xử lý xong bước này trước khi tua đồng hồ tiếp.
-      await sleep(5);
+    for (const target of [
+      { x, z: desk.z },
+      { x: deskFront, z: desk.z },
+    ]) {
+      while (Math.hypot(target.x - px, target.z - pz) > 0.01) {
+        const dx = target.x - px;
+        const dz = target.z - pz;
+        const d = Math.hypot(dx, dz);
+        const step = Math.min(d, 0.4);
+        px += (dx / d) * step;
+        pz += (dz / d) * step;
+        clock += 200;
+        a.send({ type: 'state', x: px, z: pz, facing: 0, pose: 'walk' });
+        // Chờ server xử lý xong bước này trước khi tua đồng hồ tiếp.
+        await sleep(5);
+      }
     }
     await sleep(50);
     const corrections = a.inbox.filter((m) => m.type === 'correct');
     expect(corrections).toHaveLength(0);
     clock += 200;
-    a.send({ type: 'state', x: px, z: pz - 0.45, facing: 0, pose: 'walk' });
+    // Bước thẳng vào mặt bàn (xa chỗ ngồi hơn tầm "nhảy vào ghế").
+    a.send({ type: 'state', x: px + 0.7, z: pz, facing: 0, pose: 'walk' });
     const blocked = await a.waitFor('correct');
-    expect(blocked.z).toBeGreaterThan(desk.z + OFFICE_FLOOR.desk.depth / 2);
+    expect(blocked.x).toBeLessThan(deskEdge);
   });
 });
 

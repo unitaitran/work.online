@@ -43,6 +43,7 @@ import { RoomPlants } from './roomPlants';
 import { buildLanterns } from './lanterns';
 import { CompanySign, type SignInfo } from './companySign';
 import { WallClock } from './wallClock';
+import { ZoneLabels } from './zoneLabels';
 import type { BufferGeometry, Group } from 'three';
 import type { DayMood } from '@dilam/shared';
 import { Companions } from '../avatar/companions';
@@ -73,6 +74,15 @@ const TURN_SPEED = 14;
 const CAMERA_FOLLOW = 9;
 const CAMERA_BLEND = 5;
 const LOOK_HEIGHT = 0.75;
+const DEFAULT_ORBIT: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+/** Giới hạn camera khi nhìn từ trên. */
+const TOP_CAMERA_LIMITS = {
+  ...CAMERA_LIMITS,
+  minPitch: 0.6,
+  maxPitch: 1.5,
+  minDistance: 8,
+  maxDistance: 26,
+};
 const MARKER_SECONDS = 1.2;
 const BUBBLE_HEIGHT = 1.42;
 const SELF_BUBBLE = 'self';
@@ -151,7 +161,7 @@ export class OfficeScene implements SceneController {
   private inputLocked = false;
   /** Đang chơi "gõ phím tập trung": tiếng gõ do người chơi bấm, không tự sinh. */
   private manualTyping = false;
-  private orbit: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+  private orbit: OrbitState = { ...DEFAULT_ORBIT };
   private orbitGoal: OrbitState = { ...this.orbit };
   private freeOrbit: OrbitState = { ...this.orbit };
   private readonly lookTarget = new Vector3();
@@ -176,7 +186,7 @@ export class OfficeScene implements SceneController {
     this.previous = { ...layout.spawn };
     this.facing = layout.spawnFacing;
 
-    this.scene.fog = new Fog(0xfdf3e7, 22, 50);
+    this.scene.fog = new Fog(0x0e0e12, 24, 55);
     this.lighting = createLighting(this.scene, 9, { x: 4, y: 9, z: -5 });
     this.office = buildOffice(layout, this.material, options.period);
     this.scene.add(this.office.group);
@@ -233,10 +243,15 @@ export class OfficeScene implements SceneController {
     this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
     this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
     this.plants = new RoomPlants(this.material);
-    // Đồng hồ lớn trên tường trái (dễ thấy từ góc camera mặc định), giữa kệ quẻ và khu sofa.
-    this.clock.group.position.set(layout.bounds.minX + 0.04, 1.85, 3.2);
-    this.clock.group.rotation.y = Math.PI / 2;
+    // Đồng hồ lớn trên tường bắc, bên phải dãy cửa sổ (logo công ty ở tường sảnh).
+    const lastWindow = layout.windows.spans.at(-1)?.maxX ?? 4.5;
+    const rightShelf = layout.shelves.reduce((m, b) => Math.max(m, b.maxX), lastWindow);
+    this.clock.group.position.set(rightShelf + 0.9, 2.05, layout.bounds.minZ + 0.04);
+    this.clock.group.rotation.y = 0;
     this.scene.add(this.clock.group);
+    this.zoneLabels = new ZoneLabels(layout);
+    this.setCompanySign(null);
+    this.scene.add(this.zoneLabels.group);
     this.scene.add(this.plants.group);
 
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
@@ -271,6 +286,45 @@ export class OfficeScene implements SceneController {
   private moodGroup: Group | null = null;
   private sign: CompanySign | null = null;
   private readonly clock = new WallClock();
+  private readonly zoneLabels: ZoneLabels;
+  /** 'top': nhìn toàn tầng từ trên cao, tâm là giữa văn phòng. */
+  private viewMode: 'follow' | 'top' = 'follow';
+  private autoRotate = false;
+
+  // ---------- Góc nhìn (nút "Góc nhìn" trên HUD) ----------
+
+  setXray(on: boolean): void {
+    this.office.setXray(on);
+  }
+
+  setAutoRotate(on: boolean): void {
+    this.autoRotate = on;
+  }
+
+  setZoneLabels(on: boolean): void {
+    this.labelsOn = on;
+  }
+
+  private labelsOn = true;
+
+  /** Nhìn từ trên: cả tầng 20 × 13 m trong khung hình, lối vào ở dưới. */
+  setTopView(on: boolean): void {
+    this.viewMode = on ? 'top' : 'follow';
+    this.orbitGoal = on ? { yaw: 0, pitch: 1.42, distance: 19 } : { ...DEFAULT_ORBIT };
+  }
+
+  isTopView(): boolean {
+    return this.viewMode === 'top';
+  }
+
+  /** Đặt lại góc nhìn: theo nhân vật, tắt tự xoay. */
+  resetView(): void {
+    this.viewMode = 'follow';
+    this.autoRotate = false;
+    this.orbitGoal = this.seated
+      ? { yaw: this.seated.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 }
+      : { ...DEFAULT_ORBIT };
+  }
 
   /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
   /** Có thẻ vào phòng CEO (chủ công ty, trong phòng công ty của mình) hay không. */
@@ -290,11 +344,18 @@ export class OfficeScene implements SceneController {
     return this.ceoAccess;
   }
 
+  /** Logo trên tường sảnh: phòng công ty hiện tên công ty, văn phòng chung hiện Mây Hồng. */
   setCompanySign(info: SignInfo | null): void {
     this.sign?.dispose();
-    this.sign = null;
-    if (!info) return;
-    this.sign = new CompanySign(this.options.layout, info);
+    this.sign = new CompanySign(
+      this.options.layout,
+      info ?? {
+        name: STRINGS.sign.defaultName,
+        subtitle: STRINGS.sign.defaultTagline,
+        color: 0x9a9aa3,
+        glyph: '',
+      },
+    );
     this.scene.add(this.sign.group);
   }
 
@@ -477,15 +538,27 @@ export class OfficeScene implements SceneController {
     this.lighting.follow(x, z);
 
     // Camera: ngồi thì nhìn gần qua vai về phía bàn, đứng thì theo sau như cũ.
+    if (this.autoRotate)
+      this.orbitGoal = { ...this.orbitGoal, yaw: this.orbitGoal.yaw + frameSeconds * 0.3 };
     this.orbit = {
       yaw: dampAngle(this.orbit.yaw, this.orbitGoal.yaw, CAMERA_BLEND, frameSeconds),
       pitch: damp(this.orbit.pitch, this.orbitGoal.pitch, CAMERA_BLEND, frameSeconds),
       distance: damp(this.orbit.distance, this.orbitGoal.distance, CAMERA_BLEND, frameSeconds),
     };
     const seat = this.seated;
-    const focusX = seat ? x - Math.sin(seat.facing + Math.PI) * 0.35 : x;
-    const focusZ = seat ? z - Math.cos(seat.facing + Math.PI) * 0.35 : z;
-    const focusY = seat ? 0.5 : LOOK_HEIGHT;
+    const top = this.viewMode === 'top';
+    const center = this.layout.bounds;
+    const focusX = top
+      ? (center.minX + center.maxX) / 2
+      : seat
+        ? x - Math.sin(seat.facing + Math.PI) * 0.35
+        : x;
+    const focusZ = top
+      ? (center.minZ + center.maxZ) / 2 + 0.6
+      : seat
+        ? z - Math.cos(seat.facing + Math.PI) * 0.35
+        : z;
+    const focusY = top ? 0 : seat ? 0.5 : LOOK_HEIGHT;
     this.lookTarget.set(
       damp(this.lookTarget.x, focusX, CAMERA_FOLLOW, frameSeconds),
       damp(this.lookTarget.y, focusY, CAMERA_FOLLOW, frameSeconds),
@@ -507,6 +580,14 @@ export class OfficeScene implements SceneController {
       this.marker.visible = this.markerSeconds > 0;
     }
 
+    // Tên khu chỉ hiện khi nhìn xa (từ trên, hoặc lùi camera), gần thì đỡ che.
+    this.zoneLabels.setVisible(this.labelsOn && (top || this.orbit.distance > 9.5));
+    // Vách đặc giữa các phòng tự mờ khi nhân vật ở trong phòng phía nam hoặc camera ở sau vách.
+    const rooms = this.layout.lounge.bounds.minZ;
+    this.office.setPartitionsFaded(
+      !top &&
+        (z > rooms - 0.2 || (this.camera.position.z > rooms - 0.5 && this.camera.position.y < 6)),
+    );
     this.office.update(frameSeconds);
     this.dust.update(frameSeconds);
     this.clock.update(Date.now());
@@ -520,6 +601,8 @@ export class OfficeScene implements SceneController {
 
   applyQuality(preset: QualityPreset): void {
     this.lighting.applyQuality(preset);
+    // Đèn rọi, đèn cây thật chỉ bật ở mức vừa/cao; mức thấp còn vệt sáng giả.
+    this.office.setRealLights(preset.shadows);
     this.avatar.setShadows(preset.shadows);
     this.shadows = preset.shadows;
     for (const npc of this.npcs) npc.avatar.setShadows(preset.shadows);
@@ -543,6 +626,7 @@ export class OfficeScene implements SceneController {
     this.plants.dispose();
     this.sign?.dispose();
     this.clock.dispose();
+    this.zoneLabels.dispose();
     this.companions?.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();
@@ -666,6 +750,7 @@ export class OfficeScene implements SceneController {
   }
 
   private cameraLimits(): typeof CAMERA_LIMITS {
+    if (this.viewMode === 'top') return TOP_CAMERA_LIMITS;
     return this.seated ? SEATED_CAMERA_LIMITS : CAMERA_LIMITS;
   }
 

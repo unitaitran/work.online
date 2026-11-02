@@ -105,7 +105,7 @@ describe('vật tương tác gần nhất', () => {
     if (!coffee) return;
     const near = { x: coffee.approach.x - 0.3, z: coffee.approach.z };
     expect(nearestInteractable(near, items)?.id).toBe('coffee');
-    expect(nearestInteractable({ x: 0, z: 1.5 }, items)).toBeNull();
+    expect(nearestInteractable({ x: 7.1, z: -2 }, items)).toBeNull();
   });
 });
 

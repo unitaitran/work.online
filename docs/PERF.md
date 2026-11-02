@@ -183,3 +183,15 @@ Kết luận: không thấy rò rỉ (hình học dao động 29-36 theo NPC và
 ## Phòng CEO, đồng hồ, biển công ty
 
 Thêm 5 mesh tĩnh riêng: cánh cửa kính (2 mesh: kính + khung, để trượt), biển "Phòng CEO", đèn máy quẹt thẻ, đồng hồ (mặt + 3 kim gộp trong một nhóm). Vách kính, bàn CEO, ghế CEO gộp vào mesh tĩnh và InstancedMesh ghế có sẵn (không thêm draw call). Đo ở góc nhìn mặc định (SwiftShader, mức Tự động): 31 → 36 draw call khi thấy cả phòng CEO; vẫn dưới ngân sách 100.
+
+## Văn phòng mặt bằng v2 (20 × 13 m)
+
+Đo bằng SwiftShader (container không có GPU, fps không đại diện), mức Tự động (thấp, không bóng, không đèn thật):
+
+| Góc nhìn               | Draw call | Tam giác  |
+| ---------------------- | --------- | --------- |
+| Lối vào (mặc định)     | 43        | ~53 nghìn |
+| Nhìn từ trên (cả tầng) | 65        | ~53 nghìn |
+| Ngồi ở bàn             | 29–35     |           |
+
+Cách giữ số draw call thấp: bàn dài, giá sách (sách, hộp quà), decor, các phòng gộp vào một mesh tĩnh; đồ trên bàn, màn hình (3 loại), ghế, đèn thả, bóng đèn, vệt sáng, cây là InstancedMesh; tường bao, vách đặc, dải LED, kính, cửa sổ mỗi thứ một mesh. Nhãn khu là 5 sprite, chỉ hiện khi nhìn xa. Vẫn dưới ngân sách 100.

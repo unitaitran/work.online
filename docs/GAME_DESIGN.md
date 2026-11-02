@@ -82,6 +82,16 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - CEO đặt **khung cấp tuyển dụng**: cấp bao nhiêu đến bao nhiêu thì vào Intern, Fresher, Junior, Middle, Senior (tắt được từng vị trí). Người xin việc ngoài mọi khung không nộp đơn được; nhân viên lên cấp là tự lên vị trí.
 - **Phòng kính CEO** cạnh cửa kính, chung vách với phòng họp. CEO đi lại như mọi người, chỉ khác là có thẻ quẹt mở cửa phòng này (chỉ trong văn phòng công ty của mình); ngồi bàn CEO tính như ngồi máy và mở bảng quản lý công ty. Ở văn phòng chung phòng này luôn khoá.
 
+## Văn phòng (mặt bằng v2, 20 × 13 m)
+
+- Tông đen xám: tường vữa xám, sàn đá xám đậm hơi bóng, đồ nội thất đen; màu đỏ chỉ ở vài món decor (tượng gấu, hộp quà, gối, tranh, ống quẻ, một đôi giày, một chiếc áo).
+- Phía nam (từ tây sang đông): phòng sếp (vách kính bắc và tây, cửa quẹt thẻ), phòng họp 1 (bàn 3 × 1,8 m, 6 ghế, TV), phòng nghỉ (vách kính, sofa ba chỗ, ghế dài nằm nghỉ, đèn cây).
+- Giữa: 4 dãy bàn dài liền khối chạy dọc theo hướng sếp nhìn ra từ phòng kính, mỗi dãy người ngồi hai bên (24 chỗ), mỗi cặp chỗ một đèn thả.
+- Tường bắc: 3 ô cửa sổ, giá sách đen đặt giữa các ô (không che kính), trên giá có sách và hộp quà; đồng hồ giờ Việt Nam bên phải dãy cửa sổ.
+- Tường tây, từ cổng vào sâu trong: kệ giày sneaker, tượng gấu đỏ (logo công ty chữ neon phía trên), kệ treo một dãy áo, rồi 2 bảng dán note cạnh dãy ngồi (lật task, tường than thở).
+- Khu dịch vụ gọn sát tường đông: quầy có máy pha cà phê, lò vi sóng, cây nước (có nhãn), tủ lạnh, một bàn đứng.
+- Nút "Góc nhìn": Xuyên thấu, Tự động xoay, Nhìn từ trên, Đặt lại góc nhìn, bật/tắt tên khu (PHÒNG SẾP, PHÒNG HỌP 1, PHÒNG NGHỈ, KHU DỊCH VỤ, LỐI VÀO; chỉ hiện khi nhìn xa).
+
 ## Tài khoản và ra vào
 
 - Chơi ngay không cần tài khoản (khách): đóng tab hoặc đăng xuất là mất. Đăng ký (tên đăng nhập + mật khẩu, không cần email) bất cứ lúc nào để giữ tiến độ; đăng nhập ở máy khác được.

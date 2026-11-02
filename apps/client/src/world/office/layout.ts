@@ -1,8 +1,9 @@
 // Bố cục văn phòng dùng chung với server: định nghĩa ở @dilam/shared.
 export {
   ceoDoor,
-  ceoGlassWalls,
   deskBox,
+  deskRotation,
+  deskSeatDir,
   insideCeoRoom,
   GLASS_THICKNESS,
   glassWalls,
@@ -10,6 +11,7 @@ export {
   officeInteractables,
   officeObstacles,
   PLANT_SIZE,
+  WALL_THICKNESS,
 } from '@dilam/shared';
 export type {
   Box3Data,

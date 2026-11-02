@@ -202,3 +202,170 @@ export function createCityTexture(period: DayPeriod): CanvasTexture {
   drawCityscape(canvas, period);
   return finish(canvas);
 }
+
+/** Sàn đá xám đậm 2×2 viên, ron mảnh, vân nhẹ. Một lần lặp = 2 m. */
+export function createDarkFloorTexture(): CanvasTexture {
+  const size = 256;
+  const [canvas, ctx] = canvas2d(size, size);
+  const half = size / 2;
+  const colors = ['#2a2a2f', '#25252a'];
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 2; col += 1) {
+      ctx.fillStyle = colors[(row + col) % 2] ?? '#2a2a2f';
+      ctx.fillRect(col * half, row * half, half, half);
+    }
+  }
+  // Vân đá: vài vệt sáng mờ cố định.
+  const rng = seededRng(77);
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 14; i += 1) {
+    ctx.beginPath();
+    const x = rng() * size;
+    const y = rng() * size;
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + 30, y + rng() * 40, x + 60, y - rng() * 40, x + 110, y + 10);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#151518';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, size, size);
+  ctx.beginPath();
+  ctx.moveTo(half, 0);
+  ctx.lineTo(half, size);
+  ctx.moveTo(0, half);
+  ctx.lineTo(size, half);
+  ctx.stroke();
+  const texture = finish(canvas);
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+/** Kính: trong, có vài vệt phản chiếu chéo (alpha) cho cảm giác bóng loáng. */
+export function createGlassTexture(): CanvasTexture {
+  const [canvas, ctx] = canvas2d(256, 256);
+  ctx.fillStyle = 'rgba(160,200,220,0.55)';
+  ctx.fillRect(0, 0, 256, 256);
+  for (const [x, w, a] of [
+    [30, 26, 0.35],
+    [70, 8, 0.25],
+    [160, 40, 0.18],
+    [215, 10, 0.3],
+  ] as const) {
+    ctx.save();
+    ctx.translate(x, 0);
+    ctx.transform(1, 0, -0.45, 1, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.5, `rgba(255,255,255,${String(a)})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, 256);
+    ctx.restore();
+  }
+  const texture = finish(canvas);
+  texture.wrapS = RepeatWrapping;
+  return texture;
+}
+
+/** Vệt sáng tròn mềm (cộng màu) dưới đèn thả. */
+export function createLightPoolTexture(): CanvasTexture {
+  const [canvas, ctx] = canvas2d(128, 128);
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,214,160,0.55)');
+  g.addColorStop(0.45, 'rgba(255,190,130,0.22)');
+  g.addColorStop(1, 'rgba(255,170,110,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return finish(canvas);
+}
+
+/** Biển chữ trên nền đen viền đỏ (nhãn thiết bị pantry, biển phòng). */
+export function createLabelTexture(
+  labels: readonly string[],
+  options: { width?: number; height?: number; font?: number } = {},
+): CanvasTexture {
+  const width = options.width ?? 512 * labels.length;
+  const height = options.height ?? 96;
+  const [canvas, ctx] = canvas2d(width, height);
+  const cell = width / labels.length;
+  labels.forEach((text, i) => {
+    const x = i * cell;
+    ctx.fillStyle = '#111114';
+    ctx.beginPath();
+    ctx.roundRect(x + 10, 8, cell - 20, height - 16, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#8a8a93';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#f5f1ea';
+    ctx.font = `bold ${String(options.font ?? 40)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + cell / 2, height / 2 + 2);
+  });
+  return finish(canvas);
+}
+
+/**
+ * Tường vữa trang trí xám (kiểu bê tông mài / venetian): nền xám, nhiều mảng loang sáng tối
+ * mềm, vệt bay nhẹ, lốm đốm mịn. Một lần lặp ≈ 3 m.
+ */
+export function createPlasterTexture(): CanvasTexture {
+  const size = 512;
+  const [canvas, ctx] = canvas2d(size, size);
+  ctx.fillStyle = '#9d9ea2';
+  ctx.fillRect(0, 0, size, size);
+  const rng = seededRng(404);
+  // Mảng loang (vẽ lặp ở 9 ô để nối liền khi lặp).
+  for (let i = 0; i < 70; i += 1) {
+    const x = rng() * size;
+    const y = rng() * size;
+    const r = 40 + rng() * 120;
+    const light = rng() < 0.55;
+    const a = 0.05 + rng() * 0.09;
+    for (const dx of [-size, 0, size]) {
+      for (const dy of [-size, 0, size]) {
+        const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+        g.addColorStop(0, light ? `rgba(235,235,238,${String(a)})` : `rgba(70,70,76,${String(a)})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x + dx, y + dy, r, r * (0.5 + rng() * 0.5), rng() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  // Vệt bay bay (nét cong mảnh sáng).
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 40; i += 1) {
+    const x = rng() * size;
+    const y = rng() * size;
+    ctx.strokeStyle = `rgba(245,245,248,${String(0.05 + rng() * 0.08)})`;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(
+      x + 30 + rng() * 40,
+      y - 20 + rng() * 40,
+      x + 70 + rng() * 60,
+      y + rng() * 20,
+    );
+    ctx.stroke();
+  }
+  // Lốm đốm mịn.
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (rng() - 0.5) * 10;
+    img.data[i] = (img.data[i] ?? 0) + n;
+    img.data[i + 1] = (img.data[i + 1] ?? 0) + n;
+    img.data[i + 2] = (img.data[i + 2] ?? 0) + n;
+  }
+  ctx.putImageData(img, 0, 0);
+  const texture = finish(canvas);
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.anisotropy = 4;
+  return texture;
+}
