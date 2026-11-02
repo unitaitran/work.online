@@ -75,7 +75,7 @@ bus.on((event) => {
 });
 
 // Âm thanh dùng chung cho cả trang; chỉ bật sau lần chạm/bấm phím đầu tiên (chính sách autoplay).
-const audio = new AudioEngine(loadAudioSettings(store), OFFICE_FLOOR.name);
+const audio = new AudioEngine(loadAudioSettings(store), STRINGS.office.floorName);
 const unlockAudio = (): void => {
   audio.unlock();
   window.removeEventListener('pointerdown', unlockAudio, true);
@@ -196,7 +196,7 @@ function start(): void {
     engine.setController(scene);
     hud = mountOfficeHud(hudRoot, {
       name: profile.name,
-      floorName: OFFICE_FLOOR.name,
+      floorName: STRINGS.office.floorName,
       mode: engine.qualityMode,
       audio: audio.getSettings(),
       touch: coarsePointer,
@@ -235,7 +235,7 @@ function start(): void {
       bus,
       playerId,
       playerName: profile.name,
-      floorName: OFFICE_FLOOR.name,
+      floorName: STRINGS.office.floorName,
       progress: {
         checkIn: () => progress.state.checkIn,
         lastResult: () => progress.lastResult,

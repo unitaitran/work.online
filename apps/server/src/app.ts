@@ -4,7 +4,7 @@ import { openDatabase } from './db/database';
 import { createSqliteRepositories, type Repositories } from './db/repositories';
 import { createAccountService, type AccountService } from './game/accounts';
 import { registerApiRoutes, type AuthedHelpers, type Presence } from './http/routes';
-import { attachWebSocketGateway, type GatewayOptions } from './ws/gateway';
+import { attachWebSocketGateway, type Gateway, type GatewayOptions } from './ws/gateway';
 
 export interface AppOptions {
   config: ServerConfig;
@@ -20,6 +20,12 @@ export interface AppContext {
   accounts: AccountService;
   helpers: AuthedHelpers;
   now: () => number;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    gateway: Gateway;
+  }
 }
 
 export function buildApp(options: AppOptions): FastifyInstance {
@@ -63,7 +69,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   const context: AppContext = { config, repos, accounts, helpers, now };
-  presence = attachWebSocketGateway(app, context, options.gateway);
+  const gateway = attachWebSocketGateway(app, context, options.gateway);
+  presence = gateway;
+  app.decorate('gateway', gateway);
 
   app.addHook('onClose', (_instance, done) => {
     db?.close();
