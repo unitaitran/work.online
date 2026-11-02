@@ -294,6 +294,161 @@ export const STRINGS = {
     filterLabel: 'Lọc theo loại',
     open: 'Nhật ký sự kiện',
   },
+  progress: {
+    levelLabel: (level: number, title: string) => `Cấp ${String(level)} · ${title}`,
+    xpBar: (into: number, needed: number) => `${String(into)}/${String(needed)} XP`,
+    xpMax: 'Cấp tối đa',
+    xpGain: (xp: number) => `+${String(xp)} XP`,
+    xpCapped: 'Đã quá giới hạn hôm nay, chỉ nhận 25% XP.',
+    levelUp: (level: number) => `Lên cấp ${String(level)}!`,
+    reviewDue: 'Kỳ đánh giá!',
+    openProfile: 'Xem hồ sơ',
+    profileTitle: 'Hồ sơ nhân viên',
+    tabs: {
+      card: 'Thẻ nhân viên',
+      review: 'Kỳ đánh giá',
+      log: 'Nhật ký',
+      roadmap: 'Lộ trình',
+      save: 'Lưu trữ',
+    },
+    card: {
+      title: 'Chức danh',
+      level: 'Cấp độ',
+      xp: 'Tổng XP',
+      today: 'XP hôm nay',
+      todayValue: (earned: number, cap: number) => `${String(earned)}/${String(cap)}`,
+      department: 'Phòng ban',
+      branch: 'Nhánh',
+      company: 'Công ty',
+      streak: 'Chuỗi chấm công',
+      streakValue: (days: number) => `${String(days)} ngày`,
+      noDepartment: 'Chưa chọn (từ chức danh 3)',
+      noBranch: 'Chưa chọn (từ chức danh 5)',
+      unemployed: 'Đang tự do',
+      employers: { 'may-hong': 'Văn phòng Mây Hồng' } as Record<string, string>,
+      personality: 'Tính cách',
+      traits: { diligence: 'Chăm chỉ', sociability: 'Hoà đồng', creativity: 'Sáng tạo' },
+    },
+    review: {
+      period: (day: number, total: number) =>
+        `Ngày ${String(day)}/${String(total)} của kỳ đánh giá`,
+      dueIn: (days: number) => `Còn ${String(days)} ngày nữa tới kỳ đánh giá.`,
+      due: 'Đã tới kỳ đánh giá! Kiểm tra điều kiện rồi vào phỏng vấn nhé.',
+      next: (title: string) => `Xét lên: ${title}`,
+      maxTitle: 'Bạn đã ở chức danh cao nhất. Tiếp tục lên cấp để mở thêm tính năng!',
+      checks: {
+        level: (current: number, target: number) =>
+          `Đạt cấp ${String(target)} (hiện cấp ${String(current)})`,
+        checkins: (current: number, target: number) =>
+          `Chấm công ít nhất ${String(target)} ngày trong kỳ (đã ${String(current)})`,
+        focus: (current: number, target: number) =>
+          `Tập trung gõ phím ít nhất ${String(target)} phút (đã ${String(current)})`,
+        helps: (current: number, target: number) =>
+          `Giúp đồng nghiệp ít nhất ${String(target)} lần: tặng cà phê, tưới cây (đã ${String(current)})`,
+        branch: () => 'Đã chọn nhánh Chuyên môn hoặc Quản lý',
+      },
+      start: 'Vào phỏng vấn thăng chức',
+      endPeriod: 'Kết thúc kỳ này',
+      notEligible:
+        'Kỳ này chưa đủ điều kiện. Không sao cả: bạn giữ nguyên cấp và chức danh, kỳ mới bắt đầu từ hôm nay.',
+      lastPassed: (title: string) => `Kỳ trước: lên chức ${title}.`,
+      lastFailed: 'Kỳ trước: chưa đủ điều kiện, đã chờ sang kỳ này.',
+      notYet: 'Chưa tới hạn đánh giá. Cứ làm việc đều, tới ngày sẽ có nút vào phỏng vấn.',
+    },
+    interview: {
+      title: 'Phỏng vấn thăng chức',
+      step: (index: number, total: number) => `Tình huống ${String(index)}/${String(total)}`,
+      intro: 'Không có câu trả lời sai. Cứ chọn theo cách của bạn nhé!',
+    },
+    promoted: {
+      title: 'Chúc mừng thăng chức!',
+      body: (title: string) => `Bạn đã chính thức trở thành ${title}.`,
+      continue: 'Tiếp tục làm việc',
+    },
+    department: {
+      title: 'Chọn phòng ban',
+      intro:
+        'Mỗi phòng ban được thưởng thêm 30% XP cho một kiểu việc. Chọn một lần, hãy chọn phòng hợp với bạn!',
+      descriptions: {
+        dev: 'Gõ phím tập trung được thêm 30% XP.',
+        sales: 'Tặng cà phê và lật task được thêm 30% XP.',
+        marketing: 'Kinh công sở và xin quẻ được thêm 30% XP.',
+        accounting: 'Thưởng chuỗi chấm công được thêm 30%.',
+        hr: 'Công quả và giúp đồng nghiệp được thêm 30% XP.',
+      },
+    },
+    branch: {
+      title: 'Chọn nhánh sự nghiệp',
+      intro: 'Từ chức danh 6, mỗi nhánh có tên chức danh riêng. Chọn một lần thôi nhé.',
+      descriptions: {
+        specialist: 'Đi sâu chuyên môn: Chuyên gia → Chuyên gia đầu ngành.',
+        manager: 'Dẫn dắt đội nhóm: Trưởng nhóm → Tổng giám đốc.',
+      },
+    },
+    log: {
+      empty: 'Chưa có hoạt động nào được tính XP.',
+      sources: {
+        checkin: 'Chấm công',
+        'focus-typing': 'Gõ phím tập trung',
+        'kpi-fortune': 'Xin quẻ KPI',
+        'task-flip': 'Hoàn thành task',
+        'coffee-gift': 'Tặng cà phê',
+        chore: 'Công quả',
+        meeting: 'Ngồi họp',
+        mission: 'Việc sếp giao',
+      } as Record<string, string>,
+      capped: (base: number) => `gốc ${String(base)}, đã quá giới hạn ngày`,
+    },
+    roadmap: {
+      titles: 'Các chức danh',
+      minLevel: (level: number) => `từ cấp ${String(level)}`,
+      current: 'hiện tại',
+      unlocks: 'Mở khoá',
+      unlockAt: (kind: 'title' | 'level', at: number) =>
+        kind === 'title' ? `Chức danh ${String(at)}` : `Cấp ${String(at)}`,
+      company: 'Mở công ty riêng',
+      companyLevel: (target: number, current: number) =>
+        `Đạt cấp ${String(target)} (hiện cấp ${String(current)})`,
+      companyLeave: 'Đã rời công ty hiện tại',
+      companyLater:
+        'Mở công ty sẽ có ở bản sau. Mỗi công ty là một tầng riêng trong toà nhà, mỗi toà tối đa 30 công ty.',
+    },
+    save: {
+      exportTitle: 'Mã lưu của bạn',
+      exportHint: 'Chép mã này sang máy khác để chuyển tiến độ.',
+      copy: 'Chép mã',
+      copied: 'Đã chép mã!',
+      importTitle: 'Nhập mã lưu',
+      importHint: 'Dán mã từ máy khác. Tiến độ trên máy này sẽ được thay bằng tiến độ trong mã.',
+      import: 'Nhập mã',
+      imported: 'Đã nhập tiến độ thành công!',
+      errors: {
+        format: 'Mã không đúng định dạng. Bạn kiểm tra lại nhé.',
+        checksum:
+          'Mã bị sai hoặc chép thiếu (checksum không khớp). Tiến độ hiện tại vẫn được giữ nguyên.',
+        version: 'Mã này đến từ phiên bản trò chơi chưa hỗ trợ.',
+        data: 'Dữ liệu trong mã không hợp lệ. Tiến độ hiện tại vẫn được giữ nguyên.',
+      },
+    },
+    mission: {
+      label: 'Sếp giao việc',
+      progress: (current: number, total: number) => `${String(current)}/${String(total)}`,
+      done: (xp: number) => `Xong việc sếp giao! +${String(xp)} XP`,
+    },
+    dev: {
+      title: 'Công cụ dev',
+      day: (key: string, offsetDays: number) =>
+        `Ngày giả lập: ${key} (${offsetDays >= 0 ? '+' : ''}${String(offsetDays)})`,
+      plusDay: '+1 ngày',
+      plusWeek: '+7 ngày',
+      reset: 'Về hôm nay',
+      checkin: '+ Chấm công',
+      focus: '+ Phiên 5 phút',
+      gift: '+ Tặng cà phê',
+      chore: '+ Công quả',
+      mission: 'Sếp giao việc ngay',
+    },
+  },
   connection: {
     /** Tin gửi lên server khi thử kết nối (dùng lại ở Phase 4). */
     testMessage: 'Chào buổi sáng từ bàn làm việc!',

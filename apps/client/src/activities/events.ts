@@ -1,49 +1,19 @@
 // Bus sự kiện chung cho các hoạt động. Mỗi hoạt động phát {type, startedAt, durationMs, detail}.
-// Phase 2B chưa tính XP: sự kiện chỉ được ghi lại (bộ nhớ + localStorage) để trang debug xem
-// và để phase sau gửi lên server.
-import { z } from 'zod';
+// Phase 3: ProgressService nghe bus để tính XP bằng luật trong @dilam/shared; nhật ký
+// (bộ nhớ + localStorage) để trang debug xem.
 import type { KeyValueStore } from '../storage';
 
-/** Chi tiết của từng loại sự kiện. */
-export interface ActivityEventDetails {
-  checkin: { day: string; streak: number; total: number };
-  'focus-typing': {
-    plannedMs: number;
-    presses: number;
-    scoredKeys: number;
-    lines: number;
-    completed: boolean;
-  };
-  'kpi-fortune': { day: string; fortuneId: number; repeat: boolean };
-  'task-flip': { taskId: number; completed: boolean };
-  vent: { length: number; anonymous: boolean };
-  'coffee-brew': { brewMs: number };
-  'coffee-gift': { npcId: string };
-  'coffee-drink': Record<string, never>;
-}
+import {
+  ACTIVITY_EVENT_TYPES,
+  activityEventSchema,
+  makeEvent,
+  type ActivityEvent,
+  type ActivityEventDetails,
+  type ActivityEventType,
+} from '@dilam/shared';
 
-export type ActivityEventType = keyof ActivityEventDetails;
-
-export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
-  'checkin',
-  'focus-typing',
-  'kpi-fortune',
-  'task-flip',
-  'vent',
-  'coffee-brew',
-  'coffee-gift',
-  'coffee-drink',
-];
-
-export type ActivityEvent = {
-  [K in ActivityEventType]: {
-    type: K;
-    /** Thời điểm bắt đầu (ms từ epoch, UTC). */
-    startedAt: number;
-    durationMs: number;
-    detail: ActivityEventDetails[K];
-  };
-}[ActivityEventType];
+export { ACTIVITY_EVENT_TYPES, makeEvent };
+export type { ActivityEvent, ActivityEventDetails, ActivityEventType };
 
 export type ActivityListener = (event: ActivityEvent) => void;
 
@@ -78,26 +48,6 @@ export class ActivityBus {
   }
 }
 
-/** Tiện ích tạo sự kiện có kiểu chặt. */
-export function makeEvent<K extends ActivityEventType>(
-  type: K,
-  startedAt: number,
-  durationMs: number,
-  detail: ActivityEventDetails[K],
-): Extract<ActivityEvent, { type: K }> {
-  return { type, startedAt, durationMs: Math.max(0, Math.round(durationMs)), detail } as Extract<
-    ActivityEvent,
-    { type: K }
-  >;
-}
-
-const storedEventSchema = z.object({
-  type: z.enum(ACTIVITY_EVENT_TYPES as [ActivityEventType, ...ActivityEventType[]]),
-  startedAt: z.number(),
-  durationMs: z.number().nonnegative(),
-  detail: z.record(z.string(), z.unknown()),
-});
-
 /** Đọc nhật ký đã lưu; bản ghi hỏng bị bỏ qua. */
 export function loadEventLog(store: KeyValueStore | null): ActivityEvent[] {
   if (!store) return [];
@@ -108,7 +58,7 @@ export function loadEventLog(store: KeyValueStore | null): ActivityEvent[] {
     if (!Array.isArray(data)) return [];
     const events: ActivityEvent[] = [];
     for (const item of data) {
-      const parsed = storedEventSchema.safeParse(item);
+      const parsed = activityEventSchema.safeParse(item);
       if (parsed.success) events.push(parsed.data as ActivityEvent);
     }
     return events.slice(-EVENT_LOG_LIMIT);

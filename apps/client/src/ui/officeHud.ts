@@ -18,6 +18,24 @@ export interface OfficeHudOptions {
   onInteract(): void;
   onFocusStart(): void;
   onDrinkCoffee(): void;
+  onOpenProfile(tab?: 'card' | 'review'): void;
+}
+
+/** Thông tin tiến độ hiển thị trên HUD. */
+export interface ProgressView {
+  level: number;
+  title: string;
+  ratio: number;
+  into: number;
+  needed: number;
+  isMax: boolean;
+  reviewDue: boolean;
+}
+
+export interface MissionView {
+  goalText: string;
+  progress: number;
+  total: number;
 }
 
 /** Gợi ý tương tác: null = ẩn nút. */
@@ -34,6 +52,10 @@ export interface OfficeHud {
   setFocusAvailable(available: boolean): void;
   /** Trạng thái ly cà phê: đang pha / đang cầm / không có. */
   setCoffee(phase: 'idle' | 'brewing' | 'holding'): void;
+  setProgress(view: ProgressView): void;
+  /** Chữ "+XP" bay lên cạnh thanh XP. */
+  showXpGain(xp: number, capped: boolean): void;
+  setMission(mission: MissionView | null): void;
   dispose(): void;
 }
 
@@ -89,19 +111,62 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   renderSound();
 
-  const badge = el('div', {
+  // Thẻ tên + cấp/chức danh + thanh XP; bấm vào để mở hồ sơ.
+  const levelText = el('span', { className: 'office-badge-floor' });
+  const xpFill = el('span', { className: 'xp-bar-fill' });
+  const xpText = el('span', { className: 'xp-bar-text' });
+  const xpBar = el('span', {
+    className: 'xp-bar',
+    attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' },
+    children: [xpFill, xpText],
+  });
+  const xpFloat = el('span', { className: 'xp-float', attrs: { 'aria-live': 'polite' } });
+  const badge = el('button', {
     className: 'office-badge',
+    attrs: {
+      type: 'button',
+      title: STRINGS.progress.openProfile,
+      'aria-label': STRINGS.progress.openProfile,
+    },
     children: [
       el('span', { className: 'office-badge-dot', attrs: { 'aria-hidden': 'true' } }),
       el('span', {
         className: 'office-badge-text',
         children: [
           el('span', { className: 'office-badge-name', text: options.name }),
-          el('span', { className: 'office-badge-floor', text: options.floorName }),
+          levelText,
+          xpBar,
         ],
       }),
+      xpFloat,
     ],
   });
+  badge.addEventListener('click', () => {
+    options.onOpenProfile('card');
+  });
+  const reviewButton = el('button', {
+    className: 'button button-primary review-due',
+    text: STRINGS.progress.reviewDue,
+    attrs: { type: 'button' },
+  });
+  reviewButton.hidden = true;
+  reviewButton.addEventListener('click', () => {
+    options.onOpenProfile('review');
+  });
+
+  // Thẻ việc sếp giao.
+  const missionGoal = el('span', { className: 'mission-goal' });
+  const missionCount = el('span', { className: 'mission-count' });
+  const missionCard = el('div', {
+    className: 'mission-card',
+    attrs: { role: 'status' },
+    children: [
+      el('span', { className: 'mission-label', text: STRINGS.progress.mission.label }),
+      missionGoal,
+      missionCount,
+    ],
+  });
+  missionCard.hidden = true;
 
   const stats = el('p', { className: 'office-stats', attrs: { 'aria-hidden': 'true' } });
   stats.hidden = !options.showStats;
@@ -158,7 +223,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   const bar = el('div', {
     className: 'office-bar',
     children: [
-      badge,
+      el('div', { className: 'office-badge-group', children: [badge, reviewButton] }),
       el('div', {
         className: 'office-actions',
         children: [
@@ -179,7 +244,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   const layer = el('div', {
     className: 'office-hud',
-    children: [bar, toast, stats, eventsLink, coffeeChip, focusButton, interact, hint],
+    children: [bar, missionCard, toast, stats, eventsLink, coffeeChip, focusButton, interact, hint],
   });
   root.append(layer);
 
@@ -219,6 +284,29 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       lastHint = text;
       interact.hidden = text === '';
       interact.textContent = text;
+    },
+    setProgress(view) {
+      levelText.textContent = STRINGS.progress.levelLabel(view.level, view.title);
+      xpFill.style.width = `${String(Math.round(view.ratio * 100))}%`;
+      xpText.textContent = view.isMax
+        ? STRINGS.progress.xpMax
+        : STRINGS.progress.xpBar(view.into, view.needed);
+      xpBar.setAttribute('aria-valuenow', String(Math.round(view.ratio * 100)));
+      xpBar.setAttribute('aria-label', xpText.textContent);
+      reviewButton.hidden = !view.reviewDue;
+    },
+    showXpGain(xp, capped) {
+      xpFloat.textContent = STRINGS.progress.xpGain(xp);
+      xpFloat.classList.remove('is-showing');
+      xpFloat.getBoundingClientRect(); // ép trình duyệt tính lại để chạy lại hiệu ứng
+      xpFloat.classList.add('is-showing');
+      if (capped) showToast(STRINGS.progress.xpCapped);
+    },
+    setMission(mission) {
+      missionCard.hidden = mission === null;
+      if (!mission) return;
+      missionGoal.textContent = mission.goalText;
+      missionCount.textContent = STRINGS.progress.mission.progress(mission.progress, mission.total);
     },
     setFocusAvailable(available) {
       focusButton.hidden = !available;

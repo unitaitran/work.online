@@ -1,5 +1,13 @@
 import './style.css';
 import { GAME_NAME } from '@dilam/shared';
+import {
+  activeMission,
+  BALANCE,
+  goalAmount,
+  levelProgress,
+  titleName,
+  type ProgressState,
+} from '@dilam/shared';
 import { ActivityBus } from './activities/events';
 import { OfficeActivities } from './activities/officeActivities';
 import { loadOrCreatePlayerId } from './activities/playerId';
@@ -8,6 +16,9 @@ import { DEFAULT_APPEARANCE, type Profile } from './avatar/appearance';
 import { randomVietnameseName } from './avatar/names';
 import { Engine } from './engine/engine';
 import { initialAutoLevel } from './engine/quality';
+import { clock } from './clock';
+import { ProgressService } from './progress/progressService';
+import { LocalProgressStore } from './progress/progressStore';
 import { CreatorScene } from './scenes/creatorScene';
 import { createNpcRoster } from './npc/roster';
 import { OfficeScene, type OfficeEvent } from './scenes/officeScene';
@@ -26,7 +37,10 @@ import { STRINGS } from './strings';
 import { mountCreatorPanel } from './ui/creatorPanel';
 import { el } from './ui/dom';
 import { showCoachMarks } from './ui/coachMarks';
+import { mountDevPanel } from './ui/devPanel';
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
+import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
+import { askChoices, startReview, type ReviewFlowDeps } from './ui/reviewFlow';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
 
@@ -53,6 +67,11 @@ const storageNotice = store ? null : STRINGS.storage.blocked;
 /** Bus sự kiện hoạt động (Phase 2B): ghi lại để trang events.html xem và phase sau gửi server. */
 const bus = new ActivityBus(store);
 const playerId = loadOrCreatePlayerId(store);
+// Tiến độ (Phase 3: tính ở client bằng luật trong @dilam/shared; Phase 4 chuyển lên server).
+const progress = await ProgressService.create(new LocalProgressStore(store), playerId, clock);
+bus.on((event) => {
+  progress.handle(event);
+});
 
 // Âm thanh dùng chung cho cả trang; chỉ bật sau lần chạm/bấm phím đầu tiên (chính sách autoplay).
 const audio = new AudioEngine(loadAudioSettings(store), OFFICE_FLOOR.name);
@@ -204,6 +223,9 @@ function start(): void {
       onDrinkCoffee: () => {
         activities?.drinkCoffee();
       },
+      onOpenProfile: (tab) => {
+        openProfile(tab ?? 'card');
+      },
     });
     officeHud = hud;
     const officeActivities = new OfficeActivities({
@@ -213,6 +235,10 @@ function start(): void {
       playerId,
       playerName: profile.name,
       floorName: OFFICE_FLOOR.name,
+      progress: {
+        checkIn: () => progress.state.checkIn,
+        lastResult: () => progress.lastResult,
+      },
       scene,
       hud,
       play: (sound) => {
@@ -220,6 +246,96 @@ function start(): void {
       },
     });
     activities = officeActivities;
+    const officeHudView = hud;
+
+    // ---------- Tiến độ: thanh XP, lên cấp, việc sếp giao, kỳ đánh giá ----------
+    const refreshProgress = (state: ProgressState = progress.state): void => {
+      const p = levelProgress(state.xp);
+      officeHudView.setProgress({
+        level: p.level,
+        title: titleName(state.title, state.branch),
+        ratio: p.ratio,
+        into: p.into,
+        needed: p.needed,
+        isMax: p.isMax,
+        reviewDue: progress.reviewStatus().due,
+      });
+      const mission = activeMission(state);
+      officeHudView.setMission(
+        mission
+          ? {
+              goalText: mission.goalText,
+              progress: mission.progress,
+              total: goalAmount(mission.goal),
+            }
+          : null,
+      );
+    };
+    const offProgress = progress.onChange((state, change) => {
+      refreshProgress(state);
+      if (change.kind === 'event') {
+        const { result } = change;
+        if (result.granted > 0)
+          officeHudView.showXpGain(result.granted, result.granted < result.base);
+        if (result.completedMission) {
+          audio.play('ting');
+          officeHudView.showToast(STRINGS.progress.mission.done(BALANCE.mission));
+        }
+        if (result.levelAfter > result.levelBefore) {
+          audio.play('levelup');
+          officeHudView.showToast(STRINGS.progress.levelUp(result.levelAfter));
+        }
+      } else if (change.kind === 'missionAssigned') {
+        audio.play('ting');
+        officeHudView.showToast(change.mission.text);
+      }
+    });
+    refreshProgress();
+    const missionTimer = window.setInterval(() => {
+      progress.tickMissions();
+      refreshProgress();
+    }, 3000);
+
+    const reviewDeps: ReviewFlowDeps = {
+      root: hudRoot,
+      openPanel: (title, onClose) => officeActivities.openPanel(title, onClose),
+      play: (sound) => {
+        audio.play(sound);
+      },
+      progress,
+    };
+    const openProfile = (tab: ProfileTab): void => {
+      let panel: { dispose(): void } | null = null;
+      const modal = officeActivities.openPanel(STRINGS.progress.profileTitle, () =>
+        panel?.dispose(),
+      );
+      panel = mountProfilePanel(modal.body, {
+        name: profile.name,
+        playerId,
+        progress,
+        initialTab: tab,
+        onStartReview: () => {
+          modal.close();
+          startReview(reviewDeps);
+        },
+      });
+    };
+    // Lỡ đóng màn chọn phòng ban / nhánh: lần vào văn phòng sau hỏi lại.
+    if (progress.needsDepartment() || progress.needsBranch()) askChoices(reviewDeps);
+
+    const devPanel = import.meta.env.DEV
+      ? mountDevPanel(hudRoot, {
+          emit: (event) => {
+            bus.emit(event);
+          },
+          forceMission: () => {
+            progress.forceMissionNow();
+          },
+          onTimeChange: () => {
+            refreshProgress();
+          },
+        })
+      : null;
 
     // Cảnh ngoài cửa kính đổi theo giờ thật: kiểm tra mỗi phút.
     const periodTimer = window.setInterval(() => {
@@ -238,6 +354,9 @@ function start(): void {
     const officeHudRef = hud;
     teardown = () => {
       window.clearInterval(periodTimer);
+      window.clearInterval(missionTimer);
+      offProgress();
+      devPanel?.dispose();
       officeActivities.dispose();
       activities = null;
       coach?.dispose();
@@ -282,6 +401,9 @@ function start(): void {
         npcs: () => office?.getNpcStatuses() ?? [],
         audio: () => audio.stats(),
         events: () => bus.history(),
+        progress: () => progress.state,
+        review: () => progress.reviewStatus(),
+        today: () => clock.today(),
         playerId: () => playerId,
         setPeriod: (period: DayPeriod) => {
           office?.setPeriod(period);

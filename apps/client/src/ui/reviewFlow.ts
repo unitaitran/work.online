@@ -1,0 +1,216 @@
+// Kỳ đánh giá: phỏng vấn 5 tình huống → màn chúc mừng (pháo giấy + nhạc) → chọn phòng ban / nhánh.
+import {
+  BRANCHES,
+  BRANCH_NAMES,
+  DEPARTMENTS,
+  DEPARTMENT_NAMES,
+  pickInterview,
+  scoreInterview,
+  titleName,
+  type Branch,
+  type Department,
+} from '@dilam/shared';
+import type { SoundName } from '../audio/audioEngine';
+import { STRINGS } from '../strings';
+import { el } from './dom';
+import type { Modal } from './modal';
+
+const s = STRINGS.progress;
+
+export interface ReviewFlowDeps {
+  root: HTMLElement;
+  /** Mở hộp thoại (khoá điều khiển cảnh trong lúc mở). */
+  openPanel(title: string, onClose?: () => void): Modal;
+  play(sound: SoundName): void;
+  progress: {
+    readonly state: { title: number; branch: Branch | null };
+    reviewStatus(): { due: boolean; eligible: boolean; nextTitle: number | null };
+    interviewSeed(): number;
+    finishReview(passed: boolean, personality?: ReturnType<typeof scoreInterview>): void;
+    chooseDepartment(department: Department): void;
+    chooseBranch(branch: Branch): void;
+    needsDepartment(): boolean;
+    needsBranch(): boolean;
+  };
+  onDone?(): void;
+}
+
+/** Vào kỳ đánh giá (chỉ khi đã tới hạn). */
+export function startReview(deps: ReviewFlowDeps): void {
+  const status = deps.progress.reviewStatus();
+  if (!status.due) return;
+  if (!status.eligible) {
+    deps.progress.finishReview(false);
+    const modal = deps.openPanel(s.tabs.review);
+    modal.body.append(el('p', { className: 'activity-intro', text: s.review.notEligible }));
+    return;
+  }
+  runInterview(deps);
+}
+
+function runInterview(deps: ReviewFlowDeps): void {
+  const questions = pickInterview(deps.progress.interviewSeed());
+  const choices: number[] = [];
+  let finished = false;
+  const modal = deps.openPanel(s.interview.title, () => {
+    // Đóng giữa chừng: không sao, lần sau mở lại vẫn là bộ câu hỏi đó.
+    if (finished) afterInterview(deps, questions, choices);
+  });
+
+  const render = (): void => {
+    const index = choices.length;
+    const question = questions[index];
+    if (!question) {
+      finished = true;
+      modal.close();
+      return;
+    }
+    modal.body.replaceChildren(
+      el('p', { className: 'review-period', text: s.interview.step(index + 1, questions.length) }),
+      el('p', { className: 'activity-intro', text: index === 0 ? s.interview.intro : '' }),
+      el('p', { className: 'interview-prompt', text: question.prompt }),
+      el('div', {
+        className: 'interview-options',
+        children: question.options.map((option, i) => {
+          const button = el('button', {
+            className: 'interview-option',
+            text: option.text,
+            attrs: { type: 'button' },
+          });
+          button.addEventListener('click', () => {
+            choices.push(i);
+            deps.play('keyboard');
+            render();
+          });
+          return button;
+        }),
+      }),
+    );
+    modal.body.querySelector<HTMLButtonElement>('.interview-option')?.focus();
+  };
+  render();
+}
+
+function afterInterview(
+  deps: ReviewFlowDeps,
+  questions: ReturnType<typeof pickInterview>,
+  choices: readonly number[],
+): void {
+  const before = deps.progress.state.title;
+  deps.progress.finishReview(true, scoreInterview(questions, choices));
+  const after = deps.progress.state.title;
+  if (after <= before) return;
+  showCelebration(deps, titleName(after, deps.progress.state.branch), () => {
+    askChoices(deps);
+  });
+}
+
+/** Màn chúc mừng: pháo giấy bằng CSS (không ảnh), nhạc chiến thắng sinh bằng Web Audio. */
+export function showCelebration(
+  deps: Pick<ReviewFlowDeps, 'root' | 'play'>,
+  title: string,
+  onClose: () => void,
+): void {
+  deps.play('fanfare');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const colors = ['#ff8a65', '#ffd479', '#8fc7ff', '#9fe0a8', '#d6b4ff', '#f28a8a'];
+  const confetti = reduced
+    ? []
+    : Array.from({ length: 60 }, (_, i) => {
+        const piece = el('span', { className: 'confetti' });
+        piece.style.setProperty('--x', `${String((i * 37) % 100)}vw`);
+        piece.style.setProperty('--delay', `${String((i % 12) * 0.08)}s`);
+        piece.style.setProperty('--spin', `${String(((i * 53) % 720) - 360)}deg`);
+        piece.style.background = colors[i % colors.length] ?? '#ff8a65';
+        return piece;
+      });
+  const button = el('button', {
+    className: 'button button-primary',
+    text: s.promoted.continue,
+    attrs: { type: 'button' },
+  });
+  const overlay = el('div', {
+    className: 'celebration',
+    attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': s.promoted.title },
+    children: [
+      ...confetti,
+      el('section', {
+        className: 'celebration-card',
+        children: [
+          el('p', { className: 'celebration-badge', text: '★', attrs: { 'aria-hidden': 'true' } }),
+          el('h2', { text: s.promoted.title }),
+          el('p', { className: 'celebration-title', text: s.promoted.body(title) }),
+          button,
+        ],
+      }),
+    ],
+  });
+  const close = (): void => {
+    overlay.remove();
+    onClose();
+  };
+  button.addEventListener('click', close);
+  deps.root.append(overlay);
+  button.focus();
+}
+
+/** Sau khi lên chức: chọn phòng ban (chức danh 3) hoặc nhánh (chức danh 5) nếu cần. */
+export function askChoices(deps: ReviewFlowDeps): void {
+  if (deps.progress.needsDepartment()) {
+    const modal = deps.openPanel(s.department.title, () => {
+      askChoices(deps);
+    });
+    modal.body.append(
+      el('p', { className: 'activity-intro', text: s.department.intro }),
+      el('div', {
+        className: 'choice-cards',
+        children: DEPARTMENTS.map((department) => {
+          const button = el('button', {
+            className: 'choice-card',
+            attrs: { type: 'button', 'data-department': department },
+            children: [
+              el('strong', { text: DEPARTMENT_NAMES[department] }),
+              el('span', { text: s.department.descriptions[department] }),
+            ],
+          });
+          button.addEventListener('click', () => {
+            deps.progress.chooseDepartment(department);
+            deps.play('ting');
+            modal.close();
+          });
+          return button;
+        }),
+      }),
+    );
+    return;
+  }
+  if (deps.progress.needsBranch()) {
+    const modal = deps.openPanel(s.branch.title, () => {
+      askChoices(deps);
+    });
+    modal.body.append(
+      el('p', { className: 'activity-intro', text: s.branch.intro }),
+      el('div', {
+        className: 'choice-cards',
+        children: BRANCHES.map((branch) => {
+          const button = el('button', {
+            className: 'choice-card',
+            attrs: { type: 'button', 'data-branch': branch },
+            children: [
+              el('strong', { text: BRANCH_NAMES[branch] }),
+              el('span', { text: s.branch.descriptions[branch] }),
+            ],
+          });
+          button.addEventListener('click', () => {
+            deps.progress.chooseBranch(branch);
+            deps.play('ting');
+            modal.close();
+          });
+          return button;
+        }),
+      }),
+    );
+    return;
+  }
+  deps.onDone?.();
+}

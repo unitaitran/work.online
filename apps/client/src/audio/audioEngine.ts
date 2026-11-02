@@ -4,7 +4,7 @@
 // - Mỗi "giọng" (nốt, tiếng động) tự ngắt kết nối khi kết thúc để không rò bộ nhớ.
 import { generateSong, midiToHz, STEPS_PER_BAR, type Song } from './synth';
 
-export type SoundName = 'keyboard' | 'ting' | 'printer' | 'coffee';
+export type SoundName = 'keyboard' | 'ting' | 'printer' | 'coffee' | 'levelup' | 'fanfare';
 
 export interface AudioSettings {
   enabled: boolean;
@@ -108,6 +108,12 @@ export class AudioEngine {
         break;
       case 'coffee':
         this.coffee(t);
+        break;
+      case 'levelup':
+        this.levelUp(t);
+        break;
+      case 'fanfare':
+        this.fanfare(t);
         break;
     }
   }
@@ -336,6 +342,41 @@ export class AudioEngine {
     this.tone(this.sfxBus, 'sine', 2637, t + 1.85, 0.12, 0.002, 0.35);
     this.tone(this.sfxBus, 'sine', 3951, t + 1.85, 0.06, 0.002, 0.25);
     this.tone(this.sfxBus, 'sine', 2793, t + 1.98, 0.05, 0.002, 0.3);
+  }
+
+  /** Lên cấp: arpeggio ngũ cung đi lên, ngắn gọn. */
+  private levelUp(t: number): void {
+    if (!this.sfxBus) return;
+    [72, 76, 79, 84].forEach((note, i) => {
+      if (this.sfxBus)
+        this.tone(this.sfxBus, 'triangle', midiToHz(note), t + i * 0.07, 0.14, 0.005, 0.35, 3200);
+    });
+  }
+
+  /** Thăng chức: kèn chiến thắng (hai hợp âm + giai điệu đi lên). */
+  private fanfare(t: number): void {
+    const bus = this.sfxBus;
+    if (!bus) return;
+    const melody: [number, number, number][] = [
+      [67, 0, 0.18],
+      [72, 0.18, 0.18],
+      [76, 0.36, 0.18],
+      [79, 0.54, 0.5],
+      [76, 1.04, 0.16],
+      [79, 1.2, 0.9],
+    ];
+    for (const [note, at, length] of melody) {
+      this.tone(bus, 'sawtooth', midiToHz(note), t + at, 0.06, 0.02, length, 2200);
+      this.tone(bus, 'square', midiToHz(note + 12), t + at, 0.025, 0.02, length * 0.8, 3000);
+    }
+    for (const [chord, at] of [
+      [[60, 64, 67], 0.54],
+      [[60, 65, 69], 1.2],
+    ] as const) {
+      for (const note of chord)
+        this.tone(bus, 'triangle', midiToHz(note), t + at, 0.05, 0.05, 1.1, 1500);
+    }
+    this.noiseBurst(bus, t + 1.2, 0.6, 0.06, 'highpass', 6000);
   }
 
   private pluck(frequency: number, t: number, length: number): void {

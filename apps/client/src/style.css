@@ -1257,3 +1257,503 @@ body.events-page {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- Tiến độ trên HUD ---------- */
+
+.office-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+button.office-badge {
+  position: relative;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.office-badge:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.xp-bar {
+  position: relative;
+  display: block;
+  width: 170px;
+  max-width: 100%;
+  height: 12px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f1e6da;
+}
+
+.xp-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffb26b, var(--accent));
+  transition: width 0.4s ease;
+}
+
+.xp-bar-text {
+  position: relative;
+  display: block;
+  font-size: 0.6rem;
+  line-height: 12px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink);
+}
+
+.xp-bar-large {
+  width: 100%;
+  height: 18px;
+  margin: 10px 0 4px;
+}
+
+.xp-bar-large .xp-bar-text {
+  font-size: 0.75rem;
+  line-height: 18px;
+}
+
+.xp-float {
+  position: absolute;
+  right: 8px;
+  top: -4px;
+  opacity: 0;
+  font-weight: 800;
+  color: #2f9e6b;
+  pointer-events: none;
+}
+
+.xp-float.is-showing {
+  animation: xp-float 1.4s ease-out;
+}
+
+@keyframes xp-float {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+
+.review-due {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  animation: review-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes review-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgb(255 138 101 / 25%);
+  }
+}
+
+.mission-card {
+  position: absolute;
+  top: 82px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: min(300px, calc(100% - 24px));
+  padding: 8px 12px;
+  border-radius: 14px;
+  border-left: 5px solid var(--accent);
+  background: var(--card);
+  box-shadow: 0 4px 14px rgb(59 50 65 / 12%);
+  font-size: 0.85rem;
+}
+
+.mission-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-dark);
+}
+
+.mission-goal {
+  font-weight: 700;
+}
+
+.mission-count {
+  color: var(--ink-soft);
+}
+
+/* ---------- Hồ sơ ---------- */
+
+.profile-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.profile-tab {
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.profile-tab[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+
+.profile-tab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.profile-name {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.profile-sub {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.profile-grid {
+  margin: 8px 0 0;
+}
+
+.profile-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.profile-row dt {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.profile-row dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.profile-content h3 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+
+.review-period {
+  margin: 0 0 4px;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
+.review-next {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.review-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.review-checks li {
+  padding: 6px 10px 6px 30px;
+  border-radius: 10px;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.review-checks li::before {
+  position: absolute;
+  left: 10px;
+  font-weight: 800;
+}
+
+.review-checks li.is-met {
+  background: #e7f6ee;
+}
+
+.review-checks li.is-met::before {
+  content: '✓';
+  color: #2f9e6b;
+}
+
+.review-checks li.is-missing {
+  background: #fff4e5;
+}
+
+.review-checks li.is-missing::before {
+  content: '…';
+  color: #b26b00;
+}
+
+.review-last {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.xp-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.xp-log li {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.85rem;
+}
+
+.xp-log-time {
+  color: var(--ink-soft);
+}
+
+.xp-log-xp {
+  font-weight: 700;
+  color: #2f9e6b;
+  text-align: right;
+}
+
+.roadmap-titles,
+.roadmap-unlocks {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.roadmap-titles .is-current {
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
+.roadmap-titles .is-done {
+  color: var(--ink-soft);
+}
+
+.save-code {
+  width: 100%;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  resize: vertical;
+  word-break: break-all;
+}
+
+/* ---------- Phỏng vấn, chọn phòng ban/nhánh ---------- */
+
+.interview-prompt {
+  margin: 4px 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.interview-options,
+.choice-cards {
+  display: grid;
+  gap: 8px;
+}
+
+.interview-option,
+.choice-card {
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.interview-option:hover,
+.choice-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.interview-option:focus-visible,
+.choice-card:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.choice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.choice-card span {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* ---------- Màn chúc mừng thăng chức ---------- */
+
+.celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: hidden;
+  background: rgb(59 50 65 / 45%);
+  pointer-events: auto;
+}
+
+.celebration-card {
+  position: relative;
+  z-index: 1;
+  width: min(400px, 100%);
+  padding: 26px 22px 22px;
+  border-radius: 24px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 16px 44px rgb(59 50 65 / 30%);
+  animation: celebration-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.celebration-card h2 {
+  margin: 4px 0 6px;
+}
+
+.celebration-badge {
+  margin: 0;
+  font-size: 3rem;
+  line-height: 1;
+  color: #f2b134;
+}
+
+.celebration-title {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+}
+
+@keyframes celebration-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+.confetti {
+  position: absolute;
+  top: -20px;
+  left: var(--x);
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  animation: confetti-fall 2.6s ease-in var(--delay) forwards;
+}
+
+@keyframes confetti-fall {
+  to {
+    transform: translateY(110vh) rotate(var(--spin));
+  }
+}
+
+/* ---------- Công cụ dev ---------- */
+
+.dev-panel {
+  position: fixed;
+  left: 12px;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px);
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgb(30 30 40 / 85%);
+  color: #fff;
+  font-size: 0.8rem;
+  pointer-events: auto;
+}
+
+.dev-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dev-day {
+  margin: 6px 0;
+}
+
+.dev-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dev-button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #4a4f5c;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .mission-card {
+    top: 120px;
+  }
+
+  .xp-bar {
+    width: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-float.is-showing,
+  .review-due,
+  .celebration-card,
+  .confetti {
+    animation: none;
+  }
+
+  .xp-bar-fill {
+    transition: none;
+  }
+}
