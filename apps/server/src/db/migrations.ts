@@ -211,4 +211,18 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 7,
+    sql: `
+      -- Đăng ký / đăng nhập: tên đăng nhập + mật khẩu (băm scrypt). Tài khoản khách bị xoá khi rời đi.
+      ALTER TABLE users ADD COLUMN username TEXT;
+      ALTER TABLE users ADD COLUMN password_hash TEXT;
+      ALTER TABLE users ADD COLUMN guest INTEGER NOT NULL DEFAULT 0;
+      CREATE UNIQUE INDEX users_username ON users(username) WHERE username IS NOT NULL;
+      CREATE INDEX users_guest_seen ON users(guest, last_seen_at);
+      -- Công ty: tỉnh/thành đặt trụ sở và khung cấp tuyển dụng do CEO đặt.
+      ALTER TABLE companies ADD COLUMN province TEXT NOT NULL DEFAULT 'ho-chi-minh';
+      ALTER TABLE companies ADD COLUMN hiring_bands TEXT;
+    `,
+  },
 ];

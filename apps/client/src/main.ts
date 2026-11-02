@@ -30,7 +30,16 @@ import { detectLowPower, initialAutoLevel } from './engine/quality';
 import { analyticsEnabled, setAnalyticsEnabled, track } from './net/analytics';
 import { ApiClient } from './net/api';
 import { RoomClient, type ActionReply } from './net/roomClient';
-import { recoverAccount, saveToken, signIn, type SignInResult } from './net/session';
+import {
+  login,
+  logout,
+  recoverAccount,
+  register,
+  resumeSession,
+  startGuest,
+  type SessionStores,
+  type SignInResult,
+} from './net/session';
 import { actionForEvent } from './progress/eventActions';
 import { markLocalSaveImported, pendingLocalSave } from './progress/localSave';
 import { ServerProgress } from './progress/serverProgress';
@@ -44,17 +53,20 @@ import {
   loadProfile,
   loadQualityMode,
   openLocalStorage,
+  openSessionStorage,
   saveAudioSettings,
   saveCoachDone,
   saveProfile,
   saveQualityMode,
 } from './storage';
 import { STRINGS } from './strings';
+import { showAuthScreen } from './ui/authScreen';
 import { mountCreatorPanel } from './ui/creatorPanel';
+import { mountLobbyPanel } from './ui/lobbyPanel';
 import { el } from './ui/dom';
 import { showCoachMarks } from './ui/coachMarks';
-import { openModal } from './ui/modal';
-import type { CallResult } from './ui/companyPanel';
+import { openModal, type Modal } from './ui/modal';
+import type { CallResult, CompanyApi } from './ui/companyPanel';
 
 // Các màn ít dùng được tải lười (chia nhỏ JS, tải ban đầu nhẹ hơn).
 const lazy = {
@@ -65,6 +77,7 @@ const lazy = {
   building: () => import('./ui/buildingPanel'),
   brag: () => import('./ui/bragCard'),
   dev: () => import('./ui/devPanel'),
+  companyMap: () => import('./ui/companyMapPanel'),
 };
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
@@ -105,13 +118,29 @@ const storageNotice = store ? null : STRINGS.storage.blocked;
 /** Bus sự kiện hoạt động: ghi lại để trang events.html xem, và đổi thành hành động gửi server. */
 const bus = new ActivityBus(store);
 const api = new ApiClient();
+/** Tài khoản đăng ký: localStorage. Khách: sessionStorage (đóng tab là mất). */
+const stores: SessionStores = { local: store, tab: openSessionStorage() };
 
-/** Đăng nhập (hoặc tạo tài khoản ẩn danh); mất mạng thì hiện nút thử lại. */
-async function bootSession(): Promise<Extract<SignInResult, { ok: true }>> {
+type Session = Extract<SignInResult, { ok: true }>;
+
+/**
+ * Vào lại phiên đã lưu; chưa có thì hiện màn chơi khách / đăng nhập / đăng ký.
+ * Mất mạng thì hiện nút thử lại.
+ */
+async function bootSession(): Promise<Session> {
   const status = el('p', { className: 'notice notice-center', text: STRINGS.net.bootTitle });
   hudRoot.append(status);
   for (;;) {
-    const result = await signIn(api, store);
+    const result = await resumeSession(api, stores);
+    if (result === null) {
+      status.remove();
+      return (await showAuthScreen(hudRoot, {
+        guest: () => startGuest(api, stores),
+        login: (username, password) => login(api, stores, username, password),
+        register: (username, password) => register(api, stores, username, password),
+        recover: (code) => recoverAccount(api, stores, code),
+      })) as Session;
+    }
     if (result.ok) {
       status.remove();
       return result;
@@ -179,7 +208,9 @@ const progress = new ServerProgress(session.me.progress);
 let startNotice: string | null = null;
 
 // Tiến độ cũ chơi trên máy này (Phase 3): nhập một lần vào tài khoản.
-const localSave = session.me.imported ? null : pendingLocalSave(store, Date.now());
+// Khách không nhận: rời đi là mất, giữ lại mã lưu cho tài khoản thật.
+const localSave =
+  session.me.imported || session.me.guest ? null : pendingLocalSave(store, Date.now());
 if (localSave) {
   const imported = await api.importSave(localSave);
   if (imported.ok) {
@@ -328,8 +359,160 @@ function start(): void {
     };
   };
 
-  const showOffice = (profile: Profile, notice: string | null): void => {
+  /** Mở bảng công ty trong một hộp thoại (dùng ở văn phòng và ở màn "Ở nhà"). */
+  const mountCompany = (
+    modal: Modal,
+    ctl: Pick<CompanyApi, 'enterRoom' | 'backToOffice' | 'currentCompanyRoom' | 'onLeft'>,
+  ): void => {
+    track(store, 'company_open');
+    modal.body.closest('.modal')?.classList.add('modal-wide');
+    void lazy.company().then(({ mountCompanyPanel }) => {
+      mountCompanyPanel(modal.body, {
+        get: async <T>(path: string) => {
+          const r = await api.request<T>('GET', path);
+          return r.ok ? r.value : null;
+        },
+        post: async <T>(path: string, body?: unknown): Promise<CallResult<T>> => {
+          const r = await api.request<T>('POST', path, body ?? {});
+          return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason ?? r.error };
+        },
+        ...ctl,
+      });
+    });
+  };
+
+  /** Bản đồ công ty: danh sách công ty theo vùng, tỉnh/thành; xin vào làm. */
+  const mountCompanyMap = (modal: Modal): void => {
+    modal.body.closest('.modal')?.classList.add('modal-wide');
+    void lazy.companyMap().then(({ mountCompanyMapPanel }) => {
+      mountCompanyMapPanel(modal.body, {
+        load: async () => {
+          const r = await api.request<{ companies: CompanyPublic[] }>(
+            'GET',
+            '/api/company/directory',
+          );
+          return r.ok ? r.value.companies : null;
+        },
+        apply: async (companyId) => {
+          const r = await api.request('POST', '/api/company/apply', { companyId });
+          return r.ok ? null : (r.reason ?? r.error);
+        },
+      });
+    });
+  };
+
+  /** Nơi đang làm, để hiện trên nút "Đi làm" (null: đang nghỉ việc). */
+  const workplaceName = async (): Promise<string | null> => {
+    const employer = progress.state.employer;
+    if (employer === null) return null;
+    if (employer.startsWith('npc:')) return STRINGS.company.npcEmployer(employer.slice(4));
+    if (employer.startsWith('company:')) {
+      const r = await api.request<CompanyPublic>(
+        'GET',
+        `/api/company/info/${encodeURIComponent(employer.slice('company:'.length))}`,
+      );
+      return r.ok ? r.value.name : (STRINGS.company.employer['may-hong'] ?? '');
+    }
+    return STRINGS.company.employer[employer] ?? employer;
+  };
+
+  // ---------- Màn "Ở nhà": ngoài văn phòng ----------
+  const account = { guest: session.me.guest, username: session.me.username };
+  const showLobby = (profile: Profile, notice: string | null): void => {
     teardown?.();
+    const scene = new CreatorScene(canvas, profile.appearance);
+    engine.setController(scene);
+    let disposed = false;
+    let panel: ReturnType<typeof mountLobbyPanel> | null = null;
+    let observer: ResizeObserver | null = null;
+    let modal: Modal | null = null;
+    const updateInset = (): void => {
+      if (panel) scene.setViewInset(panel.getInset());
+    };
+    const p = levelProgress(progress.state.xp);
+    void workplaceName().then((workplace) => {
+      if (disposed) return;
+      panel = mountLobbyPanel(hudRoot, {
+        name: profile.name,
+        stats: STRINGS.lobby.stats(
+          p.level,
+          titleName(titleFor(progress.state.xp), progress.state.branch),
+          progress.state.coins,
+        ),
+        workplace,
+        notice,
+        account: { ...account },
+        onWork: () => {
+          const employer = progress.state.employer;
+          if (employer === null) {
+            // Nghỉ việc rồi: quay lại Mây Hồng trước khi vào văn phòng chung.
+            void api.request('POST', '/api/company/rejoin-default', {}).then(() => {
+              showOffice(profile, null);
+            });
+            return;
+          }
+          showOffice(profile, null, employer.startsWith('company:') ? employer : 'office');
+        },
+        onCompany: () => {
+          modal?.close();
+          modal = openModal(hudRoot, { title: STRINGS.company.title });
+          const current = modal;
+          mountCompany(current, {
+            enterRoom: (companyId) => {
+              current.close();
+              showOffice(profile, null, `company:${companyId}`);
+            },
+            backToOffice: () => {
+              current.close();
+              showOffice(profile, null, 'office');
+            },
+            currentCompanyRoom: () => null,
+            onLeft: () => {
+              current.close();
+              showLobby(profile, STRINGS.lobby.leftCompany);
+            },
+          });
+        },
+        onCompanyMap: () => {
+          modal?.close();
+          modal = openModal(hudRoot, { title: STRINGS.companyMap.title });
+          mountCompanyMap(modal);
+        },
+        onWardrobe: () => {
+          showCreator(profile, storageNotice);
+        },
+        onRegister: async (username, password) => {
+          const result = await register(api, stores, username, password);
+          if (!result.ok) return result.error;
+          account.guest = false;
+          account.username = result.me.username;
+          return null;
+        },
+        onLogout: () => {
+          void logout(api, stores).then(() => {
+            window.location.reload();
+          });
+        },
+      });
+      observer = new ResizeObserver(updateInset);
+      observer.observe(panel.element);
+      updateInset();
+    });
+    window.addEventListener('resize', updateInset);
+    teardown = () => {
+      disposed = true;
+      modal?.close();
+      observer?.disconnect();
+      window.removeEventListener('resize', updateInset);
+      panel?.dispose();
+      engine.setController(null);
+    };
+  };
+
+  const showOffice = (profile: Profile, notice: string | null, startRoom?: string): void => {
+    teardown?.();
+    /** Phòng muốn vào (công ty...): chuyển sang sau khi server chào ở văn phòng chung. */
+    let pendingRoom = startRoom && startRoom !== 'office' ? startRoom : null;
     let hud: OfficeHud | null = null;
     let activities: OfficeActivities | null = null;
     const results: Partial<Record<InteractableKind, string>> = STRINGS.interact.results;
@@ -384,6 +567,9 @@ function start(): void {
       showStats: debug,
       onEdit: () => {
         showCreator(profile, storageNotice);
+      },
+      onGoHome: () => {
+        showLobby(profile, null);
       },
       onQualityChange: (mode) => {
         engine.setQualityMode(mode);
@@ -528,6 +714,10 @@ function start(): void {
           if (message.protocol !== PROTOCOL_VERSION) showUpdate(true);
           serverOffset = message.serverTime - Date.now();
           roomKind = message.room.replace(/-\d+$/, '');
+          if (pendingRoom && roomKind !== pendingRoom) {
+            room.send({ type: 'switch_room', roomId: pendingRoom });
+          }
+          pendingRoom = null;
           updateSign();
           scene.remotes.clear();
           for (const player of message.players) scene.remotes.add(player);
@@ -727,30 +917,27 @@ function start(): void {
         });
     };
     const openCompany = (): void => {
-      track(store, 'company_open');
       const modal = officeActivities.openPanel(STRINGS.company.title);
-      modal.body.closest('.modal')?.classList.add('modal-wide');
-      void lazy.company().then(({ mountCompanyPanel }) => {
-        mountCompanyPanel(modal.body, {
-          get: async <T>(path: string) => {
-            const r = await api.request<T>('GET', path);
-            return r.ok ? r.value : null;
-          },
-          post: async <T>(path: string, body?: unknown): Promise<CallResult<T>> => {
-            const r = await api.request<T>('POST', path, body ?? {});
-            return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason ?? r.error };
-          },
-          enterRoom: (companyId) => {
-            room.send({ type: 'switch_room', roomId: `company:${companyId}` });
-            modal.close();
-          },
-          backToOffice: () => {
-            room.send({ type: 'switch_room', roomId: 'office' });
-            modal.close();
-          },
-          currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
-        });
+      mountCompany(modal, {
+        enterRoom: (companyId) => {
+          room.send({ type: 'switch_room', roomId: `company:${companyId}` });
+          modal.close();
+        },
+        backToOffice: () => {
+          room.send({ type: 'switch_room', roomId: 'office' });
+          modal.close();
+        },
+        currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
+        onLeft: () => {
+          // Nghỉ việc: ra hẳn khỏi văn phòng về màn "Ở nhà".
+          modal.close();
+          showLobby(profile, STRINGS.lobby.leftCompany);
+        },
       });
+    };
+    const openCompanyMap = (): void => {
+      const modal = officeActivities.openPanel(STRINGS.companyMap.title);
+      mountCompanyMap(modal);
     };
 
     // ---------- Sự kiện phòng (Phase 5B) ----------
@@ -886,6 +1073,7 @@ function start(): void {
         [h.building, openBuilding],
         [h.brag, openBrag],
         [h.company, openCompany],
+        [h.companyMap, openCompanyMap],
       ];
       modal.body.append(
         el('div', {
@@ -968,7 +1156,7 @@ function start(): void {
         initialTab: tab,
         account: {
           recover: async (code) => {
-            const result = await recoverAccount(api, store, code);
+            const result = await recoverAccount(api, stores, code);
             if (result.ok) window.location.reload();
             return result.ok;
           },
@@ -983,7 +1171,7 @@ function start(): void {
           deleteAccount: async () => {
             const result = await api.deleteAccount();
             if (!result.ok) return false;
-            saveToken(store, null);
+            await logout(api, stores).catch(() => undefined);
             room.stop();
             return true;
           },

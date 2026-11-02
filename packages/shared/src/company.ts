@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { BALANCE } from './balance';
 import { checkText, foldText } from './filter';
 import { levelFor, xpForLevel, MAX_LEVEL } from './levels';
+import { PROVINCE_IDS } from './provinces';
 import type { ProgressState } from './progress';
 import { hashString, seededRng } from './rng';
 
@@ -163,6 +164,8 @@ export const foundCompanyRequestSchema = z.strictObject({
     .min(0)
     .max(COMPANY_COLORS.length - 1),
   icon: z.enum(COMPANY_ICONS),
+  /** Tỉnh/thành đặt trụ sở (thiếu thì mặc định TP. Hồ Chí Minh). */
+  province: z.enum(PROVINCE_IDS).optional(),
 });
 export type FoundCompanyRequest = z.infer<typeof foundCompanyRequestSchema>;
 

@@ -30,6 +30,19 @@ export function openLocalStorage(): KeyValueStore | null {
   }
 }
 
+/** sessionStorage (mất khi đóng tab): giữ token của tài khoản khách. */
+export function openSessionStorage(): KeyValueStore | null {
+  try {
+    const store = globalThis.sessionStorage as KeyValueStore | undefined;
+    if (!store) return null;
+    store.setItem(PROBE_KEY, '1');
+    store.removeItem(PROBE_KEY);
+    return store;
+  } catch {
+    return null;
+  }
+}
+
 function readJson(store: KeyValueStore | null, key: string): unknown {
   if (!store) return null;
   try {

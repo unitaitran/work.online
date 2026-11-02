@@ -281,7 +281,9 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     const a = await player(app, 'Chủ An');
     makeSenior(app, a.userId);
     await post(app, a, '/api/company/leave');
-    const detail = (await post(app, a, '/api/company/found', FOUND)).json<CompanyDetail>();
+    const detail = (
+      await post(app, a, '/api/company/found', { ...FOUND, province: 'da-nang' })
+    ).json<CompanyDetail>();
     const b = await player(app, 'Bình');
     return { app, host, a, b, companyId: detail.company.id };
   }
@@ -311,6 +313,47 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
         await app.inject({ method: 'GET', url: '/api/company/me', headers: a.headers })
       ).json<MyCompanyResponse>().detail?.feed ?? [];
     expect(feed.map((f) => f.kind)).toContain('member_joined');
+  });
+
+  it('CEO đặt khung cấp tuyển dụng: ngoài khung không nộp được đơn; vị trí theo cấp; tỉnh/thành hiện ở danh bạ', async () => {
+    const { app, a, b, companyId } = await setup();
+    const directory = (
+      await app.inject({ method: 'GET', url: '/api/company/directory', headers: b.headers })
+    ).json<{ companies: { id: string; province: string }[] }>();
+    expect(directory.companies.find((c) => c.id === companyId)?.province).toBe('da-nang');
+
+    const bands = {
+      intern: null,
+      fresher: { min: 2, max: 20 },
+      junior: { min: 21, max: 60 },
+      middle: null,
+      senior: { min: 100, max: 149 },
+    };
+    // Khung chồng nhau bị từ chối; B không phải CEO thì không đặt được.
+    const overlap = await post(app, a, '/api/company/hiring', {
+      bands: { ...bands, junior: { min: 10, max: 60 } },
+    });
+    expect(overlap.statusCode).toBe(400);
+    expect((await post(app, b, '/api/company/hiring', { bands })).statusCode).toBe(403);
+    expect((await post(app, a, '/api/company/hiring', { bands })).statusCode).toBe(200);
+
+    // B mới cấp 1: chưa vào khung nào.
+    const tooLow = await post(app, b, '/api/company/apply', { companyId });
+    expect(tooLow.json<{ reason: string }>().reason).toBe('level_band');
+    const state = app.game.engine.state(b.userId);
+    app.game.engine.save(b.userId, { ...state, xp: xpForLevel(30) });
+    const applied = await post(app, b, '/api/company/apply', { companyId });
+    expect(applied.statusCode).toBe(200);
+    const detail = (
+      await app.inject({ method: 'GET', url: '/api/company/me', headers: a.headers })
+    ).json<MyCompanyResponse>().detail;
+    expect(detail?.applications[0]?.position).toBe('junior');
+    expect(detail?.company.hiringBands.intern).toBeNull();
+    const { applicationId } = applied.json<{ applicationId: number }>();
+    const after = (
+      await post(app, a, '/api/company/applications', { applicationId, approve: true })
+    ).json<CompanyDetail>();
+    expect(after.members.find((m) => m.code === b.code)?.position).toBe('junior');
   });
 
   it('người ngoài không vào được phòng riêng; bị đuổi và chặn thì không làm gì được nữa', async () => {

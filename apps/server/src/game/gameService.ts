@@ -296,27 +296,39 @@ export function attachGameService(
     capacity: (kind) => company.roomCapacity(kind.slice('company:'.length)),
   });
   registerCompanyRoutes(app, ctx, company);
-  registerSocialRoutes(app, ctx, gateway, (userId) => {
-    // Bản đồ toà nhà: thêm tầng công ty của mình (phòng riêng).
-    const mine = company.companyOf(userId);
-    if (!mine) return [];
-    const info = company.get(mine.id);
-    if (!info) return [];
-    return [
-      {
-        ...roomInfo(
-          {
-            id: `company:${mine.id}`,
-            kind: `company:${mine.id}`,
-            online: info.online,
-            capacity: company.roomCapacity(mine.id),
-          },
-          info.name,
-        ),
-        floor: info.floor,
-      },
-    ];
-  });
+  registerSocialRoutes(
+    app,
+    ctx,
+    gateway,
+    (userId) => {
+      // Bản đồ toà nhà: thêm tầng công ty của mình (phòng riêng).
+      const mine = company.companyOf(userId);
+      if (!mine) return [];
+      const info = company.get(mine.id);
+      if (!info) return [];
+      return [
+        {
+          ...roomInfo(
+            {
+              id: `company:${mine.id}`,
+              kind: `company:${mine.id}`,
+              online: info.online,
+              capacity: company.roomCapacity(mine.id),
+            },
+            info.name,
+          ),
+          floor: info.floor,
+        },
+      ];
+    },
+    (userId) => {
+      const building = company.companyOf(userId)?.building ?? 1;
+      return {
+        building,
+        companies: company.inBuilding(building).sort((a, b) => a.floor - b.floor),
+      };
+    },
+  );
 
   if (ctx.config.devTools) {
     registerDevRoutes(app, ctx, engine, push);

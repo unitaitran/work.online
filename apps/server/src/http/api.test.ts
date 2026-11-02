@@ -316,3 +316,127 @@ describe('mã khôi phục mới, xoá tài khoản', () => {
     expect(rec.statusCode).toBe(401);
   });
 });
+
+describe('đăng ký, đăng nhập, chơi khách', () => {
+  const post = (app: FastifyInstance, url: string, payload: unknown, token?: string) =>
+    app.inject({
+      method: 'POST',
+      url,
+      payload: payload as Record<string, unknown>,
+      ...(token ? { headers: auth(token) } : {}),
+    });
+
+  it('khách nâng cấp thành tài khoản: giữ tiến độ, đăng nhập lại được ở máy khác', async () => {
+    const app = makeApp();
+    const guest = await post(app, '/api/accounts', { guest: true });
+    expect(guest.statusCode).toBe(201);
+    const { token, userId } = guest.json<AccountCreatedResponse>();
+    let me = (
+      await app.inject({ method: 'GET', url: '/api/me', headers: auth(token) })
+    ).json<MeResponse>();
+    expect(me.guest).toBe(true);
+    expect(me.username).toBeNull();
+
+    const reg = await post(
+      app,
+      '/api/accounts/register',
+      { username: '  Lan.Anh_99 ', password: 'matkhau123' },
+      token,
+    );
+    expect(reg.statusCode).toBe(200);
+    me = reg.json<MeResponse>();
+    expect(me.userId).toBe(userId);
+    expect(me.username).toBe('lan.anh_99');
+    expect(me.guest).toBe(false);
+
+    const wrong = await post(app, '/api/accounts/login', {
+      username: 'lan.anh_99',
+      password: 'sai-mat-khau',
+    });
+    expect(wrong.statusCode).toBe(401);
+    const login = await post(app, '/api/accounts/login', {
+      username: 'LAN.ANH_99',
+      password: 'matkhau123',
+    });
+    expect(login.statusCode).toBe(200);
+    const fresh = login.json<{ userId: string; token: string }>();
+    expect(fresh.userId).toBe(userId);
+    // Token cũ hết hiệu lực khi đăng nhập ở nơi khác.
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/me', headers: auth(token) })).statusCode,
+    ).toBe(401);
+    // Đăng xuất tài khoản thật: chỉ huỷ token, đăng nhập lại vẫn còn.
+    const out = await post(app, '/api/accounts/logout', {}, fresh.token);
+    expect(out.json<{ deleted: boolean }>().deleted).toBe(false);
+    expect(
+      (await post(app, '/api/accounts/login', { username: 'lan.anh_99', password: 'matkhau123' }))
+        .statusCode,
+    ).toBe(200);
+  });
+
+  it('đăng ký mới: tên trùng, tên xấu, mật khẩu ngắn bị từ chối; đăng ký lần hai bị chặn', async () => {
+    const app = makeApp();
+    const first = await post(app, '/api/accounts/register', {
+      username: 'minhtu',
+      password: '12345678',
+    });
+    expect(first.statusCode).toBe(201);
+    const { token } = first.json<{ token: string }>();
+    expect(
+      (await post(app, '/api/accounts/register', { username: 'MinhTu', password: '12345678' }))
+        .statusCode,
+    ).toBe(409);
+    expect(
+      (await post(app, '/api/accounts/register', { username: 'ab', password: '12345678' }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await post(app, '/api/accounts/register', { username: 'hoa_mai', password: '123' }))
+        .statusCode,
+    ).toBe(400);
+    const again = await post(
+      app,
+      '/api/accounts/register',
+      { username: 'ten_khac', password: '12345678' },
+      token,
+    );
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ reason: string }>().reason).toBe('already_registered');
+  });
+
+  it('khách đăng xuất là mất tài khoản; khách bỏ đi lâu thì server tự dọn', async () => {
+    const app = makeApp();
+    const a = (await post(app, '/api/accounts', { guest: true })).json<AccountCreatedResponse>();
+    const out = await post(app, '/api/accounts/logout', {}, a.token);
+    expect(out.json<{ deleted: boolean }>().deleted).toBe(true);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/me', headers: auth(a.token) })).statusCode,
+    ).toBe(401);
+
+    const b = (await post(app, '/api/accounts', { guest: true })).json<AccountCreatedResponse>();
+    const kept = await createAccount(app);
+    clock += 7 * 3_600_000;
+    const removed = (
+      app as unknown as { repos: { users: { staleGuests(before: number): string[] } } }
+    ).repos.users.staleGuests(clock - 6 * 3_600_000);
+    expect(removed).toEqual([b.userId]);
+    expect(removed).not.toContain(kept.userId);
+  });
+
+  it('dò mật khẩu: bị giới hạn theo tên đăng nhập', async () => {
+    const app = makeApp();
+    await post(app, '/api/accounts/register', { username: 'thuha', password: '12345678' });
+    const codes: number[] = [];
+    for (let i = 0; i < 8; i += 1) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/accounts/login',
+        payload: { username: 'thuha', password: `sai${String(i)}aaaa` },
+        remoteAddress: `10.1.0.${String(i)}`,
+      });
+      codes.push(res.statusCode);
+    }
+    expect(codes.slice(0, 6).every((c) => c === 401)).toBe(true);
+    expect(codes.at(-1)).toBe(429);
+  });
+});

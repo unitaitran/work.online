@@ -86,7 +86,16 @@ export function buildApp(options: AppOptions): FastifyInstance {
   app.decorate('gateway', gateway);
   app.decorate('game', attachGameService(app, context, gateway));
 
+  // Tài khoản khách: không thấy 6 giờ (đã đóng tab, token trong sessionStorage mất) thì xoá.
+  const GUEST_TTL_MS = 6 * 3_600_000;
+  const cleanGuests = (): void => {
+    accounts.cleanupGuests(now() - GUEST_TTL_MS, (id) => gateway.sessionOf(id) !== null);
+  };
+  const guestTimer = setInterval(cleanGuests, 10 * 60_000);
+  guestTimer.unref();
+
   app.addHook('onClose', (_instance, done) => {
+    clearInterval(guestTimer);
     db?.close();
     done();
   });

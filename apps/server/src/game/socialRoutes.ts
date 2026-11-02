@@ -13,6 +13,7 @@ import {
   WALL_REPORTS_TO_HIDE,
   wallPostRequestSchema,
   type BuildingResponse,
+  type CompanyPublic,
   type LeaderboardResponse,
   type LeaderboardRow,
   type RoomInfo,
@@ -58,6 +59,10 @@ export function registerSocialRoutes(
   ctx: AppContext,
   gateway: Gateway,
   extraRooms: (userId: string) => RoomInfo[] = () => [],
+  buildingOf: (userId: string) => { building: number; companies: CompanyPublic[] } = () => ({
+    building: 1,
+    companies: [],
+  }),
 ): void {
   const { repos, helpers } = ctx;
 
@@ -235,6 +240,7 @@ export function registerSocialRoutes(
         .sort((a, b) => a.floor - b.floor)
         .concat(extraRooms(user.id)),
       current: currentOf(gateway.sessionOf(user.id)?.room ?? null),
+      ...buildingOf(user.id),
     };
     return reply.send(response);
   });

@@ -17,6 +17,10 @@ export interface CompanyRow {
   ipoCount: number;
   eventDay: string | null;
   createdAt: number;
+  /** Tỉnh/thành đặt trụ sở. */
+  province: string;
+  /** Khung cấp tuyển dụng (JSON; null = mặc định). */
+  hiringBands: string | null;
 }
 
 export interface MemberRow {
@@ -46,7 +50,9 @@ export interface CompanyRepo {
   saveEconomy(id: string, economy: CompanyEconomy): void;
   update(
     id: string,
-    fields: Partial<Pick<CompanyRow, 'industry' | 'ipoCount' | 'eventDay' | 'hiring'>>,
+    fields: Partial<
+      Pick<CompanyRow, 'industry' | 'ipoCount' | 'eventDay' | 'hiring' | 'hiringBands'>
+    >,
   ): void;
   /** Tầng còn trống đầu tiên: toà nhà mỗi toà tối đa `perBuilding` công ty. */
   nextFloor(perBuilding: number): { building: number; floor: number };
@@ -101,6 +107,8 @@ interface CompanyDbRow {
   ipo_count: number;
   event_day: string | null;
   created_at: number;
+  province: string;
+  hiring_bands: string | null;
 }
 
 const toCompany = (row: CompanyDbRow | undefined): CompanyRow | null =>
@@ -120,6 +128,8 @@ const toCompany = (row: CompanyDbRow | undefined): CompanyRow | null =>
         ipoCount: row.ipo_count,
         eventDay: row.event_day,
         createdAt: row.created_at,
+        province: row.province,
+        hiringBands: row.hiring_bands,
       }
     : null;
 
@@ -162,8 +172,8 @@ const toApp = (row: AppDbRow): ApplicationRow => ({
 export function createCompanyRepo(db: Db): CompanyRepo {
   const q = {
     create: db.prepare(
-      `INSERT INTO companies (id, owner_id, name, name_key, industry, color, icon, building, floor, economy, hiring, ipo_count, event_day, created_at)
-       VALUES (@id, @ownerId, @name, @nameKey, @industry, @color, @icon, @building, @floor, @economy, @hiring, @ipoCount, @eventDay, @createdAt)`,
+      `INSERT INTO companies (id, owner_id, name, name_key, industry, color, icon, building, floor, economy, hiring, ipo_count, event_day, created_at, province, hiring_bands)
+       VALUES (@id, @ownerId, @name, @nameKey, @industry, @color, @icon, @building, @floor, @economy, @hiring, @ipoCount, @eventDay, @createdAt, @province, @hiringBands)`,
     ),
     get: db.prepare('SELECT * FROM companies WHERE id = ?'),
     byOwner: db.prepare('SELECT * FROM companies WHERE owner_id = ?'),
@@ -263,6 +273,10 @@ export function createCompanyRepo(db: Db): CompanyRepo {
       if (fields.hiring !== undefined) {
         sets.push('hiring = ?');
         values.push(fields.hiring ? 1 : 0);
+      }
+      if (fields.hiringBands !== undefined) {
+        sets.push('hiring_bands = ?');
+        values.push(fields.hiringBands);
       }
       if (sets.length === 0) return;
       db.prepare(`UPDATE companies SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);

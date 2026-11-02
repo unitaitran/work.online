@@ -2438,3 +2438,259 @@ button.office-badge:focus-visible {
     animation: none;
   }
 }
+
+/* ---------- Màn mở đầu: chơi khách / đăng nhập / đăng ký ---------- */
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 16px;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 20% 15%, #ffe3d6 0, transparent 45%),
+    radial-gradient(circle at 85% 80%, #dff1e4 0, transparent 40%), var(--paper);
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  padding: 24px 22px;
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: 0 8px 28px rgb(59 50 65 / 14%);
+}
+
+.auth-card.is-busy {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.auth-guest {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 1.05rem;
+}
+
+.auth-divider {
+  margin: 18px 0 12px;
+  border: 0;
+  border-top: 2px dashed var(--line);
+}
+
+.auth-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.auth-tab {
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.auth-tab.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 4px;
+}
+
+.auth-hint {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.auth-recover {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.auth-recover summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+
+/* ---------- Màn "Ở nhà" ---------- */
+
+.lobby-actions {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.lobby-account {
+  margin-top: 8px;
+}
+
+.notice-warn {
+  background: #ffe1dc;
+  color: #7a2a1c;
+}
+
+.home-button {
+  white-space: nowrap;
+}
+
+/* ---------- Bản đồ công ty ---------- */
+
+.company-map-layout {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .company-map-layout {
+    grid-template-columns: 260px 1fr;
+    align-items: start;
+  }
+}
+
+.company-map-box {
+  max-width: 300px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.company-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+  background: #e3f1f7;
+}
+
+.map-land {
+  fill: #f7ecd9;
+  stroke: #f7ecd9;
+  stroke-width: 14;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.map-strip {
+  fill: none;
+  stroke-width: 18;
+}
+
+.map-strip-thin {
+  fill: none;
+  stroke-width: 12;
+}
+
+.map-island {
+  fill: #c9b79a;
+}
+
+.map-label {
+  fill: #6e6475;
+  font-size: 9px;
+}
+
+.map-dot {
+  cursor: pointer;
+}
+
+.map-dot circle {
+  fill: #c9b79a;
+}
+
+.map-dot.is-city circle {
+  fill: #a68f6c;
+}
+
+.map-dot.has-company circle {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.map-dot:hover circle,
+.map-dot:focus-visible circle {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.map-dot:focus {
+  outline: none;
+}
+
+.map-count {
+  fill: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.company-map-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.company-map-province h4 {
+  margin: 10px 0 6px;
+}
+
+.company-map-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---------- Khung cấp tuyển dụng ---------- */
+
+.band-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.band-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 96px;
+}
+
+.band-input {
+  width: 64px;
+  font: inherit;
+  padding: 4px 6px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+
+.building-companies {
+  margin-top: 12px;
+}

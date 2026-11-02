@@ -1,5 +1,6 @@
 // Phase 5B: sự kiện phòng, xếp hạng, tường than thở chung, bản đồ toà nhà, lịch theo ngày.
 import { z } from 'zod';
+import type { CompanyPublic } from './companyApi';
 import { DEPARTMENTS, type Department } from './levels';
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,10 @@ export interface RoomInfo {
 export interface BuildingResponse {
   rooms: RoomInfo[];
   current: string | null;
+  /** Toà đang xem (toà có công ty của mình, mặc định toà 1). */
+  building: number;
+  /** Các công ty người chơi đặt trong toà này, theo tầng. */
+  companies: CompanyPublic[];
 }
 
 // ---------------------------------------------------------------------------

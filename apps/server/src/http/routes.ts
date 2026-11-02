@@ -9,6 +9,8 @@ import {
   DEPARTMENTS,
   DEPARTMENT_NAMES,
   importRequestSchema,
+  loginRequestSchema,
+  registerRequestSchema,
   MAX_LEVEL,
   NAME_MAX_LENGTH,
   PROTOCOL_VERSION,
@@ -22,6 +24,7 @@ import {
   type ApiError,
   type ApiErrorCode,
   type CapacityResponse,
+  type LoginResponse,
   type MeResponse,
   type MetaResponse,
   type RecoverResponse,
@@ -81,6 +84,11 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
   const accountWrites = new KeyedLimiter({ capacity: 30, refillPerSecond: 0.5 }, now);
   const accountCreates = new KeyedLimiter({ capacity: 5, refillPerSecond: 1 / 600 }, now);
   const recoveries = new KeyedLimiter({ capacity: 8, refillPerSecond: 1 / 60 }, now);
+  // Đăng nhập: theo IP và theo tên (chặn dò mật khẩu một tài khoản từ nhiều IP).
+  const logins = new KeyedLimiter({ capacity: 10, refillPerSecond: 1 / 60 }, now);
+  const loginsPerName = new KeyedLimiter({ capacity: 6, refillPerSecond: 1 / 120 }, now);
+  // Khách: mỗi lần mở tab là một tài khoản, nhiều người chung mạng văn phòng nên nới hơn.
+  const guestCreates = new KeyedLimiter({ capacity: 20, refillPerSecond: 1 / 60 }, now);
 
   const tooMany = (reply: FastifyReply): FastifyReply => {
     void reply.header('Retry-After', '30');
@@ -116,6 +124,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
   const me = (user: UserRecord): MeResponse => {
     const progress = repos.progress.get(user.id);
     if (!progress) throw new Error('missing progress');
+    const account = repos.users.account(user.id);
     return {
       userId: user.id,
       playerCode: playerCodeOf(user.id),
@@ -123,6 +132,8 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
       character: repos.characters.get(user.id),
       progress: progress.state,
       imported: progress.imported,
+      username: account?.username ?? null,
+      guest: account?.guest ?? false,
     };
   };
 
@@ -158,12 +169,67 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
 
   app.post('/api/accounts', (request, reply) => {
     if (!helpers.allowWrite(request, reply)) return reply;
-    if (!accountCreates.consume(request.ip)) return tooMany(reply);
     const body = helpers.parse(createAccountRequestSchema, request.body, reply);
     if (!body) return reply;
-    const created = accounts.create(body.timeZone ?? DEFAULT_TIME_ZONE);
+    const limiter = body.guest ? guestCreates : accountCreates;
+    if (!limiter.consume(request.ip)) return tooMany(reply);
+    const created = accounts.create(body.timeZone ?? DEFAULT_TIME_ZONE, {
+      guest: body.guest === true,
+    });
     const response: AccountCreatedResponse = created;
     return reply.code(201).send(response);
+  });
+
+  /** Tên đăng nhập không được chứa từ cấm. */
+  const usernameOk = (username: string): boolean =>
+    checkText(username, { maxLength: 20, blockBrands: false }).ok;
+
+  // Đăng ký: có token (tài khoản khách / ẩn danh) thì nâng cấp tài khoản đó, giữ tiến độ.
+  app.post('/api/accounts/register', (request, reply) => {
+    if (!helpers.allowWrite(request, reply)) return reply;
+    const body = helpers.parse(registerRequestSchema, request.body, reply);
+    if (!body) return reply;
+    if (!usernameOk(body.username)) return sendError(reply, 422, 'rejected', 'profanity');
+    const token = bearerToken(request);
+    const current = token ? accounts.authenticate(token) : null;
+    if (token && !current) return sendError(reply, 401, 'unauthorized');
+    if (current) {
+      const result = accounts.setCredentials(current.id, body.username, body.password);
+      if (!result.ok) return sendError(reply, 409, 'conflict', result.error);
+      return reply.send(me(current));
+    }
+    if (!accountCreates.consume(request.ip)) return tooMany(reply);
+    const created = accounts.create(body.timeZone ?? DEFAULT_TIME_ZONE);
+    const result = accounts.setCredentials(created.userId, body.username, body.password);
+    if (!result.ok) {
+      accounts.remove(created.userId);
+      return sendError(reply, 409, 'conflict', result.error);
+    }
+    const response: LoginResponse = { userId: created.userId, token: created.token };
+    return reply.code(201).send(response);
+  });
+
+  app.post('/api/accounts/login', (request, reply) => {
+    if (!helpers.allowWrite(request, reply)) return reply;
+    const body = helpers.parse(loginRequestSchema, request.body, reply);
+    if (!body) return reply;
+    if (!logins.consume(request.ip) || !loginsPerName.consume(body.username)) {
+      return tooMany(reply);
+    }
+    const result = accounts.login(body.username, body.password);
+    if (!result) return sendError(reply, 401, 'unauthorized', 'bad_credentials');
+    // Phiên cũ (máy khác) đang ở phòng: đẩy ra vì token đã đổi.
+    app.gateway.sessionOf(result.userId)?.room.remove(result.userId, 'replaced');
+    const response: LoginResponse = result;
+    return reply.send(response);
+  });
+
+  app.post('/api/accounts/logout', (request, reply) => {
+    const user = helpers.requireUser(request, reply);
+    if (!user || !helpers.allowWrite(request, reply, user.id)) return reply;
+    app.gateway.sessionOf(user.id)?.room.remove(user.id);
+    const result = accounts.logout(user.id);
+    return reply.send(result);
   });
 
   app.post('/api/accounts/recover', (request, reply) => {

@@ -8,6 +8,7 @@ import type {
   ProjectOffer,
   StageBlocker,
 } from './company';
+import type { HiringBands, Position } from './hiring';
 
 export interface CompanyPublic {
   id: string;
@@ -20,6 +21,10 @@ export interface CompanyPublic {
   floor: number;
   members: number;
   hiring: boolean;
+  /** Tỉnh/thành đặt trụ sở (id trong PROVINCES). */
+  province: string;
+  /** Khung cấp tuyển dụng theo vị trí. */
+  hiringBands: HiringBands;
   ipoCount: number;
   /** Số người đang ở phòng công ty. */
   online: number;
@@ -32,6 +37,9 @@ export interface CompanyMemberView {
   role: number;
   owner: boolean;
   title: number;
+  /** Cấp hiện tại và vị trí theo khung tuyển dụng (chủ: null). */
+  level: number;
+  position: Position | null;
   joinedAt: number;
 }
 
@@ -40,6 +48,9 @@ export interface CompanyApplicationView {
   code: string;
   name: string;
   title: number;
+  level: number;
+  /** Vị trí sẽ nhận nếu duyệt (theo khung hiện tại). */
+  position: Position | null;
   at: number;
 }
 

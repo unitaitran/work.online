@@ -23,6 +23,19 @@ Không thu email hay thông tin cá nhân. Server chỉ lưu bản băm SHA-256 
 | POST        | `/api/me/import`        | `{ saveCode }`                                                                 | `MeResponse`. Nhập mã lưu cục bộ (Phase 3) **một lần**, xem dưới                                     |
 | DELETE      | `/api/me`               |                                                                                | `204`. Xoá tài khoản và toàn bộ dữ liệu (Phase 7)                                                    |
 
+### Đăng ký, đăng nhập, chơi khách
+
+Tên đăng nhập 3-20 ký tự `a-z 0-9 . _` (không phân biệt hoa thường, qua bộ lọc từ cấm), mật khẩu 8-72 ký tự, băm bằng scrypt (N=16384, r=8, p=1, muối 16 byte). Không có email.
+
+| Phương thức | Đường dẫn                | Body                                | Trả về                                                                                                                                                                                                               |
+| ----------- | ------------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST        | `/api/accounts`          | `{ timeZone?, guest: true }`        | Tài khoản **khách**: `201 { userId, token, recoveryCode }`. Giới hạn riêng 20/IP, hồi 1 mỗi phút                                                                                                                     |
+| POST        | `/api/accounts/register` | `{ username, password, timeZone? }` | Có `Authorization` (khách / tài khoản ẩn danh cũ): gắn tên + mật khẩu, giữ tiến độ, trả `MeResponse`. Không có: tài khoản mới `201 { userId, token }`. Trùng tên `409 conflict` (`name_taken`, `already_registered`) |
+| POST        | `/api/accounts/login`    | `{ username, password }`            | `{ userId, token }`. Sai: `401` (`bad_credentials`). Token cũ (máy khác) mất hiệu lực. Giới hạn 10/IP và 6/tên đăng nhập                                                                                             |
+| POST        | `/api/accounts/logout`   |                                     | `{ deleted }`. Khách: xoá hẳn tài khoản. Tài khoản thật: chỉ huỷ token                                                                                                                                               |
+
+`MeResponse` có thêm `username` (null nếu chưa đăng ký) và `guest`. Client giữ token khách trong `sessionStorage` (đóng tab là mất), token tài khoản thật trong `localStorage`. Server xoá tài khoản khách không thấy quá 6 giờ (trừ người đang online), kiểm tra mỗi 10 phút.
+
 **Nhập mã lưu**: kiểm tra checksum và phiên bản (`reason: format / checksum / version / data`), rồi giới hạn hợp lý: XP ≤ 400 × số ngày từ lúc tạo tiến độ, cấp ≤ 150, xu ≤ XP, uy tín và chuỗi chấm công ≤ số ngày (`reason: too_high`). Đã nhập rồi hoặc tài khoản đã chơi trên server (> 50 XP) thì `409 conflict` (`already_imported`, `not_fresh`). Phần theo ngày (giới hạn, việc sếp giao) bắt đầu lại.
 
 ### Công khai
@@ -127,24 +140,27 @@ Lý do từ chối: `too_fast` (cùng loại quá dày), `too_far`, `not_started
 
 Mọi endpoint ghi là `POST`, có giới hạn tần suất; lỗi nghiệp vụ trả `422 rejected` với `reason` (ví dụ `level`, `employed`, `capital`, `brand`, `profanity`, `name_taken`, `limit`, `banned`, `bad_code`, `too_senior`, `not_ready`), không phải chủ thì `403`.
 
-| Đường dẫn                                               | Body                              | Ghi chú                                                                 |
-| ------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------- |
-| `GET /api/company/me`                                   |                                   | công ty đang thuộc (chi tiết), điều kiện mở, lời mời làm việc, huy hiệu |
-| `GET /api/company/directory`                            |                                   | danh bạ công ty                                                         |
-| `GET /api/company/info/:id`                             |                                   | thông tin công khai (biển hiệu)                                         |
-| `/api/company/found`                                    | `{ name, industry, color, icon }` | mở công ty                                                              |
-| `/api/company/project`                                  | `{ offerId }`                     | nhận dự án mời thầu hôm nay                                             |
-| `/api/company/hire`, `/api/company/staff/promote`       | `{ staffId }`                     | NPC                                                                     |
-| `/api/company/event`                                    | `{ choice: 0 \| 1 }`              | sự kiện công ty hôm nay                                                 |
-| `/api/company/upgrade`, `/api/company/ipo`              | `{ industry }` (IPO)              |                                                                         |
-| `/api/company/apply`                                    | `{ companyId }`                   | nộp đơn                                                                 |
-| `/api/company/applications`                             | `{ applicationId, approve }`      | chủ duyệt                                                               |
-| `/api/company/invite` → `{ code }`, `/api/company/join` | `{ code }`                        | mã mời                                                                  |
-| `/api/company/leave`, `/api/company/rejoin-default`     |                                   | rời công ty / về Mây Hồng                                               |
-| `/api/company/kick`                                     | `{ code, ban? }`                  | cho nghỉ (và chặn)                                                      |
-| `/api/company/promote`                                  | `{ code }`                        | thăng chức trong công ty                                                |
-| `/api/company/assign`                                   | `{ code, templateId }`            | giao việc                                                               |
-| `/api/company/offer`                                    | `{ offerId, accept }`             | lời mời từ công ty NPC                                                  |
+| Đường dẫn                                               | Body                                         | Ghi chú                                                                                                                                                       |
+| ------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/company/me`                                   |                                              | công ty đang thuộc (chi tiết), điều kiện mở, lời mời làm việc, huy hiệu                                                                                       |
+| `GET /api/company/directory`                            |                                              | danh bạ công ty                                                                                                                                               |
+| `GET /api/company/info/:id`                             |                                              | thông tin công khai (biển hiệu)                                                                                                                               |
+| `/api/company/found`                                    | `{ name, industry, color, icon, province? }` | mở công ty; `province` là mã trong 34 tỉnh/thành (`PROVINCES`), mặc định `ho-chi-minh`                                                                        |
+| `/api/company/hiring`                                   | `{ bands, hiring? }`                         | CEO đặt khung cấp theo vị trí `intern / fresher / junior / middle / senior` (`{ min, max }` hoặc `null` = không tuyển); tăng dần, không chồng nhau, cấp 1-149 |
+| `/api/company/project`                                  | `{ offerId }`                                | nhận dự án mời thầu hôm nay                                                                                                                                   |
+| `/api/company/hire`, `/api/company/staff/promote`       | `{ staffId }`                                | NPC                                                                                                                                                           |
+| `/api/company/event`                                    | `{ choice: 0 \| 1 }`                         | sự kiện công ty hôm nay                                                                                                                                       |
+| `/api/company/upgrade`, `/api/company/ipo`              | `{ industry }` (IPO)                         |                                                                                                                                                               |
+| `/api/company/apply`                                    | `{ companyId }`                              | nộp đơn                                                                                                                                                       |
+| `/api/company/applications`                             | `{ applicationId, approve }`                 | chủ duyệt                                                                                                                                                     |
+| `/api/company/invite` → `{ code }`, `/api/company/join` | `{ code }`                                   | mã mời                                                                                                                                                        |
+| `/api/company/leave`, `/api/company/rejoin-default`     |                                              | rời công ty / về Mây Hồng                                                                                                                                     |
+| `/api/company/kick`                                     | `{ code, ban? }`                             | cho nghỉ (và chặn)                                                                                                                                            |
+| `/api/company/promote`                                  | `{ code }`                                   | thăng chức trong công ty                                                                                                                                      |
+| `/api/company/assign`                                   | `{ code, templateId }`                       | giao việc                                                                                                                                                     |
+| `/api/company/offer`                                    | `{ offerId, accept }`                        | lời mời từ công ty NPC                                                                                                                                        |
+
+`CompanyPublic` có thêm `province` và `hiringBands`; thành viên và đơn xin việc có `level` và `position` (vị trí theo khung). Nộp đơn khi cấp không nằm trong khung đang mở: `422 level_band`. `GET /api/building` có thêm `building` và `companies` (công ty trong toà, theo tầng).
 
 Vào phòng công ty qua WebSocket: `switch_room { roomId: "company:<id>" }` (không phải thành viên thì `switch_failed: forbidden`); về văn phòng chung: `switch_room { roomId: "office" }`.
 

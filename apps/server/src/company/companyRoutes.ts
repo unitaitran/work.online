@@ -10,6 +10,7 @@ import {
   memberCodeSchema,
   offerDecisionSchema,
   projectAcceptSchema,
+  setHiringSchema,
   staffIdSchema,
 } from '@dilam/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -96,6 +97,9 @@ export function registerCompanyRoutes(
     return r.ok ? { ok: true, value: { code: r.value } } : r;
   });
   write('/api/company/join', inviteCodeSchema, (u, b) => service.joinByCode(u.id, b.code));
+  write('/api/company/hiring', setHiringSchema, (u, b) =>
+    service.setHiring(u.id, b.bands, b.hiring),
+  );
   write('/api/company/leave', null, (u) => service.leave(u.id));
   write('/api/company/rejoin-default', null, (u) => service.rejoinDefault(u.id));
   write('/api/company/kick', memberCodeSchema, (u, b) =>

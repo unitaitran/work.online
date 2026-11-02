@@ -30,6 +30,12 @@ export interface UserRepo {
   setTimeZone(id: string, timeZone: string): void;
   setRecovery(id: string, recoveryHash: string): void;
   setIpHash(id: string, ipHash: string): void;
+  byUsername(username: string): (UserRecord & { passwordHash: string | null }) | null;
+  setCredentials(id: string, username: string, passwordHash: string): void;
+  setGuest(id: string, guest: boolean): void;
+  account(id: string): { guest: boolean; username: string | null } | null;
+  /** Tài khoản khách lâu không thấy (để dọn). */
+  staleGuests(before: number): string[];
   ipHash(id: string): string | null;
   delete(id: string): void;
   count(): number;
@@ -212,6 +218,13 @@ export function createSqliteRepositories(db: Db): Repositories {
     userSetTz: db.prepare('UPDATE users SET time_zone = ? WHERE id = ?'),
     userSetRecovery: db.prepare('UPDATE users SET recovery_hash = ? WHERE id = ?'),
     userSetIp: db.prepare('UPDATE users SET ip_hash = ? WHERE id = ?'),
+    userByName: db.prepare('SELECT * FROM users WHERE username = ?'),
+    userSetCred: db.prepare(
+      'UPDATE users SET username = ?, password_hash = ?, guest = 0 WHERE id = ?',
+    ),
+    userSetGuest: db.prepare('UPDATE users SET guest = ? WHERE id = ?'),
+    userAccount: db.prepare('SELECT guest, username FROM users WHERE id = ?'),
+    userStaleGuests: db.prepare('SELECT id FROM users WHERE guest = 1 AND last_seen_at < ?'),
     userIp: db.prepare('SELECT ip_hash FROM users WHERE id = ?'),
     settingGet: db.prepare('SELECT value FROM server_settings WHERE key = ?'),
     settingSet: db.prepare('INSERT OR IGNORE INTO server_settings (key, value) VALUES (?, ?)'),
@@ -322,6 +335,24 @@ export function createSqliteRepositories(db: Db): Repositories {
       q.userSetIp.run(ipHash, id);
     },
     ipHash: (id) => (q.userIp.get(id) as { ip_hash: string | null } | undefined)?.ip_hash ?? null,
+    byUsername(username) {
+      const row = q.userByName.get(username) as
+        (UserRow & { password_hash: string | null }) | undefined;
+      const user = toUser(row);
+      return user && row ? { ...user, passwordHash: row.password_hash } : null;
+    },
+    setCredentials(id, username, passwordHash) {
+      q.userSetCred.run(username, passwordHash, id);
+    },
+    setGuest(id, guest) {
+      q.userSetGuest.run(guest ? 1 : 0, id);
+    },
+    account(id) {
+      const row = q.userAccount.get(id) as { guest: number; username: string | null } | undefined;
+      return row ? { guest: row.guest === 1, username: row.username } : null;
+    },
+    staleGuests: (before) =>
+      (q.userStaleGuests.all(before) as { id: string }[]).map((row) => row.id),
     delete(id) {
       q.userDelete.run(id);
     },

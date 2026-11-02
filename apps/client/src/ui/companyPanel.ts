@@ -7,7 +7,19 @@ import {
   COMPANY_ICONS,
   INDUSTRIES,
   MISSION_TEMPLATES,
+  POSITION_NAMES,
+  POSITIONS,
+  PROVINCES,
+  provinceOf,
+  REGION_NAMES,
   seededRng,
+  validateBands,
+  HIRING_MAX_LEVEL,
+  DEFAULT_PROVINCE,
+  DEFAULT_HIRING_BANDS,
+  type HiringBands,
+  type LevelBand,
+  type Position,
   stageConfig,
   titleName,
   type CompanyDetail,
@@ -28,11 +40,17 @@ export interface CompanyApi {
   backToOffice(): void;
   /** Đang ở phòng công ty nào (null nếu ở văn phòng chung). */
   currentCompanyRoom(): string | null;
+  /** Vừa nghỉ việc: ra hẳn khỏi văn phòng (về sảnh) để mở công ty hoặc tìm việc khác. */
+  onLeft?(): void;
 }
 
 const s = STRINGS.company;
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
+
+function positionText(position: Position | null): string {
+  return position ? s.people.position(POSITION_NAMES[position]) : s.people.noPosition;
+}
 
 export function npcName(nameIndex: number): string {
   return randomVietnameseName(seededRng(nameIndex + 17));
@@ -60,7 +78,7 @@ function companyBadge(c: CompanyPublic): HTMLElement {
           el('strong', { className: 'company-name', text: c.name }),
           el('p', {
             className: 'fortune-note',
-            text: `${s.industries[c.industry] ?? ''} · ${s.stages[c.stage] ?? ''} · ${s.floorLabel(c.building, c.floor)} · ${s.members(c.members + 1)}`,
+            text: `${s.industries[c.industry] ?? ''} · ${s.stages[c.stage] ?? ''} · ${provinceOf(c.province)?.name ?? ''} · ${s.floorLabel(c.building, c.floor)} · ${s.members(c.members + 1)}`,
           }),
         ],
       }),
@@ -162,7 +180,10 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                 return;
               }
               leaveArmed = false;
-              void act('/api/company/leave').then(load);
+              void act('/api/company/leave').then((done) => {
+                if (done && api.onLeft) api.onLeft();
+                else void load();
+              });
             }),
           ],
         }),
@@ -295,6 +316,20 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     });
     for (const id of COMPANY_ICONS)
       icons.append(el('option', { text: s.icons[id] ?? id, attrs: { value: id } }));
+    // Tỉnh/thành đặt trụ sở, nhóm theo miền.
+    const province = el('select', {
+      className: 'board-select',
+      attrs: { 'aria-label': s.found.province },
+    });
+    for (const region of ['north', 'central', 'south'] as const) {
+      const group = el('optgroup', { attrs: { label: REGION_NAMES[region] } });
+      for (const p of PROVINCES.filter((item) => item.region === region)) {
+        const option = el('option', { text: p.name, attrs: { value: p.id } });
+        option.selected = p.id === DEFAULT_PROVINCE;
+        group.append(option);
+      }
+      province.append(group);
+    }
     icons.addEventListener('change', () => {
       icon = icons.value as typeof icon;
     });
@@ -309,6 +344,8 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
         colors,
         el('label', { text: s.found.icon }),
         icons,
+        el('label', { text: s.found.province }),
+        province,
         el('p', { className: 'fortune-note', text: s.found.noUpload }),
         el('div', {
           className: 'activity-actions',
@@ -321,6 +358,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                   industry: industry.value,
                   color,
                   icon,
+                  province: province.value,
                 }).then(load);
               },
               true,
@@ -361,7 +399,10 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                     return;
                   }
                   leaveArmed = false;
-                  void act('/api/company/leave').then(load);
+                  void act('/api/company/leave').then((done) => {
+                    if (done && api.onLeft) api.onLeft();
+                    else void load();
+                  });
                 }),
               ]),
         ],
@@ -640,7 +681,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                 children: [
                   el('strong', { text: m.name }),
                   el('span', {
-                    text: ` · ${m.owner ? p.owner : (s.ranks[m.role] ?? '')} · ${titleName(m.title, null)}`,
+                    text: ` · ${m.owner ? p.owner : `${s.ranks[m.role] ?? ''} · ${positionText(m.position)}`} · ${titleName(m.title, null)} · ${p.level(m.level)}`,
                   }),
                 ],
               }),
@@ -660,7 +701,9 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
             : d.applications.map((a) =>
                 el('li', {
                   children: [
-                    el('span', { text: `${a.name} · ${titleName(a.title, null)}` }),
+                    el('span', {
+                      text: `${a.name} · ${p.level(a.level)} · ${positionText(a.position)}`,
+                    }),
                     el('div', {
                       className: 'company-actions',
                       children: [
@@ -688,6 +731,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
               ),
       }),
     );
+    if (d.isOwner) parts.push(renderBands(d.company.hiringBands, d.company.hiring));
     const code = el('code', {
       className: 'recovery-code',
       text: inviteCode ? p.inviteCode(inviteCode) : '',
@@ -708,6 +752,112 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       }),
     );
     return parts;
+  };
+
+  /** CEO đặt khung cấp: mỗi vị trí bật/tắt, từ cấp - đến cấp. */
+  const renderBands = (bands: HiringBands, hiring: boolean): HTMLElement => {
+    const p = s.people;
+    const rows = POSITIONS.map((position) => {
+      const band = bands[position];
+      const open = el('input', {
+        attrs: { type: 'checkbox', 'aria-label': `${p.bandOpen} ${POSITION_NAMES[position]}` },
+      });
+      open.checked = band !== null;
+      const num = (value: number, label: string): HTMLInputElement => {
+        const input = el('input', {
+          className: 'band-input',
+          attrs: {
+            type: 'number',
+            min: '1',
+            max: String(HIRING_MAX_LEVEL),
+            step: '1',
+            inputmode: 'numeric',
+            'aria-label': `${POSITION_NAMES[position]} ${label}`,
+          },
+        });
+        input.value = String(value);
+        return input;
+      };
+      const fallback = DEFAULT_HIRING_BANDS[position] ?? { min: 1, max: 1 };
+      const min = num(band?.min ?? fallback.min, p.bandFrom);
+      const max = num(band?.max ?? fallback.max, p.bandTo);
+      const sync = (): void => {
+        min.disabled = !open.checked;
+        max.disabled = !open.checked;
+      };
+      open.addEventListener('change', sync);
+      sync();
+      return {
+        position,
+        read: (): LevelBand | null =>
+          open.checked
+            ? { min: Math.round(Number(min.value)), max: Math.round(Number(max.value)) }
+            : null,
+        element: el('div', {
+          className: 'band-row',
+          children: [
+            el('label', {
+              className: 'band-name',
+              children: [open, el('strong', { text: POSITION_NAMES[position] })],
+            }),
+            el('span', { text: p.bandFrom }),
+            min,
+            el('span', { text: p.bandTo }),
+            max,
+          ],
+        }),
+      };
+    });
+    const hiringBox = el('input', { attrs: { type: 'checkbox' } });
+    hiringBox.checked = hiring;
+    return el('div', {
+      className: 'company-form company-bands',
+      children: [
+        el('h3', { text: p.bandsTitle }),
+        el('p', { className: 'fortune-note', text: p.bandsIntro }),
+        ...rows.map((row) => row.element),
+        el('label', {
+          className: 'band-name',
+          children: [hiringBox, el('span', { text: p.hiringOpen })],
+        }),
+        el('div', {
+          className: 'activity-actions',
+          children: [
+            button(
+              p.saveBands,
+              () => {
+                const next = Object.fromEntries(
+                  rows.map((row) => [row.position, row.read()]),
+                ) as Record<Position, LevelBand | null>;
+                const invalid = Object.values(next).some(
+                  (b) =>
+                    b &&
+                    (!Number.isFinite(b.min) ||
+                      !Number.isFinite(b.max) ||
+                      b.min < 1 ||
+                      b.max > HIRING_MAX_LEVEL),
+                )
+                  ? 'order'
+                  : validateBands(next);
+                if (invalid) {
+                  say(p.bandErrors[invalid] ?? STRINGS.net.actionFailed);
+                  return;
+                }
+                void act('/api/company/hiring', { bands: next, hiring: hiringBox.checked }).then(
+                  (r) => {
+                    if (!r) return;
+                    void load().then(() => {
+                      say(p.bandsSaved, 'ok');
+                    });
+                  },
+                );
+              },
+              true,
+            ),
+          ],
+        }),
+      ],
+    });
   };
 
   const renderFeed = (d: CompanyDetail): HTMLElement => {

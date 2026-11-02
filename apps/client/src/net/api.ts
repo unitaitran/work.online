@@ -57,8 +57,8 @@ export class ApiClient {
     };
   }
 
-  createAccount(timeZone: string): Promise<ApiResult<AccountCreatedResponse>> {
-    return this.request('POST', '/api/accounts', { timeZone });
+  createAccount(timeZone: string, guest = false): Promise<ApiResult<AccountCreatedResponse>> {
+    return this.request('POST', '/api/accounts', { timeZone, ...(guest ? { guest } : {}) });
   }
 
   recover(recoveryCode: string): Promise<ApiResult<RecoverResponse>> {

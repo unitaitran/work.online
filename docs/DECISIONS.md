@@ -322,3 +322,13 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Sao lưu** dùng API backup trực tuyến của SQLite (không dừng server), bản sao chuyển về một tệp (journal DELETE) và kiểm tra toàn vẹn. Tải ra ngoài qua lệnh cấu hình (`BACKUP_UPLOAD_CMD`, chạy không qua shell).
 - **Điều khoản và quyền riêng tư** chỉ là bản nháp trong `docs/legal/` (không phục vụ trên trang) theo yêu cầu "không đưa nội dung pháp lý lên khi chưa có người có chuyên môn rà soát". Trong game có mục "Dữ liệu của bạn" mô tả đúng những gì được lưu.
 - **Docker chưa build được trong container phát triển** (Docker Hub giới hạn lượt tải, CDN bị chặn); CI có job build và khởi động thử image. Đường chạy không Docker đã kiểm chứng từ clone sạch.
+
+## Sau Phase 7: tài khoản, sảnh, bản đồ công ty
+
+- **Ba cách vào**: chơi khách (không cần gì), đăng nhập, đăng ký. Khách là tài khoản thật ở server đánh dấu `guest`, token trong `sessionStorage`: đóng tab hoặc đăng xuất là mất. Server dọn khách không thấy 6 giờ (đủ dài để tải lại trang, mất mạng). Đăng ký khi đang là khách thì giữ nguyên tiến độ.
+- **Mật khẩu** băm scrypt có muối (node:crypto, không thêm thư viện). Tên đăng nhập sai và mật khẩu sai trả cùng một lỗi; tên không tồn tại vẫn chạy scrypt để thời gian trả lời như nhau. Giới hạn đăng nhập theo IP và theo tên.
+- **Đăng nhập cấp token mới**, token cũ hết hiệu lực (mỗi tài khoản một phiên, giống mở tab mới).
+- **Tài khoản ẩn danh cũ** (mã khôi phục) vẫn dùng được; ở màn "Ở nhà" có chỗ đặt tên + mật khẩu.
+- **Nút "Đi về"** đưa ra màn "Ở nhà" (ngoài văn phòng, ngắt WebSocket): đi làm lại, công ty, bản đồ công ty, đổi nhân vật, lưu tài khoản, đăng xuất. **Nghỉ việc** cũng đưa ra màn này để mở công ty hoặc tìm việc khác. Đang nghỉ việc mà bấm "Đi làm" thì quay lại Mây Hồng.
+- **Tỉnh/thành**: 34 đơn vị (6 thành phố, 28 tỉnh). Bản đồ là sơ đồ SVG vẽ bằng code (chấm theo toạ độ gần đúng của trung tâm hành chính, dải đất nối các chấm), có hai quần đảo Hoàng Sa, Trường Sa; không dùng file bản đồ. Công ty cũ mặc định TP. Hồ Chí Minh.
+- **Khung tuyển dụng**: 5 vị trí Intern/Fresher/Junior/Middle/Senior, mỗi vị trí một khoảng cấp hoặc tắt; mặc định 1-11, 12-34, 35-64, 65-109, 110-149 (cấp 150 tự mở công ty). Vị trí của nhân viên tính lại theo cấp hiện tại (lên cấp là lên vị trí), không lưu riêng; vai trò trong công ty (thăng chức) vẫn do CEO quyết như trước.

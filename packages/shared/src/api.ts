@@ -42,6 +42,39 @@ export const timeZoneSchema = z.string().min(1).max(64).refine(isValidTimeZone);
 
 export const createAccountRequestSchema = z.strictObject({
   timeZone: timeZoneSchema.optional(),
+  /** Chơi khách: không cần tài khoản, rời đi (đăng xuất, đóng tab lâu) là mất. */
+  guest: z.boolean().optional(),
+});
+
+/** Tên đăng nhập: 3-20 ký tự a-z, 0-9, dấu chấm, gạch dưới (không phân biệt hoa thường). */
+export const USERNAME_PATTERN = /^[a-z0-9_.]{3,20}$/;
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 72;
+
+export function normalizeUsername(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+export const usernameSchema = z
+  .string()
+  .max(40)
+  .transform(normalizeUsername)
+  .refine((name) => USERNAME_PATTERN.test(name));
+export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
+
+/**
+ * Đăng ký. Gửi kèm token của tài khoản khách (header Authorization) thì giữ nguyên tiến độ,
+ * chỉ gắn tên đăng nhập + mật khẩu; không có token thì tạo tài khoản mới.
+ */
+export const registerRequestSchema = z.strictObject({
+  username: usernameSchema,
+  password: passwordSchema,
+  timeZone: timeZoneSchema.optional(),
+});
+
+export const loginRequestSchema = z.strictObject({
+  username: usernameSchema,
+  password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
 });
 
 export const recoverRequestSchema = z.strictObject({
@@ -63,6 +96,11 @@ export interface AccountCreatedResponse {
   recoveryCode: string;
 }
 
+export interface LoginResponse {
+  userId: string;
+  token: string;
+}
+
 export interface RecoverResponse {
   userId: string;
   /** Token mới; token cũ hết hiệu lực. */
@@ -78,6 +116,10 @@ export interface MeResponse {
   progress: ProgressState;
   /** Đã từng nhập mã lưu cục bộ chưa (chỉ được một lần). */
   imported: boolean;
+  /** Tên đăng nhập (null: tài khoản khách hoặc tài khoản ẩn danh cũ). */
+  username: string | null;
+  /** Tài khoản khách: đăng xuất là xoá hết. */
+  guest: boolean;
 }
 
 export interface CapacityResponse {

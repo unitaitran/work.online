@@ -13,6 +13,8 @@ export interface OfficeHudOptions {
   notice: string | null;
   showStats: boolean;
   onEdit(): void;
+  /** Nút "Đi về": ra khỏi văn phòng về màn "Ở nhà". */
+  onGoHome(): void;
   onQualityChange(mode: QualityMode): void;
   onAudioChange(settings: AudioSettings): void;
   onInteract(): void;
@@ -81,6 +83,15 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   editButton.addEventListener('click', () => {
     options.onEdit();
+  });
+
+  const homeButton = el('button', {
+    className: 'button button-soft home-button',
+    text: STRINGS.lobby.goHome,
+    attrs: { type: 'button', title: STRINGS.lobby.goHomeHint },
+  });
+  homeButton.addEventListener('click', () => {
+    options.onGoHome();
   });
 
   const select = el('select', { className: 'quality-select', attrs: { id: 'quality-select' } });
@@ -276,6 +287,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
             children: [el('span', { text: s.qualityLabel }), select],
           }),
           editButton,
+          homeButton,
         ],
       }),
     ],
