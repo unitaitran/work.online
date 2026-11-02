@@ -66,6 +66,9 @@ export interface RemoteListEntry {
   name: string;
   title: string;
   hidden: boolean;
+  /** Vị trí hiện tại (để debug). */
+  x: number;
+  z: number;
 }
 
 export class RemotePlayers {
@@ -182,6 +185,8 @@ export class RemotePlayers {
       name: p.profile.name,
       title: titleName(p.profile.title, p.profile.branch),
       hidden: this.hiddenCodes.has(p.profile.code),
+      x: Math.round(p.x * 100) / 100,
+      z: Math.round(p.z * 100) / 100,
     }));
   }
 
