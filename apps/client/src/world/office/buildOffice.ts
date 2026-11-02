@@ -1626,6 +1626,15 @@ export function buildOffice(
   floor.receiveShadow = true;
   group.add(floor);
 
+  // Trần: mặt phẳng một phía quay xuống. Từ trong phòng thấy trần (không nhìn vượt mép tường ra
+  // ngoài được); nhìn từ trên xuống (chế độ "Nhìn từ trên") thì trần trong suốt.
+  const CEILING_COLOR = 0x26262b;
+  const ceilingMaterial = new MeshLambertMaterial({ color: CEILING_COLOR });
+  const ceiling = new Mesh(new PlaneGeometry(width, depth), ceilingMaterial);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set((minX + maxX) / 2, layout.wallHeight - 0.001, (minZ + maxZ) / 2);
+  group.add(ceiling);
+
   // Tường + vách đặc: vật liệu riêng để bật "xuyên thấu".
   const plaster = createPlasterTexture();
   const wallMaterial = new MeshLambertMaterial({ vertexColors: true, map: plaster });
@@ -1966,6 +1975,7 @@ export function buildOffice(
     floorMaterial.color.setScalar(boost);
     wallMaterial.color.setScalar(boost * 0.85);
     partitionMaterial.color.setScalar(boost * 0.85);
+    ceilingMaterial.color.setHex(CEILING_COLOR).multiplyScalar(boost * 1.6);
   };
   applyDaylight(period);
   let currentPeriod = period;
@@ -2007,8 +2017,7 @@ export function buildOffice(
     },
     setXray(on) {
       xray = on;
-      applyOpacity(wallMaterial, on ? 0.25 : 1);
-      walls.renderOrder = on ? 3 : 0;
+      // Phòng kín: xuyên thấu chỉ làm mờ vách bên trong (xem update), tường bao giữ nguyên.
     },
     setPartitionsFaded(on) {
       faded = on;

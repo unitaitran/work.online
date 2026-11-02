@@ -21,6 +21,7 @@ import {
   applyDrag,
   applyZoom,
   CAMERA_LIMITS,
+  confineToRoom,
   orbitOffset,
   SEATED_CAMERA_LIMITS,
   type OrbitState,
@@ -565,10 +566,17 @@ export class OfficeScene implements SceneController {
       damp(this.lookTarget.z, focusZ, CAMERA_FOLLOW, frameSeconds),
     );
     const offset = orbitOffset(this.orbit);
+    // Phòng kín: camera không ra ngoài tường hay lên quá trần (trừ chế độ nhìn từ trên).
+    const shrink = top
+      ? 1
+      : confineToRoom(this.lookTarget, offset, {
+          ...this.layout.bounds,
+          ceiling: this.layout.wallHeight,
+        });
     this.camera.position.set(
-      this.lookTarget.x + offset.x,
-      this.lookTarget.y + offset.y,
-      this.lookTarget.z + offset.z,
+      this.lookTarget.x + offset.x * shrink,
+      this.lookTarget.y + offset.y * shrink,
+      this.lookTarget.z + offset.z * shrink,
     );
     this.camera.lookAt(this.lookTarget);
 

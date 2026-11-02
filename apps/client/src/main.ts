@@ -1308,6 +1308,9 @@ function start(): void {
         },
         playerPosition: () => office?.getPlayerPosition() ?? null,
         orbit: () => office?.getOrbit() ?? null,
+        cameraPosition: () => (office ? office.camera.position.toArray() : null),
+        roomBox: () =>
+          office ? { ...OFFICE_FLOOR.bounds, ceiling: OFFICE_FLOOR.wallHeight } : null,
         project: (x: number, z: number) => office?.projectFloorPoint(x, z) ?? null,
         projectPoint: (x: number, y: number, z: number) => office?.projectPoint(x, y, z) ?? null,
         memory: () => ({ ...engine.renderer.info.memory }),
