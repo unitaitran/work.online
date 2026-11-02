@@ -48,6 +48,8 @@ interface Member {
   idleDeadline: number | null;
   /** Vị trí đã gửi gần nhất của từng người khác tới người này (chỉ gửi khi đổi). */
   sent: Map<number, string>;
+  /** Có thẻ CEO (tính lúc vào phòng). */
+  ceo: boolean;
 }
 
 export interface RoomOptions {
@@ -58,6 +60,8 @@ export interface RoomOptions {
   now: () => number;
   /** Báo ra ngoài khi một người rời hẳn phòng (để quản lý phòng dọn dẹp). */
   onEmpty?: (room: Room) => void;
+  /** Người này có thẻ vào phòng CEO của phòng này không (chủ công ty). */
+  isCeo?: (userId: string) => boolean;
 }
 
 export class Room {
@@ -115,6 +119,7 @@ export class Room {
       member.activeAt = now;
       member.stateAt = now;
       member.sent.clear();
+      member.ceo = this.options.isCeo?.(info.userId) ?? false;
     } else {
       member = {
         userId: info.userId,
@@ -129,6 +134,7 @@ export class Room {
         reservedUntil: 0,
         idleDeadline: null,
         sent: new Map(),
+        ceo: this.options.isCeo?.(info.userId) ?? false,
       };
       this.members.set(info.userId, member);
     }
@@ -183,7 +189,7 @@ export class Room {
     const member = this.members.get(userId);
     if (!member?.conn) return;
     const now = this.now();
-    const check = this.validator.check(member, member.stateAt, { x, z }, pose, now);
+    const check = this.validator.check(member, member.stateAt, { x, z }, pose, now, member.ceo);
     const moved = Math.hypot(x - member.x, z - member.z) > 0.01 || pose !== member.pose;
     if (check.ok) {
       member.x = x;

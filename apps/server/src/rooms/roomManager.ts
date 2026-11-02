@@ -11,6 +11,8 @@ import { Room } from './room';
 export interface RoomManagerOptions {
   capacity: number;
   now: () => number;
+  /** Người này có thẻ vào phòng CEO ở phòng loại `kind` không. */
+  isCeo?: (userId: string, kind: string) => boolean;
 }
 
 export class RoomManager {
@@ -71,6 +73,7 @@ export class RoomManager {
       capacity: capacity ?? this.options.capacity,
       layout,
       now: this.options.now,
+      isCeo: (userId) => this.options.isCeo?.(userId, kind) ?? false,
       onEmpty: (empty) => {
         this.rooms.delete(empty.id);
       },
@@ -108,6 +111,7 @@ export class RoomManager {
       capacity,
       layout,
       now: this.options.now,
+      isCeo: (userId) => this.options.isCeo?.(userId, kind) ?? false,
       onEmpty: (empty) => {
         this.rooms.delete(empty.id);
       },

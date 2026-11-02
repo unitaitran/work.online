@@ -56,6 +56,7 @@ import { createLighting, type Lighting } from '../world/lighting';
 import { combineInputs, headingOf, inputToWorld, stepToward } from '../world/movement';
 import { buildOffice, type BuiltOffice } from '../world/office/buildOffice';
 import {
+  insideCeoRoom,
   officeInteractables,
   officeObstacles,
   type Interactable,
@@ -121,7 +122,10 @@ export class OfficeScene implements SceneController {
   private readonly bubbles: BubbleLayer;
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
+  /** Vật cản của người chơi (đổi khi có / mất thẻ CEO; sửa tại chỗ để mọi nơi giữ tham chiếu). */
   private readonly obstacles: Aabb[];
+  private ceoAccess = false;
+  private readonly layout: OfficeLayout;
   private readonly bounds: Aabb;
   private readonly items: Interactable[];
   private readonly pickBoxes: { item: Interactable; box: Box3 }[];
@@ -164,6 +168,7 @@ export class OfficeScene implements SceneController {
     this.options = options;
     this.canvas = options.canvas;
     const { layout } = options;
+    this.layout = layout;
     this.bounds = layout.bounds;
     this.obstacles = officeObstacles(layout);
     this.items = officeInteractables(layout);
@@ -203,7 +208,8 @@ export class OfficeScene implements SceneController {
     const itemMap = new Map(this.items.map((item) => [item.id, item]));
     const coffee = itemMap.get('coffee');
     const world = {
-      obstacles: this.obstacles,
+      // NPC không có thẻ CEO: luôn thấy cửa phòng CEO đóng.
+      obstacles: officeObstacles(layout),
       bounds: this.bounds,
       interactables: itemMap,
       seats: this.seats,
@@ -267,6 +273,23 @@ export class OfficeScene implements SceneController {
   private readonly clock = new WallClock();
 
   /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
+  /** Có thẻ vào phòng CEO (chủ công ty, trong phòng công ty của mình) hay không. */
+  setCeoAccess(on: boolean): void {
+    if (on === this.ceoAccess) return;
+    this.ceoAccess = on;
+    this.obstacles.splice(0, this.obstacles.length, ...officeObstacles(this.layout, { ceo: on }));
+    this.office.setCeoDoorOpen(on);
+    // Mất thẻ khi đang ở trong phòng (chuyển phòng): đưa ra trước cửa.
+    if (!on && insideCeoRoom(this.layout, this.position)) {
+      const door = this.items.find((item) => item.kind === 'ceodoor');
+      if (door) this.correctPosition(door.approach.x, door.approach.z);
+    }
+  }
+
+  hasCeoAccess(): boolean {
+    return this.ceoAccess;
+  }
+
   setCompanySign(info: SignInfo | null): void {
     this.sign?.dispose();
     this.sign = null;

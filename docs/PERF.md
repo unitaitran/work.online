@@ -179,3 +179,7 @@ Kết luận: không thấy rò rỉ (hình học dao động 29-36 theo NPC và
 **Chế độ máy yếu** (tự phát hiện khi ≤ 4 nhân CPU, ≤ 4 GB RAM hoặc bật tiết kiệm dữ liệu): bắt đầu ở mức thấp (không bóng, không bụi, pixel ratio 1, chỉ 5 người vẽ chi tiết), bộ điều tiết vẫn tự hạ thêm nếu fps < 30 kéo dài.
 
 **Sửa trong Phase 7**: thẻ khoe trả context WebGL ngay sau khi chụp (trước đây chờ trình duyệt thu hồi), tránh chạm giới hạn số context khi mở thẻ khoe nhiều lần.
+
+## Phòng CEO, đồng hồ, biển công ty
+
+Thêm 5 mesh tĩnh riêng: cánh cửa kính (2 mesh: kính + khung, để trượt), biển "Phòng CEO", đèn máy quẹt thẻ, đồng hồ (mặt + 3 kim gộp trong một nhóm). Vách kính, bàn CEO, ghế CEO gộp vào mesh tĩnh và InstancedMesh ghế có sẵn (không thêm draw call). Đo ở góc nhìn mặc định (SwiftShader, mức Tự động): 31 → 36 draw call khi thấy cả phòng CEO; vẫn dưới ngân sách 100.

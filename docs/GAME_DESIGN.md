@@ -78,6 +78,15 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - IPO ở giai đoạn Tập đoàn: huy hiệu vĩnh viễn, chọn ngành mới, bắt đầu lại với thưởng nhỏ.
 - Người chưa lên Senior có thể nộp đơn hoặc dùng mã mời vào làm ở công ty người chơi khác; chủ duyệt, giao việc, thăng chức, cho nghỉ, chặn.
 - Thỉnh thoảng có lời mời từ công ty khác: lên ngay một cấp nhưng đổi môi trường và giảm nhẹ uy tín.
+- Khi mở công ty chọn nơi đặt trụ sở trong 34 tỉnh, thành. **Bản đồ công ty** (sơ đồ Việt Nam) cho xem công ty theo miền, tỉnh và nộp đơn; **bản đồ toà nhà** liệt kê các công ty trong toà theo tầng.
+- CEO đặt **khung cấp tuyển dụng**: cấp bao nhiêu đến bao nhiêu thì vào Intern, Fresher, Junior, Middle, Senior (tắt được từng vị trí). Người xin việc ngoài mọi khung không nộp đơn được; nhân viên lên cấp là tự lên vị trí.
+- **Phòng kính CEO** cạnh cửa kính, chung vách với phòng họp. CEO đi lại như mọi người, chỉ khác là có thẻ quẹt mở cửa phòng này (chỉ trong văn phòng công ty của mình); ngồi bàn CEO tính như ngồi máy và mở bảng quản lý công ty. Ở văn phòng chung phòng này luôn khoá.
+
+## Tài khoản và ra vào
+
+- Chơi ngay không cần tài khoản (khách): đóng tab hoặc đăng xuất là mất. Đăng ký (tên đăng nhập + mật khẩu, không cần email) bất cứ lúc nào để giữ tiến độ; đăng nhập ở máy khác được.
+- Nút **Đi về** đưa ra màn "Ở nhà" (ngoài văn phòng): đi làm lại, công ty, bản đồ công ty, đổi nhân vật, lưu tài khoản, đăng xuất. Nghỉ việc cũng ra màn này.
+- Đồng hồ treo tường trong văn phòng chạy theo giờ Việt Nam thật.
 
 ## Sự kiện và xã hội
 

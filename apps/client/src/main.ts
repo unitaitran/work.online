@@ -13,6 +13,7 @@ import {
   COMPANY_COLORS,
   type BuildingResponse,
   type CompanyPublic,
+  type MyCompanyResponse,
   type InventoryResponse,
   type LeaderboardResponse,
   type WallPost,
@@ -516,6 +517,9 @@ function start(): void {
     let hud: OfficeHud | null = null;
     let activities: OfficeActivities | null = null;
     const results: Partial<Record<InteractableKind, string>> = STRINGS.interact.results;
+    // Gán sau khi dựng xong phòng và bảng công ty (bên dưới).
+    let roomKindNow = (): string => 'office';
+    let openCompanyNow = (): void => undefined;
     const onEvent = (event: OfficeEvent): void => {
       if (event.type === 'seatTaken') {
         hud?.showToast(STRINGS.interact.seatTaken(event.name));
@@ -528,6 +532,23 @@ function start(): void {
       lastInteraction = event.item.id;
       if (activities?.handleInteract(event.item)) return;
       const { kind } = event.item;
+      if (kind === 'ceodoor') {
+        // Máy quẹt thẻ phòng CEO: chỉ chủ công ty (trong phòng công ty của mình) có thẻ.
+        const ok = office?.hasCeoAccess() ?? false;
+        audio.play(ok ? 'ting' : 'printer');
+        hud?.showToast(
+          ok
+            ? STRINGS.ceo.swipeOk
+            : roomKindNow().startsWith('company:')
+              ? STRINGS.ceo.swipeDenied
+              : STRINGS.ceo.sharedOffice,
+        );
+        return;
+      }
+      if (kind === 'ceodesk') {
+        openCompanyNow();
+        return;
+      }
       const sound = INTERACT_SOUNDS[kind];
       if (sound) audio.play(sound);
       const text = kind === 'window' ? STRINGS.interact.window[currentPeriod()] : results[kind];
@@ -552,7 +573,9 @@ function start(): void {
       onSeatChange: (item) => {
         activities?.onSeatChange(item);
         // Ngồi máy hoặc ghế họp: XP nhỏ giọt mỗi phút (server tính), hiện mũi tên ▲.
-        hud?.setXpRising(item?.kind === 'desk' || item?.kind === 'meeting');
+        hud?.setXpRising(
+          item?.kind === 'desk' || item?.kind === 'meeting' || item?.kind === 'ceodesk',
+        );
       },
     });
     office = scene;
@@ -714,6 +737,7 @@ function start(): void {
           if (message.protocol !== PROTOCOL_VERSION) showUpdate(true);
           serverOffset = message.serverTime - Date.now();
           roomKind = message.room.replace(/-\d+$/, '');
+          updateCeoAccess();
           if (pendingRoom && roomKind !== pendingRoom) {
             room.send({ type: 'switch_room', roomId: pendingRoom });
           }
@@ -933,6 +957,21 @@ function start(): void {
           modal.close();
           showLobby(profile, STRINGS.lobby.leftCompany);
         },
+      });
+    };
+    openCompanyNow = openCompany;
+    roomKindNow = () => roomKind;
+    /** Thẻ CEO: chỉ trong phòng công ty mình làm chủ. */
+    const updateCeoAccess = (): void => {
+      scene.setCeoAccess(false);
+      if (!roomKind.startsWith('company:')) return;
+      const kind = roomKind;
+      void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
+        if (!r.ok || roomKind !== kind) return;
+        const detail = r.value.detail;
+        scene.setCeoAccess(
+          detail !== null && detail.isOwner && `company:${detail.company.id}` === kind,
+        );
       });
     };
     const openCompanyMap = (): void => {

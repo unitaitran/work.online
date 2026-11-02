@@ -5,6 +5,7 @@ import {
   moveWithCollisions,
   officeInteractables,
   officeObstacles,
+  insideCeoRoom,
   type Aabb,
   type OfficeLayout,
   type Pose,
@@ -26,18 +27,32 @@ export type PositionCheck = { ok: true } | { ok: false; x: number; z: number };
 
 export class PositionValidator {
   private readonly obstacles: Aabb[];
+  /** Vật cản với người có thẻ CEO (cửa phòng CEO mở). */
+  private readonly ceoObstacles: Aabb[];
   private readonly bounds: Aabb;
   private readonly anchors: Vec2[];
+  private readonly ceoAnchors: Vec2[];
 
-  constructor(layout: OfficeLayout) {
+  constructor(private readonly layout: OfficeLayout) {
     this.obstacles = officeObstacles(layout);
+    this.ceoObstacles = officeObstacles(layout, { ceo: true });
     this.bounds = layout.bounds;
-    this.anchors = officeInteractables(layout).flatMap((item) =>
-      item.seat ? [item.seat, item.approach] : [item.approach],
-    );
+    const anchorsOf = (items: ReturnType<typeof officeInteractables>): Vec2[] =>
+      items.flatMap((item) => (item.seat ? [item.seat, item.approach] : [item.approach]));
+    const items = officeInteractables(layout);
+    this.ceoAnchors = anchorsOf(items);
+    // Người không có thẻ: không được "nhảy" vào chỗ ngồi trong phòng CEO.
+    this.anchors = anchorsOf(items.filter((item) => item.kind !== 'ceodesk'));
   }
 
-  check(prev: Vec2, prevAt: number, next: Vec2, _pose: Pose, now: number): PositionCheck {
+  check(
+    prev: Vec2,
+    prevAt: number,
+    next: Vec2,
+    _pose: Pose,
+    now: number,
+    ceo = false,
+  ): PositionCheck {
     const dt = Math.min(Math.max((now - prevAt) / 1000, 0), 1);
     const dx = next.x - prev.x;
     const dz = next.z - prev.z;
@@ -46,7 +61,12 @@ export class PositionValidator {
 
     // Ngồi xuống / đứng lên ở một chỗ có sẵn: cho "nhảy" ngắn (không quá SEAT_JUMP) vào đúng
     // điểm đó. Tư thế không mở thêm quyền dịch chuyển xa.
-    if (distance <= SEAT_JUMP && this.nearAnchor(next)) return { ok: true };
+    if (distance <= SEAT_JUMP && this.nearAnchor(next, ceo)) {
+      // Không có thẻ thì không "nhảy" qua vách vào phòng CEO.
+      if (ceo || insideCeoRoom(this.layout, prev) || !insideCeoRoom(this.layout, next)) {
+        return { ok: true };
+      }
+    }
 
     const maxDistance = MAX_WALK_SPEED * dt * SPEED_SLACK + DISTANCE_SLACK;
     if (distance > maxDistance) return { ok: false, x: prev.x, z: prev.z };
@@ -55,7 +75,7 @@ export class PositionValidator {
       prev,
       { x: dx, z: dz },
       PLAYER_RADIUS,
-      this.obstacles,
+      ceo ? this.ceoObstacles : this.obstacles,
       this.bounds,
     );
     if (Math.hypot(resolved.x - next.x, resolved.z - next.z) > COLLISION_TOLERANCE) {
@@ -64,7 +84,9 @@ export class PositionValidator {
     return { ok: true };
   }
 
-  private nearAnchor(p: Vec2): boolean {
-    return this.anchors.some((a) => Math.hypot(a.x - p.x, a.z - p.z) <= SEAT_SNAP);
+  private nearAnchor(p: Vec2, ceo: boolean): boolean {
+    return (ceo ? this.ceoAnchors : this.anchors).some(
+      (a) => Math.hypot(a.x - p.x, a.z - p.z) <= SEAT_SNAP,
+    );
   }
 }

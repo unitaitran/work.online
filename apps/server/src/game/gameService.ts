@@ -181,7 +181,9 @@ export function attachGameService(
   });
 
   // XP nhỏ giọt: mỗi 15 giây xem ai đang ngồi máy / ngồi họp (server tự xác định từ vị trí + tư thế).
-  const deskSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'desk' && i.seat);
+  const deskSeats = officeInteractables(OFFICE_FLOOR).filter(
+    (i) => (i.kind === 'desk' || i.kind === 'ceodesk') && i.seat,
+  );
   const meetingSeats = officeInteractables(OFFICE_FLOOR).filter(
     (i) => i.kind === 'meeting' && i.seat,
   );
@@ -294,6 +296,10 @@ export function attachGameService(
   gateway.setAccess({
     canEnter: (userId, kind) => company.canEnter(userId, kind.slice('company:'.length)),
     capacity: (kind) => company.roomCapacity(kind.slice('company:'.length)),
+    // Phòng CEO chỉ mở trong phòng công ty, cho đúng chủ công ty đó.
+    isCeo: (userId, kind) =>
+      kind.startsWith('company:') &&
+      ctx.repos.companies.get(kind.slice('company:'.length))?.ownerId === userId,
   });
   registerCompanyRoutes(app, ctx, company);
   registerSocialRoutes(

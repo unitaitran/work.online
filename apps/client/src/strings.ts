@@ -123,6 +123,8 @@ export const STRINGS = {
       fortune: 'Xin quẻ KPI',
       taskboard: 'Lật task',
       ventwall: 'Tường than thở',
+      ceodesk: 'Ngồi bàn CEO (quản lý công ty)',
+      ceodoor: 'Quẹt thẻ phòng CEO',
     },
     prompt: (label: string) => `Chạm để dùng · ${label}`,
     keyHint: ' (E)',
@@ -968,6 +970,13 @@ export const STRINGS = {
       password: 'Mật khẩu cần 8-72 ký tự.',
       other: 'Có lỗi xảy ra, thử lại nhé.',
     } as Record<string, string>,
+  },
+  ceo: {
+    plaque: 'Phòng CEO',
+    swipeOk: 'Bíp! Cửa phòng CEO mở. Chào sếp!',
+    swipeDenied: 'Bíp bíp… Chỉ CEO của công ty mới có thẻ vào phòng này.',
+    sharedOffice:
+      'Phòng CEO ở văn phòng chung luôn khoá. Vào văn phòng công ty của bạn để dùng nhé.',
   },
   lobby: {
     title: 'Ở nhà',

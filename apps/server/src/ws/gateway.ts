@@ -46,6 +46,8 @@ export type SessionListener = (session: Session) => void;
 export interface RoomAccess {
   canEnter(userId: string, kind: string): boolean;
   capacity(kind: string): number;
+  /** Chủ công ty: có thẻ vào phòng CEO trong phòng công ty. */
+  isCeo?(userId: string, kind: string): boolean;
 }
 
 export interface Gateway extends Presence {
@@ -77,7 +79,11 @@ export function attachWebSocketGateway(
 ): Gateway {
   const now = options.now ?? ctx.now;
   const rateLimit = options.rateLimit ?? DEFAULT_WS_RATE_LIMIT;
-  const rooms = new RoomManager({ capacity: ctx.config.roomCapacity, now });
+  const rooms = new RoomManager({
+    capacity: ctx.config.roomCapacity,
+    now,
+    isCeo: (userId, kind) => access.isCeo?.(userId, kind) ?? false,
+  });
   if (!options.manualTick) rooms.start();
   const handlers: MessageHandler[] = [];
   const sessions = new Map<string, Session>();

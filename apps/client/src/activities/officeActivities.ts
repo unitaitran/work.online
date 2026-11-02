@@ -140,7 +140,7 @@ export class OfficeActivities {
       // Server tự đo thời gian họp từ lúc này.
       void this.o.progress.act({ kind: 'meeting_start', seatId: item.id });
     }
-    this.seatedAtDesk = item?.kind === 'desk';
+    this.seatedAtDesk = item?.kind === 'desk' || item?.kind === 'ceodesk';
     this.deskId = this.seatedAtDesk && item ? item.id : null;
     this.o.hud.setFocusAvailable(this.seatedAtDesk && !this.focus);
     this.o.hud.setWipeAvailable(this.seatedAtDesk && !this.focus);

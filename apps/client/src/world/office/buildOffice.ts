@@ -16,14 +16,17 @@ import {
   Quaternion,
   SphereGeometry,
   Vector3,
+  CanvasTexture as CanvasTextureClass,
+  SRGBColorSpace,
   type BufferGeometry,
   type CanvasTexture,
   type Material,
 } from 'three';
 import { mergePieces, piece, type Piece } from '../../engine/meshBuilder';
+import { STRINGS } from '../../strings';
 import type { Aabb } from '../collision';
 import { createFloorTileTexture } from '../textures';
-import { glassWalls, PLANT_SIZE, type OfficeLayout } from './layout';
+import { ceoDoor, ceoGlassWalls, glassWalls, PLANT_SIZE, type OfficeLayout } from './layout';
 import { createCityTexture, createScreenTextures, drawCityscape } from './officeTextures';
 import type { DayPeriod } from './period';
 
@@ -39,6 +42,8 @@ export interface BuiltOffice {
   readonly group: Group;
   setPeriod(period: DayPeriod): void;
   update(dt: number): void;
+  /** Cửa phòng CEO: mở (có thẻ) thì cánh kính trượt sang bên, đèn máy quẹt thẻ xanh. */
+  setCeoDoorOpen(open: boolean): void;
 }
 
 function boxPiece(b: Aabb, y0: number, y1: number, color: number): Piece {
@@ -208,6 +213,7 @@ function staticPieces(layout: OfficeLayout): Piece[] {
   pieces.push(floorPatch(layout.meeting.bounds, 0x9db7c9));
   pieces.push(floorPatch(layout.pantry.floor, 0xf4efe6));
   pieces.push(floorPatch(layout.lounge.rug, 0xf3b9a7));
+  pieces.push(floorPatch(layout.ceoRoom.bounds, 0xc9a98a));
 
   // Phòng họp: bàn dài, khung kính.
   const table = layout.meeting.table;
@@ -238,7 +244,7 @@ function staticPieces(layout: OfficeLayout): Piece[] {
       DARK,
     ),
   );
-  for (const glass of glassWalls(layout)) {
+  for (const glass of [...glassWalls(layout), ...ceoGlassWalls(layout)]) {
     const posts =
       glass.maxX - glass.minX > glass.maxZ - glass.minZ
         ? [
@@ -253,6 +259,42 @@ function staticPieces(layout: OfficeLayout): Piece[] {
     pieces.push(boxPiece(glass, GLASS_HEIGHT - 0.05, GLASS_HEIGHT, FRAME));
     pieces.push(boxPiece(glass, 0, 0.05, FRAME));
   }
+
+  // Phòng CEO: bàn gỗ sẫm, màn hình quay về phía người ngồi (phía cửa kính), biển tên,
+  // máy quẹt thẻ gắn mặt ngoài vách trước.
+  const ceo = layout.ceoRoom;
+  const cd = ceo.desk;
+  const DESK_TOP = 0.43;
+  pieces.push(boxPiece(cd, DESK_TOP - 0.05, DESK_TOP, 0x7a4e32));
+  pieces.push(boxPiece({ ...cd, minZ: cd.maxZ - 0.06 }, 0.05, DESK_TOP - 0.05, 0x8d5e3c));
+  pieces.push(boxPiece({ ...cd, maxX: cd.minX + 0.08 }, 0, DESK_TOP - 0.05, 0x8d5e3c));
+  pieces.push(boxPiece({ ...cd, minX: cd.maxX - 0.08 }, 0, DESK_TOP - 0.05, 0x8d5e3c));
+  const cx = (cd.minX + cd.maxX) / 2;
+  pieces.push(
+    boxPiece(
+      { minX: cx - 0.36, maxX: cx + 0.36, minZ: cd.maxZ - 0.2, maxZ: cd.maxZ - 0.15 },
+      DESK_TOP + 0.2,
+      DESK_TOP + 0.62,
+      DARK,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cx - 0.04, maxX: cx + 0.04, minZ: cd.maxZ - 0.2, maxZ: cd.maxZ - 0.14 },
+      DESK_TOP,
+      DESK_TOP + 0.22,
+      DARK,
+    ),
+  );
+  pieces.push(
+    boxPiece(
+      { minX: cd.minX + 0.12, maxX: cd.minX + 0.42, minZ: cd.minZ + 0.08, maxZ: cd.minZ + 0.16 },
+      DESK_TOP,
+      DESK_TOP + 0.08,
+      0xf2c14e,
+    ),
+  );
+  pieces.push(boxPiece(ceo.reader, 0.95, 1.25, DARK));
 
   // Pantry: quầy, máy pha cà phê, tủ lạnh, bàn tròn.
   const { counter, coffee, fridge, table: pantryTable } = layout.pantry;
@@ -638,6 +680,12 @@ export function buildOffice(
       z: seat.z - Math.cos(seat.facing) * 0.03,
       rotY: seat.facing - Math.PI,
     })),
+    // Ghế CEO: sau bàn, quay mặt ra văn phòng (+Z).
+    {
+      x: (layout.ceoRoom.desk.minX + layout.ceoRoom.desk.maxX) / 2,
+      z: layout.ceoRoom.desk.minZ - 0.28,
+      rotY: -Math.PI,
+    },
   ]);
   chairs.castShadow = true;
   chairs.receiveShadow = true;
@@ -648,7 +696,7 @@ export function buildOffice(
   group.add(plants);
 
   // Kính phòng họp: một mesh trong suốt, nhìn được cả hai mặt.
-  const glassPieces = glassWalls(layout).map((glass) => {
+  const glassPieces = [...glassWalls(layout), ...ceoGlassWalls(layout)].map((glass) => {
     const alongX = glass.maxX - glass.minX > glass.maxZ - glass.minZ;
     const length = alongX ? glass.maxX - glass.minX : glass.maxZ - glass.minZ;
     return piece(new PlaneGeometry(length, GLASS_HEIGHT - 0.1), 0xffffff, {
@@ -669,6 +717,70 @@ export function buildOffice(
   glass.renderOrder = 2;
   group.add(glass);
 
+  // Cửa kính phòng CEO (một tấm, trượt sang phải khi mở) + biển "Phòng CEO" + đèn máy quẹt thẻ.
+  const door = ceoDoor(layout);
+  const doorWidth = door.maxX - door.minX;
+  const doorMesh = new Mesh(
+    mergePieces([
+      piece(new PlaneGeometry(doorWidth - 0.04, GLASS_HEIGHT - 0.12), 0xd7efff, {
+        position: [0, GLASS_HEIGHT / 2, 0],
+      }),
+    ]),
+    glass.material,
+  );
+  doorMesh.renderOrder = 2;
+  const doorFrame = new Mesh(
+    mergePieces([
+      boxPiece(
+        { minX: -doorWidth / 2, maxX: -doorWidth / 2 + 0.05, minZ: -0.03, maxZ: 0.03 },
+        0,
+        GLASS_HEIGHT - 0.06,
+        FRAME,
+      ),
+      boxPiece(
+        { minX: doorWidth / 2 - 0.05, maxX: doorWidth / 2, minZ: -0.03, maxZ: 0.03 },
+        0,
+        GLASS_HEIGHT - 0.06,
+        FRAME,
+      ),
+      boxPiece(
+        { minX: doorWidth / 2 - 0.16, maxX: doorWidth / 2 - 0.12, minZ: 0.03, maxZ: 0.07 },
+        0.8,
+        1.2,
+        0xd6dde4,
+      ),
+    ]),
+    material,
+  );
+  const doorGroup = new Group();
+  doorGroup.add(doorMesh, doorFrame);
+  const doorClosedX = (door.minX + door.maxX) / 2;
+  doorGroup.position.set(doorClosedX, 0, (door.minZ + door.maxZ) / 2 + 0.06);
+  group.add(doorGroup);
+
+  const plaque = createPlaqueTexture(STRINGS.ceo.plaque);
+  const plaqueMesh = new Mesh(
+    new PlaneGeometry(1.1, 0.3),
+    new MeshBasicMaterial({ map: plaque, transparent: true }),
+  );
+  plaqueMesh.position.set(
+    doorClosedX + 0.6,
+    GLASS_HEIGHT + 0.22,
+    layout.ceoRoom.bounds.maxZ + 0.04,
+  );
+  group.add(plaqueMesh);
+
+  const led = new Mesh(
+    new BoxGeometry(0.06, 0.06, 0.02),
+    new MeshBasicMaterial({ color: 0xe5534b }),
+  );
+  const reader = layout.ceoRoom.reader;
+  led.position.set((reader.minX + reader.maxX) / 2, 1.18, reader.maxZ + 0.011);
+  group.add(led);
+
+  let doorOpen = false;
+  let doorOffset = 0;
+
   const codeTexture = screenTextures[0];
   let currentPeriod = period;
   return {
@@ -682,6 +794,44 @@ export function buildOffice(
     update(dt) {
       // Mã trên màn hình cuộn chậm cho văn phòng có "sức sống".
       if (codeTexture) codeTexture.offset.y = (codeTexture.offset.y + dt * 0.04) % 1;
+      const target = doorOpen ? doorWidth - 0.08 : 0;
+      if (doorOffset !== target) {
+        const step = dt * 2.5;
+        doorOffset =
+          Math.abs(target - doorOffset) <= step
+            ? target
+            : doorOffset + Math.sign(target - doorOffset) * step;
+        doorGroup.position.x = doorClosedX + doorOffset;
+      }
+    },
+    setCeoDoorOpen(open) {
+      doorOpen = open;
+      led.material.color.setHex(open ? 0x4caf50 : 0xe5534b);
     },
   };
+}
+
+/** Biển tên nhỏ vẽ bằng canvas (chữ trắng trên nền gỗ sẫm). */
+function createPlaqueTexture(text: string): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 72;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#5d3b26';
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 248, 64, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#f2c14e';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = '#fff6e5';
+    ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 38);
+  }
+  const texture = new CanvasTextureClass(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }

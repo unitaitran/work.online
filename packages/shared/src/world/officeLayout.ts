@@ -16,7 +16,9 @@ export type InteractableKind =
   | 'gate'
   | 'fortune'
   | 'taskboard'
-  | 'ventwall';
+  | 'ventwall'
+  | 'ceodesk'
+  | 'ceodoor';
 
 /** Tư thế khi dùng vật: ngồi gõ phím, ngồi thường, hoặc đứng. */
 export type UsePose = 'type' | 'sit' | 'stand';
@@ -55,6 +57,19 @@ export interface MeetingRoom {
   seats: { x: number; z: number; facing: number }[];
 }
 
+/**
+ * Phòng kính của CEO: sát cửa kính, chung vách phía đông với phòng họp. Cửa có máy quẹt thẻ,
+ * chỉ chủ công ty (trong phòng công ty) đi qua được.
+ */
+export interface CeoRoom {
+  bounds: Aabb;
+  doorMinX: number;
+  doorMaxX: number;
+  desk: Aabb;
+  /** Máy quẹt thẻ gắn mặt ngoài vách trước, cạnh cửa. */
+  reader: Aabb;
+}
+
 export interface OfficeLayout {
   bounds: Aabb;
   wallHeight: number;
@@ -64,6 +79,7 @@ export interface OfficeLayout {
   desk: { width: number; depth: number; height: number };
   desks: Desk[];
   meeting: MeetingRoom;
+  ceoRoom: CeoRoom;
   pantry: { floor: Aabb; counter: Aabb; coffee: Vec2; fridge: Aabb; table: Aabb };
   lounge: { rug: Aabb; sofa: Aabb; table: Aabb; seatXs: number[] };
   printer: Aabb;
@@ -114,6 +130,13 @@ export const OFFICE_FLOOR: OfficeLayout = {
       { x, z: -5.4 + SEAT_GAP, facing: Math.PI },
     ]),
   },
+  ceoRoom: {
+    bounds: { minX: 0.8, maxX: 5, minZ: -9, maxZ: -5.6 },
+    doorMinX: 1.2,
+    doorMaxX: 2.2,
+    desk: box(3.2, -7.3, 1.5, 0.75),
+    reader: box(2.5, -5.47, 0.26, 0.16),
+  },
   pantry: {
     floor: { minX: 9, maxX: 13, minZ: 2, maxZ: 9 },
     counter: { minX: 12.3, maxX: 13, minZ: 2.5, maxZ: 6.5 },
@@ -135,14 +158,14 @@ export const OFFICE_FLOOR: OfficeLayout = {
   ventBoard: { minX: 4.4, maxX: 5.8 },
   plants: [
     { x: -12.4, z: -8.4 },
-    { x: 4.3, z: -8.4 },
+    { x: -1.4, z: -8.4 },
     { x: 12.4, z: 0.8 },
     { x: -12.4, z: 1.8 },
     { x: 6.5, z: 8.4 },
     { x: -4.6, z: 8.4 },
   ],
   strollSpots: [
-    { x: 1.5, z: -7.6 },
+    { x: -0.4, z: -6.8 },
     { x: -1, z: 3.5 },
     { x: 6, z: 1 },
     { x: -9, z: 3.5 },
@@ -169,11 +192,42 @@ export function glassWalls(layout: OfficeLayout): Aabb[] {
   ];
 }
 
-/** Mọi vật cản trên sàn (ghế không chặn đường để dễ ngồi vào). */
-export function officeObstacles(layout: OfficeLayout): Aabb[] {
+/** Vách kính phòng CEO: vách tây và vách trước (chừa cửa); vách đông dùng chung với phòng họp. */
+export function ceoGlassWalls(layout: OfficeLayout): Aabb[] {
+  const { bounds, doorMinX, doorMaxX } = layout.ceoRoom;
+  const t = GLASS_THICKNESS / 2;
+  return [
+    { minX: bounds.minX - t, maxX: bounds.minX + t, minZ: bounds.minZ, maxZ: bounds.maxZ + t },
+    { minX: bounds.minX, maxX: doorMinX, minZ: bounds.maxZ - t, maxZ: bounds.maxZ + t },
+    { minX: doorMaxX, maxX: bounds.maxX, minZ: bounds.maxZ - t, maxZ: bounds.maxZ + t },
+  ];
+}
+
+/** Cánh cửa kính phòng CEO (đóng với người không có thẻ). */
+export function ceoDoor(layout: OfficeLayout): Aabb {
+  const { bounds, doorMinX, doorMaxX } = layout.ceoRoom;
+  const t = GLASS_THICKNESS / 2;
+  return { minX: doorMinX, maxX: doorMaxX, minZ: bounds.maxZ - t, maxZ: bounds.maxZ + t };
+}
+
+/** Điểm có nằm trong phòng CEO không. */
+export function insideCeoRoom(layout: OfficeLayout, p: Vec2): boolean {
+  const b = layout.ceoRoom.bounds;
+  return p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ;
+}
+
+/**
+ * Mọi vật cản trên sàn (ghế không chặn đường để dễ ngồi vào).
+ * `ceo`: có thẻ vào phòng CEO thì cửa phòng không chặn.
+ */
+export function officeObstacles(layout: OfficeLayout, options: { ceo?: boolean } = {}): Aabb[] {
   return [
     ...layout.desks.map((desk) => deskBox(layout, desk)),
     ...glassWalls(layout),
+    ...ceoGlassWalls(layout),
+    ...(options.ceo ? [] : [ceoDoor(layout)]),
+    layout.ceoRoom.desk,
+    layout.ceoRoom.reader,
     layout.meeting.table,
     layout.pantry.counter,
     layout.pantry.fridge,
@@ -330,13 +384,37 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
   list.push({
     id: 'window',
     kind: 'window',
-    approach: { x: 1.5, z: layout.bounds.minZ + 0.9 },
+    approach: { x: -0.3, z: layout.bounds.minZ + 0.9 },
     facing: Math.PI,
     pose: 'stand',
     pick: {
-      min: [0, w.bottom, layout.bounds.minZ - 0.1],
-      max: [3, w.top, layout.bounds.minZ + 0.2],
+      min: [-1, w.bottom, layout.bounds.minZ - 0.1],
+      max: [0.7, w.top, layout.bounds.minZ + 0.2],
     },
+  });
+
+  // Phòng CEO: bàn CEO (ngồi phía cửa kính, quay mặt ra văn phòng) và máy quẹt thẻ ngoài cửa.
+  const ceo = layout.ceoRoom;
+  const ceoX = (ceo.desk.minX + ceo.desk.maxX) / 2;
+  list.push({
+    id: 'ceodesk',
+    kind: 'ceodesk',
+    approach: { x: ceoX, z: ceo.desk.minZ - APPROACH_GAP - 0.35 },
+    seat: { x: ceoX, z: ceo.desk.minZ - SEAT_GAP },
+    facing: 0,
+    pose: 'type',
+    pick: {
+      min: [ceo.desk.minX, 0, ceo.desk.minZ - 0.55],
+      max: [ceo.desk.maxX, height + 0.5, ceo.desk.maxZ],
+    },
+  });
+  list.push({
+    id: 'ceodoor',
+    kind: 'ceodoor',
+    approach: { x: (ceo.doorMinX + ceo.doorMaxX) / 2, z: ceo.bounds.maxZ + 0.75 },
+    facing: Math.PI,
+    pose: 'stand',
+    pick: pickFromAabb(ceo.reader, 1.3, 0.12),
   });
 
   return list;

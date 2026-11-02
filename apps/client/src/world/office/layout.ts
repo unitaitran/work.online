@@ -1,6 +1,9 @@
 // Bố cục văn phòng dùng chung với server: định nghĩa ở @dilam/shared.
 export {
+  ceoDoor,
+  ceoGlassWalls,
   deskBox,
+  insideCeoRoom,
   GLASS_THICKNESS,
   glassWalls,
   OFFICE_FLOOR,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { containsPoint, inflate } from '../collision';
 import { nearestInteractable, SeatRegistry } from '../interaction';
 import { findPath, PATH_MARGIN } from '../pathfinding';
+import { insideCeoRoom } from '@dilam/shared';
 import { OFFICE_FLOOR, officeInteractables, officeObstacles } from './layout';
 import { DAY_PERIODS, isDayPeriod, periodOfDay } from './period';
 
@@ -53,8 +54,9 @@ describe('bố cục tầng văn phòng', () => {
     }
   });
 
-  it('từ chỗ xuất hiện đi tới được mọi vật tương tác và điểm đi dạo', () => {
-    for (const target of [...items.map((item) => item.approach), ...OFFICE_FLOOR.strollSpots]) {
+  it('từ chỗ xuất hiện đi tới được mọi vật tương tác và điểm đi dạo (trừ bàn trong phòng CEO)', () => {
+    const outside = items.filter((item) => item.kind !== 'ceodesk');
+    for (const target of [...outside.map((item) => item.approach), ...OFFICE_FLOOR.strollSpots]) {
       const path = findPath(OFFICE_FLOOR.spawn, target, obstacles, RADIUS, OFFICE_FLOOR.bounds);
       expect(path, JSON.stringify(target)).not.toBeNull();
       const end = path?.at(-1);
@@ -70,6 +72,22 @@ describe('bố cục tầng văn phòng', () => {
     expect(
       findPath(meetingSeat.approach, desk.approach, obstacles, RADIUS, OFFICE_FLOOR.bounds),
     ).not.toBeNull();
+  });
+
+  it('phòng CEO: không có thẻ thì cửa chặn, có thẻ thì vào ngồi bàn CEO được', () => {
+    const desk = items.find((item) => item.kind === 'ceodesk');
+    expect(desk).toBeDefined();
+    if (!desk) return;
+    expect(insideCeoRoom(OFFICE_FLOOR, desk.approach)).toBe(true);
+    expect(
+      findPath(OFFICE_FLOOR.spawn, desk.approach, obstacles, RADIUS, OFFICE_FLOOR.bounds),
+    ).toBeNull();
+    const ceo = officeObstacles(OFFICE_FLOOR, { ceo: true });
+    const path = findPath(OFFICE_FLOOR.spawn, desk.approach, ceo, RADIUS, OFFICE_FLOOR.bounds);
+    expect(path).not.toBeNull();
+    // Điểm đi dạo của NPC không nằm trong phòng CEO.
+    for (const spot of OFFICE_FLOOR.strollSpots)
+      expect(insideCeoRoom(OFFICE_FLOOR, spot)).toBe(false);
   });
 
   it('ghế có chỗ ngồi, vật đứng dùng thì không', () => {
