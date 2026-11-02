@@ -17,7 +17,14 @@ import {
 import type { SoundName } from '../audio/audioEngine';
 import type { Appearance } from '../avatar/appearance';
 import { AvatarModel } from '../avatar/avatarModel';
-import { applyDrag, applyZoom, orbitOffset, type OrbitState } from '../engine/cameraMath';
+import {
+  applyDrag,
+  applyZoom,
+  CAMERA_LIMITS,
+  orbitOffset,
+  SEATED_CAMERA_LIMITS,
+  type OrbitState,
+} from '../engine/cameraMath';
 import { disposeObject3D } from '../engine/disposal';
 import { damp, dampAngle, lerp } from '../engine/mathUtils';
 import { createVertexColorMaterial } from '../engine/meshBuilder';
@@ -193,14 +200,13 @@ export class OfficeScene implements SceneController {
       onTap: (x, y) => {
         this.handleTap(x, y);
       },
+      // Kéo/zoom dùng được cả khi đang ngồi (để ngắm toàn tầng), với giới hạn riêng.
       onDrag: (dx, dy) => {
-        if (this.seated) return;
-        this.orbitGoal = applyDrag(this.orbitGoal, dx, dy);
+        this.orbitGoal = applyDrag(this.orbitGoal, dx, dy, this.cameraLimits());
         this.orbit = { ...this.orbit, yaw: this.orbitGoal.yaw, pitch: this.orbitGoal.pitch };
       },
       onZoom: (factor) => {
-        if (this.seated) return;
-        this.orbitGoal = applyZoom(this.orbitGoal, factor);
+        this.orbitGoal = applyZoom(this.orbitGoal, factor, this.cameraLimits());
         this.orbit = { ...this.orbit, distance: this.orbitGoal.distance };
       },
     });
@@ -477,6 +483,10 @@ export class OfficeScene implements SceneController {
     this.previous = { ...seat.approach };
     this.avatar.setPose('stand');
     this.orbitGoal = { ...this.freeOrbit, yaw: this.orbit.yaw };
+  }
+
+  private cameraLimits(): typeof CAMERA_LIMITS {
+    return this.seated ? SEATED_CAMERA_LIMITS : CAMERA_LIMITS;
   }
 
   private cancelPath(): void {

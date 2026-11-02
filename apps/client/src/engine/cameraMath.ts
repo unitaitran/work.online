@@ -7,36 +7,66 @@ export interface OrbitState {
   distance: number;
 }
 
-export const CAMERA_LIMITS = {
+export interface CameraLimits {
+  minPitch: number;
+  maxPitch: number;
+  minDistance: number;
+  maxDistance: number;
+  /** Radian cho mỗi pixel kéo. */
+  dragSensitivity: number;
+}
+
+/** Giới hạn khi đi lại. */
+export const CAMERA_LIMITS: Readonly<CameraLimits> = {
   minPitch: 0.3,
   maxPitch: 1.25,
   minDistance: 3.5,
   maxDistance: 11,
-  /** Radian cho mỗi pixel kéo. */
   dragSensitivity: 0.006,
-} as const;
+};
 
-export function clampOrbit(state: OrbitState): OrbitState {
+/** Giới hạn khi ngồi: lại gần được hơn để nhìn màn hình, lùi xa được hơn để ngắm toàn tầng. */
+export const SEATED_CAMERA_LIMITS: Readonly<CameraLimits> = {
+  ...CAMERA_LIMITS,
+  minPitch: 0.2,
+  maxPitch: 1.35,
+  minDistance: 1.6,
+  maxDistance: 14,
+};
+
+export function clampOrbit(state: OrbitState, limits: CameraLimits = CAMERA_LIMITS): OrbitState {
   return {
     yaw: state.yaw,
-    pitch: clamp(state.pitch, CAMERA_LIMITS.minPitch, CAMERA_LIMITS.maxPitch),
-    distance: clamp(state.distance, CAMERA_LIMITS.minDistance, CAMERA_LIMITS.maxDistance),
+    pitch: clamp(state.pitch, limits.minPitch, limits.maxPitch),
+    distance: clamp(state.distance, limits.minDistance, limits.maxDistance),
   };
 }
 
 /** Kéo sang phải: camera vòng sang trái quanh nhân vật; kéo xuống: camera hạ thấp. */
-export function applyDrag(state: OrbitState, dxPixels: number, dyPixels: number): OrbitState {
-  return clampOrbit({
-    yaw: state.yaw - dxPixels * CAMERA_LIMITS.dragSensitivity,
-    pitch: state.pitch + dyPixels * CAMERA_LIMITS.dragSensitivity,
-    distance: state.distance,
-  });
+export function applyDrag(
+  state: OrbitState,
+  dxPixels: number,
+  dyPixels: number,
+  limits: CameraLimits = CAMERA_LIMITS,
+): OrbitState {
+  return clampOrbit(
+    {
+      yaw: state.yaw - dxPixels * limits.dragSensitivity,
+      pitch: state.pitch + dyPixels * limits.dragSensitivity,
+      distance: state.distance,
+    },
+    limits,
+  );
 }
 
 /** factor < 1 là phóng to (lại gần), > 1 là thu nhỏ. */
-export function applyZoom(state: OrbitState, factor: number): OrbitState {
+export function applyZoom(
+  state: OrbitState,
+  factor: number,
+  limits: CameraLimits = CAMERA_LIMITS,
+): OrbitState {
   if (!Number.isFinite(factor) || factor <= 0) return state;
-  return clampOrbit({ ...state, distance: state.distance * factor });
+  return clampOrbit({ ...state, distance: state.distance * factor }, limits);
 }
 
 /** Vị trí camera so với điểm nhìn. */

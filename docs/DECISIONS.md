@@ -134,7 +134,7 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Hai cách dùng vật**:
   - lại gần (trong 1,4 m) thì hiện nút "Chạm để dùng · tên vật"; bấm nút hoặc nhấn phím E;
   - bấm hoặc chạm thẳng vào đồ vật: nhân vật tự đi tới (vòng tránh vật cản như khi bấm lên sàn) rồi dùng.
-- **Ngồi**: ở bàn làm việc thì tư thế gõ phím, kèm tiếng bàn phím ngẫu nhiên; ở ghế họp và sofa thì tư thế ngồi. Camera chuyển sang góc gần qua vai. Đứng dậy bằng nút "Đứng dậy", phím E, bất kỳ phím di chuyển nào, hoặc bấm chỗ khác.
+- **Ngồi**: ở bàn làm việc thì tư thế gõ phím, kèm tiếng bàn phím ngẫu nhiên; ở ghế họp và sofa thì tư thế ngồi. Camera chuyển sang góc gần qua vai. Khi đang ngồi vẫn kéo để xoay và cuộn hoặc chụm hai ngón để zoom được, theo giới hạn riêng (`SEATED_CAMERA_LIMITS`): lại gần tới 1,6 m, lùi xa tới 14 m để ngắm toàn tầng. Đứng dậy thì camera về khoảng cách lúc đi lại. Đứng dậy bằng nút "Đứng dậy", phím E, bất kỳ phím di chuyển nào, hoặc bấm chỗ khác.
 - **Một ghế một người** (`SeatRegistry`, dùng chung với NPC). Chỗ có người ngồi thì báo "<tên> đang ngồi chỗ này rồi".
 - **Dùng vật chỉ có phản hồi tại chỗ** (lời nhắn và âm thanh), **chưa cộng XP hay xu**. Điểm do server tính, làm ở các phase sau.
 

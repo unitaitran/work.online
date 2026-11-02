@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyDrag, applyZoom, CAMERA_LIMITS } from './cameraMath';
+import { applyDrag, applyZoom, CAMERA_LIMITS, SEATED_CAMERA_LIMITS } from './cameraMath';
 import { advanceFixedStep, FIXED_STEP, MAX_STEPS_PER_FRAME } from './loop';
 import { dampAngle, wrapAngle } from './mathUtils';
 import {
@@ -46,6 +46,20 @@ describe('camera', () => {
     expect(applyDrag(start, 0, -10_000).pitch).toBe(CAMERA_LIMITS.minPitch);
     expect(applyZoom(start, 100).distance).toBe(CAMERA_LIMITS.maxDistance);
     expect(applyZoom(start, 0.01).distance).toBe(CAMERA_LIMITS.minDistance);
+  });
+
+  it('khi ngồi: lại gần và lùi xa được hơn lúc đi lại', () => {
+    const seated = { yaw: 0, pitch: 0.8, distance: 2.3 };
+    expect(applyZoom(seated, 0.01, SEATED_CAMERA_LIMITS).distance).toBe(
+      SEATED_CAMERA_LIMITS.minDistance,
+    );
+    expect(applyZoom(seated, 100, SEATED_CAMERA_LIMITS).distance).toBe(
+      SEATED_CAMERA_LIMITS.maxDistance,
+    );
+    expect(SEATED_CAMERA_LIMITS.minDistance).toBeLessThan(CAMERA_LIMITS.minDistance);
+    expect(SEATED_CAMERA_LIMITS.maxDistance).toBeGreaterThan(CAMERA_LIMITS.maxDistance);
+    // Kéo nhẹ khi ngồi không làm camera bật ra xa (giữ nguyên khoảng cách gần).
+    expect(applyDrag(seated, 30, 0, SEATED_CAMERA_LIMITS).distance).toBe(2.3);
   });
 
   it('bỏ qua hệ số zoom không hợp lệ', () => {
