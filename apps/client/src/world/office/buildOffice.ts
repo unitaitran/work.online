@@ -451,6 +451,128 @@ function staticPieces(layout: OfficeLayout): Piece[] {
       }),
     );
   });
+
+  // Cửa ra vào (hai cánh kính, khung tối) và máy quẹt thẻ chấm công.
+  const { doorX, doorWidth, reader } = layout.entrance;
+  const doorTop = 2.2;
+  pieces.push(
+    piece(new PlaneGeometry(doorWidth + 0.16, doorTop + 0.08), 0x5d6670, {
+      position: [doorX, (doorTop + 0.08) / 2, maxZ - 0.01],
+      rotation: facingIn,
+    }),
+  );
+  for (const side of [-1, 1]) {
+    pieces.push(
+      piece(new PlaneGeometry(doorWidth / 2 - 0.06, doorTop - 0.1), 0xb9d7e6, {
+        position: [doorX + side * (doorWidth / 4), (doorTop - 0.1) / 2 + 0.04, maxZ - 0.02],
+        rotation: facingIn,
+      }),
+    );
+    pieces.push(
+      piece(new PlaneGeometry(0.04, 0.5), 0xd0d4d8, {
+        position: [doorX + side * 0.1, 1.05, maxZ - 0.03],
+        rotation: facingIn,
+      }),
+    );
+  }
+  const rx = (reader.minX + reader.maxX) / 2;
+  const rz = (reader.minZ + reader.maxZ) / 2;
+  pieces.push(
+    piece(new CylinderGeometry(0.05, 0.08, 0.9, 10), 0x6b737d, { position: [rx, 0.45, rz] }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.22, 0.3, 0.1), 0x3d3f47, {
+      position: [rx, 1.0, rz],
+      rotation: [-0.35, 0, 0],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.14, 0.1, 0.02), 0x8fd3ff, {
+      position: [rx, 1.03, rz - 0.06],
+      rotation: [-0.35, 0, 0],
+    }),
+  );
+  pieces.push(
+    piece(new SphereGeometry(0.018, 6, 4), 0x6cc28a, { position: [rx + 0.07, 0.9, rz - 0.04] }),
+  );
+
+  // Kệ nhỏ sát tường trái, trên có ống quẻ KPI màu đỏ với các thẻ tre.
+  const shelf = layout.fortuneShelf;
+  const sx = (shelf.minX + shelf.maxX) / 2;
+  const sz = (shelf.minZ + shelf.maxZ) / 2;
+  pieces.push(boxPiece(shelf, 0, 0.55, 0xb98552));
+  pieces.push(boxPiece(shelf, 0.55, 0.59, WOOD));
+  pieces.push(
+    piece(new CylinderGeometry(0.1, 0.09, 0.32, 16), 0xd94b4b, { position: [sx, 0.75, sz] }),
+  );
+  pieces.push(
+    piece(new CylinderGeometry(0.105, 0.105, 0.04, 16), 0xf2c14e, { position: [sx, 0.88, sz] }),
+  );
+  for (let i = 0; i < 5; i += 1) {
+    pieces.push(
+      piece(new BoxGeometry(0.02, 0.22, 0.008), 0xe8cf9a, {
+        position: [sx - 0.04 + i * 0.02, 0.96 + (i % 2) * 0.03, sz + ((i % 3) - 1) * 0.025],
+        rotation: [0, 0, (i - 2) * 0.08],
+      }),
+    );
+  }
+
+  // Bảng việc trên tường phải: bảng trắng có giấy nhớ màu (mặt phẳng quay vào phòng).
+  const { maxX } = layout.bounds;
+  const board = layout.taskBoard;
+  const bz = (board.minZ + board.maxZ) / 2;
+  const facingWest: [number, number, number] = [0, -Math.PI / 2, 0];
+  pieces.push(
+    piece(new PlaneGeometry(board.maxZ - board.minZ + 0.1, 1.0), 0x9aa3ad, {
+      position: [maxX - 0.01, 1.45, bz],
+      rotation: facingWest,
+    }),
+  );
+  pieces.push(
+    piece(new PlaneGeometry(board.maxZ - board.minZ, 0.9), 0xfbfbf8, {
+      position: [maxX - 0.02, 1.45, bz],
+      rotation: facingWest,
+    }),
+  );
+  const notes = [0xffd479, 0x8fc7ff, 0xf28a8a, 0x9fe0a8, 0xffd479, 0xd6b4ff];
+  notes.forEach((color, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    pieces.push(
+      piece(new PlaneGeometry(0.32, 0.26), color, {
+        position: [maxX - 0.03, 1.66 - row * 0.4, board.maxZ - 0.35 - col * 0.55],
+        rotation: [0, -Math.PI / 2, (i % 2 ? 1 : -1) * 0.06],
+      }),
+    );
+  });
+
+  // Tường than thở: bảng ghim bần trên tường trước, dán những mẩu giấy nhỏ.
+  const vent = layout.ventBoard;
+  const vx = (vent.minX + vent.maxX) / 2;
+  pieces.push(
+    piece(new PlaneGeometry(vent.maxX - vent.minX + 0.1, 1.0), 0x8a5a3b, {
+      position: [vx, 1.45, maxZ - 0.01],
+      rotation: facingIn,
+    }),
+  );
+  pieces.push(
+    piece(new PlaneGeometry(vent.maxX - vent.minX, 0.9), 0xc79a6b, {
+      position: [vx, 1.45, maxZ - 0.02],
+      rotation: facingIn,
+    }),
+  );
+  [0xffffff, 0xfff3c4, 0xffe0e6, 0xe3f2ff, 0xffffff, 0xe9ffe3, 0xfff3c4].forEach((color, i) => {
+    pieces.push(
+      piece(new PlaneGeometry(0.26, 0.18), color, {
+        position: [
+          vent.minX + 0.2 + (i % 4) * 0.33,
+          1.68 - Math.floor(i / 4) * 0.36 - (i % 2) * 0.06,
+          maxZ - 0.03,
+        ],
+        rotation: [0, Math.PI, ((i % 3) - 1) * 0.1],
+      }),
+    );
+  });
   return pieces;
 }
 

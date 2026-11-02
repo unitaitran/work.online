@@ -33,6 +33,7 @@ import type { SceneController } from '../engine/types';
 import { VirtualJoystick } from '../input/joystick';
 import { KeyboardInput } from '../input/keyboard';
 import { PointerControls } from '../input/pointerControls';
+import { GIFT_RADIUS } from '../activities/coffee/coffee';
 import { NpcAgent, type NpcSpec } from '../npc/npcAgent';
 import { seededRng } from '../npc/schedule';
 import { STRINGS } from '../strings';
@@ -68,7 +69,9 @@ const BUBBLE_TOP_MARGIN = 120;
 const PLAYER_ID = 'player';
 
 export type OfficeEvent =
-  { type: 'interact'; item: Interactable } | { type: 'seatTaken'; name: string };
+  | { type: 'interact'; item: Interactable }
+  | { type: 'gift'; npcId: string; name: string }
+  | { type: 'seatTaken'; name: string };
 
 export interface OfficeSceneOptions {
   canvas: HTMLElement;
@@ -81,6 +84,10 @@ export interface OfficeSceneOptions {
   onHint(hint: InteractionHint | null): void;
   onEvent(event: OfficeEvent): void;
   onSound(name: SoundName): void;
+  /** Đang cầm ly cà phê có thể tặng không. */
+  canGiftCoffee(): boolean;
+  /** Ngồi xuống (vật đang ngồi) hoặc đứng dậy (null). */
+  onSeatChange(item: Interactable | null): void;
 }
 
 export class OfficeScene implements SceneController {
@@ -117,6 +124,10 @@ export class OfficeScene implements SceneController {
   private stuckSeconds = 0;
   private markerSeconds = 0;
   private typingTimer = 0;
+  /** Đang mở bảng hoạt động: không di chuyển, không chạm vật. */
+  private inputLocked = false;
+  /** Đang chơi "gõ phím tập trung": tiếng gõ do người chơi bấm, không tự sinh. */
+  private manualTyping = false;
   private orbit: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
   private orbitGoal: OrbitState = { ...this.orbit };
   private freeOrbit: OrbitState = { ...this.orbit };
@@ -124,7 +135,7 @@ export class OfficeScene implements SceneController {
   private readonly tmp = new Vector3();
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code !== 'KeyE' || event.repeat) return;
+    if (event.code !== 'KeyE' || event.repeat || this.inputLocked) return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return;
     this.triggerHint();
@@ -225,12 +236,35 @@ export class OfficeScene implements SceneController {
 
   /** Nút "Chạm để dùng" / "Đứng dậy" hoặc phím E. */
   triggerHint(): void {
+    if (this.inputLocked) return;
     if (this.seated) {
       this.standUp();
       return;
     }
+    const npc = this.giftTarget();
+    if (npc) {
+      const p = npc.getPosition();
+      this.facing = headingOf({ x: p.x - this.position.x, z: p.z - this.position.z });
+      this.options.onEvent({ type: 'gift', npcId: npc.spec.id, name: npc.name });
+      return;
+    }
     const nearby = nearestInteractable(this.position, this.items);
     if (nearby) this.requestInteraction(nearby);
+  }
+
+  /** Khoá/mở điều khiển (khi mở bảng hoạt động). */
+  setInputLocked(locked: boolean): void {
+    this.inputLocked = locked;
+    if (locked) this.cancelPath();
+  }
+
+  setManualTyping(manual: boolean): void {
+    this.manualTyping = manual;
+  }
+
+  /** NPC đáp lại (bong bóng đổi câu trong vài giây). */
+  npcSay(npcId: string, text: string, seconds = 4): void {
+    this.npcs.find((npc) => npc.spec.id === npcId)?.say(text, seconds);
   }
 
   /** Đi tới vật và dùng khi tới nơi (như khi chạm vào vật đó). */
@@ -286,7 +320,7 @@ export class OfficeScene implements SceneController {
   fixedUpdate(dt: number): void {
     this.previous = { ...this.position };
     const input = combineInputs(this.keyboard.vector(), this.joystick.vector());
-    const hasInput = Math.hypot(input.x, input.y) > 0.05;
+    const hasInput = !this.inputLocked && Math.hypot(input.x, input.y) > 0.05;
 
     if (this.seated) {
       if (hasInput) this.standUp();
@@ -427,7 +461,7 @@ export class OfficeScene implements SceneController {
 
   /** Tiếng bàn phím khi ngồi gõ: lách cách từng chuỗi, thỉnh thoảng nghỉ tay. */
   private updateTyping(dt: number): void {
-    if (this.seated?.pose !== 'type') return;
+    if (this.seated?.pose !== 'type' || this.manualTyping) return;
     this.typingTimer -= dt;
     if (this.typingTimer > 0) return;
     this.options.onSound('keyboard');
@@ -467,6 +501,7 @@ export class OfficeScene implements SceneController {
       this.freeOrbit = { ...this.orbitGoal };
       // Góc nhìn gần qua vai phải, đủ cao để thấy màn hình phía trên đầu nhân vật.
       this.orbitGoal = { yaw: item.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 };
+      this.options.onSeatChange(item);
     } else {
       this.facing = item.facing;
       this.avatar.setPose('stand');
@@ -483,6 +518,7 @@ export class OfficeScene implements SceneController {
     this.previous = { ...seat.approach };
     this.avatar.setPose('stand');
     this.orbitGoal = { ...this.freeOrbit, yaw: this.orbit.yaw };
+    this.options.onSeatChange(null);
   }
 
   private cameraLimits(): typeof CAMERA_LIMITS {
@@ -502,6 +538,7 @@ export class OfficeScene implements SceneController {
   }
 
   private handleTap(clientX: number, clientY: number): void {
+    if (this.inputLocked) return;
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -550,9 +587,34 @@ export class OfficeScene implements SceneController {
     this.showMarker(destination);
   }
 
+  /** NPC đứng gần nhất trong tầm tặng cà phê (khi đang cầm ly). */
+  private giftTarget(): NpcAgent | null {
+    if (this.seated || !this.options.canGiftCoffee()) return null;
+    let best: NpcAgent | null = null;
+    let bestDistance = GIFT_RADIUS;
+    for (const npc of this.npcs) {
+      const p = npc.getPosition();
+      const d = Math.hypot(p.x - this.position.x, p.z - this.position.z);
+      if (d <= bestDistance) {
+        best = npc;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
   private updateHint(): void {
+    if (this.inputLocked) {
+      this.options.onHint(null);
+      return;
+    }
     if (this.seated) {
       this.options.onHint({ kind: 'stand', label: STRINGS.interact.standUp });
+      return;
+    }
+    const npc = this.giftTarget();
+    if (npc) {
+      this.options.onHint({ kind: 'gift', label: npc.name });
       return;
     }
     const nearby = this.path.length === 0 ? nearestInteractable(this.position, this.items) : null;

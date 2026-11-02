@@ -5,7 +5,18 @@ import { STRINGS } from '../../strings';
 import type { Aabb, Vec2 } from '../collision';
 
 export type InteractableKind =
-  'desk' | 'meeting' | 'sofa' | 'coffee' | 'fridge' | 'printer' | 'plant' | 'window';
+  | 'desk'
+  | 'meeting'
+  | 'sofa'
+  | 'coffee'
+  | 'fridge'
+  | 'printer'
+  | 'plant'
+  | 'window'
+  | 'gate'
+  | 'fortune'
+  | 'taskboard'
+  | 'ventwall';
 
 /** Tư thế khi dùng vật: ngồi gõ phím, ngồi thường, hoặc đứng. */
 export type UsePose = 'type' | 'sit' | 'stand';
@@ -58,6 +69,14 @@ export interface OfficeLayout {
   lounge: { rug: Aabb; sofa: Aabb; table: Aabb; seatXs: number[] };
   printer: Aabb;
   cabinets: Aabb[];
+  /** Cửa ra vào trên tường trước và máy quẹt thẻ chấm công cạnh cửa. */
+  entrance: { doorX: number; doorWidth: number; reader: Aabb };
+  /** Kệ nhỏ đặt ống quẻ KPI, sát tường trái. */
+  fortuneShelf: Aabb;
+  /** Bảng việc (lật task) treo trên tường phải: khoảng Z. */
+  taskBoard: { minZ: number; maxZ: number };
+  /** Tường than thở (bảng ghim) trên tường trước: khoảng X. */
+  ventBoard: { minX: number; maxX: number };
   plants: Vec2[];
   /** Điểm cho NPC đi dạo. */
   strollSpots: Vec2[];
@@ -80,7 +99,7 @@ export const OFFICE_FLOOR: OfficeLayout = {
   name: STRINGS.office.floorName,
   bounds: { minX: -13, maxX: 13, minZ: -9, maxZ: 9 },
   wallHeight: 2.8,
-  spawn: { x: 0, z: 6 },
+  spawn: { x: -2.5, z: 7.3 },
   spawnFacing: Math.PI,
   window: { minX: -12.5, maxX: 12.5, bottom: 0.7, top: 2.45 },
   desk: DESK,
@@ -112,6 +131,10 @@ export const OFFICE_FLOOR: OfficeLayout = {
   },
   printer: { minX: 2.6, maxX: 3.4, minZ: 8.2, maxZ: 8.8 },
   cabinets: [{ minX: -13, maxX: -12.5, minZ: -6.2, maxZ: -3.2 }],
+  entrance: { doorX: -2.5, doorWidth: 1.4, reader: box(-1.4, 8.6, 0.3, 0.3) },
+  fortuneShelf: { minX: -13, maxX: -12.4, minZ: -1.6, maxZ: -0.8 },
+  taskBoard: { minZ: -2.4, maxZ: -0.6 },
+  ventBoard: { minX: 4.4, maxX: 5.8 },
   plants: [
     { x: -12.4, z: -8.4 },
     { x: 4.3, z: -8.4 },
@@ -161,6 +184,8 @@ export function officeObstacles(layout: OfficeLayout): Aabb[] {
     layout.lounge.table,
     layout.printer,
     ...layout.cabinets,
+    layout.entrance.reader,
+    layout.fortuneShelf,
     ...layout.plants.map(plantBox),
   ];
 }
@@ -259,6 +284,48 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
       pose: 'stand',
       pick: pickFromAabb(plantBox(plant), 1.1),
     });
+  });
+
+  // Chấm công: đứng trước máy quẹt thẻ cạnh cửa, quay mặt về phía cửa (+Z).
+  const reader = layout.entrance.reader;
+  list.push({
+    id: 'gate',
+    kind: 'gate',
+    approach: { x: (reader.minX + reader.maxX) / 2, z: reader.minZ - APPROACH_GAP - 0.2 },
+    facing: 0,
+    pose: 'stand',
+    pick: pickFromAabb(reader, 1.2, 0.15),
+  });
+
+  const shelf = layout.fortuneShelf;
+  list.push({
+    id: 'fortune',
+    kind: 'fortune',
+    approach: { x: shelf.maxX + APPROACH_GAP + 0.2, z: (shelf.minZ + shelf.maxZ) / 2 },
+    facing: -Math.PI / 2,
+    pose: 'stand',
+    pick: pickFromAabb(shelf, 1.1),
+  });
+
+  const { maxX, maxZ } = layout.bounds;
+  const board = layout.taskBoard;
+  list.push({
+    id: 'taskboard',
+    kind: 'taskboard',
+    approach: { x: maxX - 0.8, z: (board.minZ + board.maxZ) / 2 },
+    facing: Math.PI / 2,
+    pose: 'stand',
+    pick: { min: [maxX - 0.15, 0.9, board.minZ], max: [maxX + 0.05, 2, board.maxZ] },
+  });
+
+  const vent = layout.ventBoard;
+  list.push({
+    id: 'ventwall',
+    kind: 'ventwall',
+    approach: { x: (vent.minX + vent.maxX) / 2, z: maxZ - 0.85 },
+    facing: 0,
+    pose: 'stand',
+    pick: { min: [vent.minX, 0.9, maxZ - 0.15], max: [vent.maxX, 2, maxZ + 0.05] },
   });
 
   const w = layout.window;

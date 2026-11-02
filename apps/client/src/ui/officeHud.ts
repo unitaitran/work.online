@@ -16,11 +16,13 @@ export interface OfficeHudOptions {
   onQualityChange(mode: QualityMode): void;
   onAudioChange(settings: AudioSettings): void;
   onInteract(): void;
+  onFocusStart(): void;
+  onDrinkCoffee(): void;
 }
 
 /** Gợi ý tương tác: null = ẩn nút. */
 export interface InteractionHint {
-  kind: 'use' | 'stand';
+  kind: 'use' | 'stand' | 'gift';
   label: string;
 }
 
@@ -28,6 +30,10 @@ export interface OfficeHud {
   showToast(text: string): void;
   setStats(stats: EngineStats): void;
   setHint(hint: InteractionHint | null): void;
+  /** Hiện nút "Gõ phím tập trung" (khi đang ngồi ở bàn làm việc). */
+  setFocusAvailable(available: boolean): void;
+  /** Trạng thái ly cà phê: đang pha / đang cầm / không có. */
+  setCoffee(phase: 'idle' | 'brewing' | 'holding'): void;
   dispose(): void;
 }
 
@@ -112,6 +118,43 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     options.onInteract();
   });
 
+  const focusButton = el('button', {
+    className: 'button button-soft focus-button',
+    text: STRINGS.focus.start,
+    attrs: { type: 'button' },
+  });
+  focusButton.hidden = true;
+  focusButton.addEventListener('click', () => {
+    options.onFocusStart();
+  });
+
+  const drinkButton = el('button', {
+    className: 'button button-soft coffee-drink',
+    text: STRINGS.coffee.drink,
+    attrs: { type: 'button' },
+  });
+  drinkButton.addEventListener('click', () => {
+    options.onDrinkCoffee();
+  });
+  const coffeeText = el('span', { className: 'coffee-text' });
+  const coffeeChip = el('div', {
+    className: 'coffee-chip',
+    attrs: { role: 'status' },
+    children: [
+      el('span', { className: 'coffee-cup', attrs: { 'aria-hidden': 'true' } }),
+      coffeeText,
+      drinkButton,
+    ],
+  });
+  coffeeChip.hidden = true;
+
+  const eventsLink = el('a', {
+    className: 'events-link',
+    text: STRINGS.eventsPage.open,
+    attrs: { href: './events.html', target: '_blank', rel: 'noopener' },
+  });
+  eventsLink.hidden = !options.showStats;
+
   const bar = el('div', {
     className: 'office-bar',
     children: [
@@ -136,7 +179,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   const layer = el('div', {
     className: 'office-hud',
-    children: [bar, toast, stats, interact, hint],
+    children: [bar, toast, stats, eventsLink, coffeeChip, focusButton, interact, hint],
   });
   root.append(layer);
 
@@ -168,11 +211,24 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
         ? ''
         : value.kind === 'stand'
           ? STRINGS.interact.standUp
-          : STRINGS.interact.prompt(value.label) + (options.touch ? '' : STRINGS.interact.keyHint);
+          : (value.kind === 'gift'
+              ? STRINGS.coffee.giftPrompt(value.label)
+              : STRINGS.interact.prompt(value.label)) +
+            (options.touch ? '' : STRINGS.interact.keyHint);
       if (text === lastHint) return;
       lastHint = text;
       interact.hidden = text === '';
       interact.textContent = text;
+    },
+    setFocusAvailable(available) {
+      focusButton.hidden = !available;
+    },
+    setCoffee(phase) {
+      coffeeChip.hidden = phase === 'idle';
+      coffeeChip.dataset.phase = phase;
+      coffeeText.textContent =
+        phase === 'brewing' ? STRINGS.coffee.brewing : STRINGS.coffee.holding;
+      drinkButton.hidden = phase !== 'holding';
     },
     dispose() {
       window.clearTimeout(toastTimer);

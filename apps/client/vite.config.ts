@@ -26,6 +26,13 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'es2022',
+      // Hai trang: game (index.html) và trang debug xem nhật ký sự kiện (events.html).
+      rolldownOptions: {
+        input: {
+          main: fileURLToPath(new URL('index.html', import.meta.url)),
+          events: fileURLToPath(new URL('events.html', import.meta.url)),
+        },
+      },
     },
   };
 });

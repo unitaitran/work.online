@@ -171,3 +171,58 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 
 - Phòng thử Phase 1 (`world/roomLayout.ts`, `world/room.ts`) vẫn giữ vì test tìm đường đang dùng, nhưng game không còn dùng phòng này.
 - Màn cảm ứng: nút "Chạm để dùng" đặt bên phải để không đè lên cần gạt; thanh trên cùng được thu gọn ở màn hẹp.
+
+## Phase 2B: các hoạt động (2026-11-02)
+
+### Cấu trúc
+
+- **Mỗi hoạt động là một thư mục riêng** trong `apps/client/src/activities/` (`checkIn`, `focusTyping`, `fortune`, `taskFlip`, `ventWall`, `coffee`). Thư mục gồm logic thuần có test và giao diện riêng. `officeActivities.ts` chỉ nối vật trong văn phòng với hoạt động tương ứng.
+- **Bus sự kiện** (`activities/events.ts`): mọi hoạt động phát `{type, startedAt, durationMs, detail}`. `startedAt` là mili giây từ epoch (UTC); `durationMs` là số nguyên không âm. Kiểu `detail` được khai báo chặt theo từng loại.
+- **8 loại sự kiện**: `checkin`, `focus-typing`, `kpi-fortune`, `task-flip`, `vent`, `coffee-brew`, `coffee-gift`, `coffee-drink`.
+- **Chưa tính XP.** Sự kiện chỉ được ghi lại: trong bộ nhớ, và trong localStorage `dilam.events.v1` (tối đa 300 sự kiện gần nhất). Khi đọc lại, dữ liệu được kiểm tra bằng zod.
+- **Trang debug `events.html`** (trang thứ hai của Vite): bảng sự kiện, lọc theo loại, xoá nhật ký. Trang tự cập nhật khi tab văn phòng phát thêm sự kiện (qua sự kiện `storage`). Ở `?debug` có link "Nhật ký sự kiện".
+- **Nội dung tự viết** nằm trong `apps/client/src/data/`: `kinh-cong-so.ts` (45 dòng), `kpi-fortunes.ts` (60 quẻ), `micro-tasks.ts` (30 việc nhỏ). Đây là _nội dung trò chơi_, nên được tách khỏi `strings.ts` (chỉ chứa nhãn giao diện), theo đúng yêu cầu của prompt 2B.
+- **Mã nhân viên** `NV-XXXXXX` sinh ngẫu nhiên (crypto) và lưu trong `dilam.player.v1`. Mã dùng để chọn quẻ theo người và in trên thẻ. Phase 4 sẽ thay bằng mã do server cấp.
+
+### Vật mới trong văn phòng
+
+- **Cổng vào có máy quẹt thẻ** cạnh cửa trên tường trước. Chỗ xuất hiện chuyển ra ngay trong cửa (-2.5, 7.3).
+- **Kệ ống quẻ KPI** sát tường trái.
+- **Bảng việc** (lật task) trên tường phải.
+- **Tường than thở** (bảng ghim) trên tường trước.
+- Tất cả là mặt phẳng một phía (giống tường) hoặc khối gộp trong mesh tĩnh, nên không tăng draw call.
+
+### Quy tắc ngày và chuỗi chấm công (đổi múi giờ)
+
+- **"Một ngày" là ngày lịch ở múi giờ hiện tại của máy, tại lúc quẹt thẻ.** Ngày được lưu dạng khoá `YYYY-MM-DD` (`dayKey`), không lưu mili giây. Khoảng cách giữa hai ngày tính bằng UTC từ các thành phần năm-tháng-ngày (`daysBetween`), nên không bị ảnh hưởng bởi giờ mùa hè.
+- **Cách lần chấm trước đúng 1 ngày lịch**: chuỗi +1. **Cách từ 2 ngày trở lên**: chuỗi về 1. Tổng số ngày luôn +1 mỗi lần chấm thành công.
+- **Cùng ngày, hoặc ngày lịch hiện tại đứng trước lần chấm trước** (vừa đổi sang múi giờ chậm hơn, ví dụ bay từ Việt Nam sang Mỹ): coi như _đã chấm_, không đổi gì. Vì vậy đổi múi giờ không thể làm mất chuỗi hay chấm hai lần trong cùng một ngày lịch.
+- **Đổi sang múi giờ nhanh hơn có thể sang ngày mới sớm hơn vài giờ.** Đây là chấp nhận được với chấm công chỉ lưu trên máy. Ở Phase 4, server sẽ là nguồn sự thật cho chuỗi ngày (AGENTS.md) và có thể dùng múi giờ cố định của tài khoản.
+- **Kiểm tra**: test vitest (VN, LA, Tokyo, nửa đêm địa phương, ngày đổi giờ mùa hè) và E2E đổi múi giờ thật trong Chrome (LA, Tokyo, Pago Pago UTC−11, Kiritimati UTC+14).
+- **Quẻ KPI dùng cùng khoá ngày**: `hash("kpi|ngày|mã NV") % 60`, nên cả ngày không đổi. Xin lại trong ngày thì hiện lại quẻ cũ và phát sự kiện với `repeat: true`.
+
+### Gõ phím tập trung
+
+- **Chỉ mở được khi đang ngồi ở bàn làm việc** (nút "Gõ phím tập trung"). Chọn 1, 3 hoặc 5 phút.
+- **Trong lúc gõ, mọi phím bị cửa sổ "Kinh công sở" bắt lại** (pha capture), nên WASD hay E không làm nhân vật đứng dậy. Esc hoặc nút "Dừng" để kết thúc sớm. Trên màn cảm ứng thì chạm vào ô gõ.
+- **Chống gian lận cơ bản**: hai lần gõ được tính phải cách nhau ít nhất 120 ms (khoảng 8 phím/giây). Gõ nhanh hơn vẫn có tiếng nhưng không được tính, kèm lời nhắc. Phím giữ lặp (`repeat`) không tính.
+- **Mỗi lần gõ được tính = một dòng kinh công sở mới**; thứ tự các dòng xáo theo hạt giống của phiên.
+- **Hết giờ hoặc dừng thì có màn tổng kết** (thời gian, số lần gõ, số phím được tính, số dòng) và sự kiện `focus-typing`.
+
+### Tường than thở
+
+- **Một dòng, tối đa 120 ký tự.** Dài hơn thì _chặn_ kèm thông báo, không cắt ngầm. Xuống dòng và khoảng trắng thừa được gộp.
+- **Mặc định ẩn danh.** Nếu bỏ chọn thì ghi tên trên thẻ.
+- **Chỉ lưu trên máy** (`dilam.vent.v1`, 50 dòng gần nhất).
+- **Sự kiện `vent` chỉ chứa độ dài và lựa chọn ẩn danh, không chứa nội dung.**
+- Chưa có tường chung và chưa lọc nội dung; lộ trình yêu cầu có bộ lọc trước khi mở tường chung.
+
+### Pha cà phê
+
+- **Chạm máy pha** → chờ 3,5 giây (có âm thanh) → cầm 1 ly (ô trạng thái góc phải, có nút "Uống luôn"). Đang pha hoặc đang cầm ly thì không pha thêm.
+- **Đứng cách NPC dưới 1,6 m** thì nút gợi ý đổi thành "Tặng cà phê cho <tên>". NPC đáp "Cảm ơn nha!" trong bong bóng 4 giây.
+
+### Khác
+
+- **Khi đang mở hộp thoại hoạt động**, cảnh 3D bị khoá điều khiển (không đi, không chạm vật, không nhận phím E). Esc, nút ×, hoặc bấm ra nền mờ để đóng.
+- **Lật task**: mỗi lượt chia 3 lá (việc nhỏ khác nhau), chỉ lật được 1 lá. Đánh dấu "Đã xong!" thì phát `task-flip` với `completed: true`. Đóng khi đã lật mà chưa xong thì phát `completed: false`.

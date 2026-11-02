@@ -1,5 +1,8 @@
 import './style.css';
 import { GAME_NAME } from '@dilam/shared';
+import { ActivityBus } from './activities/events';
+import { OfficeActivities } from './activities/officeActivities';
+import { loadOrCreatePlayerId } from './activities/playerId';
 import { AudioEngine, type SoundName } from './audio/audioEngine';
 import { DEFAULT_APPEARANCE, type Profile } from './avatar/appearance';
 import { randomVietnameseName } from './avatar/names';
@@ -47,6 +50,9 @@ const currentPeriod = (): DayPeriod =>
 
 const store = openLocalStorage();
 const storageNotice = store ? null : STRINGS.storage.blocked;
+/** Bus sự kiện hoạt động (Phase 2B): ghi lại để trang events.html xem và phase sau gửi server. */
+const bus = new ActivityBus(store);
+const playerId = loadOrCreatePlayerId(store);
 
 // Âm thanh dùng chung cho cả trang; chỉ bật sau lần chạm/bấm phím đầu tiên (chính sách autoplay).
 const audio = new AudioEngine(loadAudioSettings(store), OFFICE_FLOOR.name);
@@ -60,7 +66,6 @@ window.addEventListener('keydown', unlockAudio, true);
 
 /** Tiếng động khi dùng từng loại vật. */
 const INTERACT_SOUNDS: Partial<Record<InteractableKind, SoundName>> = {
-  coffee: 'coffee',
   printer: 'printer',
   fridge: 'ting',
   plant: 'ting',
@@ -129,20 +134,24 @@ function start(): void {
   const showOffice = (profile: Profile, notice: string | null): void => {
     teardown?.();
     let hud: OfficeHud | null = null;
+    let activities: OfficeActivities | null = null;
+    const results: Partial<Record<InteractableKind, string>> = STRINGS.interact.results;
     const onEvent = (event: OfficeEvent): void => {
       if (event.type === 'seatTaken') {
         hud?.showToast(STRINGS.interact.seatTaken(event.name));
         return;
       }
+      if (event.type === 'gift') {
+        activities?.giftCoffee(event.npcId, event.name);
+        return;
+      }
+      lastInteraction = event.item.id;
+      if (activities?.handleInteract(event.item)) return;
       const { kind } = event.item;
       const sound = INTERACT_SOUNDS[kind];
       if (sound) audio.play(sound);
-      hud?.showToast(
-        kind === 'window'
-          ? STRINGS.interact.window[currentPeriod()]
-          : STRINGS.interact.results[kind],
-      );
-      lastInteraction = event.item.id;
+      const text = kind === 'window' ? STRINGS.interact.window[currentPeriod()] : results[kind];
+      if (text) hud?.showToast(text);
     };
     const scene = new OfficeScene({
       canvas,
@@ -157,6 +166,10 @@ function start(): void {
       onEvent,
       onSound: (name) => {
         audio.play(name);
+      },
+      canGiftCoffee: () => activities?.canGiftCoffee() ?? false,
+      onSeatChange: (item) => {
+        activities?.onSeatChange(item);
       },
     });
     office = scene;
@@ -185,8 +198,28 @@ function start(): void {
       onInteract: () => {
         scene.triggerHint();
       },
+      onFocusStart: () => {
+        activities?.startFocus();
+      },
+      onDrinkCoffee: () => {
+        activities?.drinkCoffee();
+      },
     });
     officeHud = hud;
+    const officeActivities = new OfficeActivities({
+      root: hudRoot,
+      store,
+      bus,
+      playerId,
+      playerName: profile.name,
+      floorName: OFFICE_FLOOR.name,
+      scene,
+      hud,
+      play: (sound) => {
+        audio.play(sound);
+      },
+    });
+    activities = officeActivities;
 
     // Cảnh ngoài cửa kính đổi theo giờ thật: kiểm tra mỗi phút.
     const periodTimer = window.setInterval(() => {
@@ -205,6 +238,8 @@ function start(): void {
     const officeHudRef = hud;
     teardown = () => {
       window.clearInterval(periodTimer);
+      officeActivities.dispose();
+      activities = null;
       coach?.dispose();
       officeHud = null;
       office = null;
@@ -246,6 +281,8 @@ function start(): void {
         seated: () => office?.getSeatedId() ?? null,
         npcs: () => office?.getNpcStatuses() ?? [],
         audio: () => audio.stats(),
+        events: () => bus.history(),
+        playerId: () => playerId,
         setPeriod: (period: DayPeriod) => {
           office?.setPeriod(period);
         },

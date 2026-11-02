@@ -49,6 +49,8 @@ export class NpcAgent {
   private timeLeft: number;
   private destination: Destination | null = null;
   private seatId: string | null = null;
+  /** Câu nói tạm thời (vd. cảm ơn khi được tặng cà phê) và thời gian còn lại. */
+  private speech: { text: string; seconds: number } | null = null;
 
   constructor(
     readonly spec: NpcSpec,
@@ -79,11 +81,20 @@ export class NpcAgent {
 
   /** Câu trong bong bóng trên đầu. */
   status(): string {
+    if (this.speech) return this.speech.text;
     const s = STRINGS.npc;
     return this.phase === 'walking' ? s.going[this.activity] : s.doing[this.activity];
   }
 
+  say(text: string, seconds: number): void {
+    this.speech = { text, seconds };
+  }
+
   update(dt: number): void {
+    if (this.speech) {
+      this.speech.seconds -= dt;
+      if (this.speech.seconds <= 0) this.speech = null;
+    }
     if (this.phase === 'doing') {
       this.timeLeft -= dt;
       if (this.timeLeft <= 0) this.startNext();

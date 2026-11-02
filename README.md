@@ -14,6 +14,7 @@ npm run dev
 ```
 
 - Client: <http://localhost:5173> (thêm `?debug` để xem fps và số draw call)
+- Nhật ký sự kiện hoạt động (trang debug): <http://localhost:5173/events.html>
 - Server: <http://127.0.0.1:3000/api/health>, WebSocket ở `/ws` (client đi qua proxy của Vite).
 
 Muốn đổi cổng thì chép `.env.example` thành `.env` rồi sửa.
