@@ -67,9 +67,16 @@ function instanced(
   return mesh;
 }
 
+/**
+ * Độ cao tâm màn hình so với mặt bàn. Đầu chibi rất to nên mắt người ngồi ở khoảng
+ * 0,87 m: màn hình phải được nâng lên ngang tầm mắt để nhân vật nhìn thẳng vào.
+ */
+const MONITOR_LIFT = 0.36;
+const MONITOR_STAND = MONITOR_LIFT - 0.19;
+
 /** Bàn làm việc, tâm ở gốc toạ độ; người ngồi phía +Z. */
 function deskGeometry(w: number, d: number, h: number): BufferGeometry {
-  const monitorY = h + 0.06 + 0.19;
+  const monitorY = h + MONITOR_LIFT;
   return mergePieces([
     piece(new BoxGeometry(w, 0.04, d), WOOD, { position: [0, h - 0.02, 0] }),
     piece(new BoxGeometry(0.05, h - 0.04, d - 0.06), WHITE, {
@@ -83,8 +90,12 @@ function deskGeometry(w: number, d: number, h: number): BufferGeometry {
     }),
     // Màn hình (phần vỏ; mặt hiển thị là InstancedMesh riêng).
     piece(new BoxGeometry(0.62, 0.38, 0.04), DARK, { position: [0, monitorY, -d / 2 + 0.15] }),
-    piece(new CylinderGeometry(0.025, 0.05, 0.08, 8), DARK, {
-      position: [0, h + 0.04, -d / 2 + 0.15],
+    // Chân đế cao (kiểu tay đỡ màn hình) và đế tròn.
+    piece(new CylinderGeometry(0.025, 0.03, MONITOR_STAND, 8), DARK, {
+      position: [0, h + MONITOR_STAND / 2, -d / 2 + 0.15],
+    }),
+    piece(new CylinderGeometry(0.09, 0.1, 0.02, 14), DARK, {
+      position: [0, h + 0.01, -d / 2 + 0.15],
     }),
     piece(new BoxGeometry(0.36, 0.015, 0.12), 0x4a4f5c, { position: [0, h + 0.008, d / 2 - 0.17] }),
     piece(new BoxGeometry(0.06, 0.012, 0.09), 0xe6e6ea, {
@@ -103,7 +114,7 @@ function deskGeometry(w: number, d: number, h: number): BufferGeometry {
 /** Màn hình hiển thị (mặt phẳng), cùng toạ độ với deskGeometry. */
 function screenGeometry(d: number, h: number): BufferGeometry {
   const geometry = new PlaneGeometry(0.56, 0.33);
-  geometry.translate(0, h + 0.06 + 0.19, -d / 2 + 0.15 + 0.021);
+  geometry.translate(0, h + MONITOR_LIFT, -d / 2 + 0.15 + 0.021);
   return geometry;
 }
 

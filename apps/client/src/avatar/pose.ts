@@ -88,7 +88,8 @@ export function computePose(pose: PoseName, t: number): PoseState {
       return {
         rootY: -0.03,
         bodyPitch: 0.08,
-        headPitch: 0.18,
+        // Nhìn thẳng vào màn hình ngang tầm mắt (chỉ hơi cúi).
+        headPitch: 0.04,
         headRoll: 0,
         armLeftX: -1.25 + tap * 0.1,
         armRightX: -1.25 - tap * 0.1,
