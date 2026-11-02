@@ -296,6 +296,10 @@ export function attachGameService(
   gateway.setAccess({
     canEnter: (userId, kind) => company.canEnter(userId, kind.slice('company:'.length)),
     capacity: (kind) => company.roomCapacity(kind.slice('company:'.length)),
+    homeRoom: (userId) => {
+      const mine = company.companyOf(userId);
+      return mine ? `company:${mine.id}` : 'office';
+    },
     // Phòng CEO chỉ mở trong phòng công ty, cho đúng chủ công ty đó.
     isCeo: (userId, kind) =>
       kind.startsWith('company:') &&

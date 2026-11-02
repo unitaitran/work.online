@@ -37,7 +37,6 @@ export interface CompanyApi {
   post<T>(path: string, body?: unknown): Promise<CallResult<T>>;
   /** Vào phòng công ty (WebSocket switch_room). */
   enterRoom(companyId: string): void;
-  backToOffice(): void;
   /** Đang ở phòng công ty nào (null nếu ở văn phòng chung). */
   currentCompanyRoom(): string | null;
   /** Vừa nghỉ việc: ra hẳn khỏi văn phòng (về sảnh) để mở công ty hoặc tìm việc khác. */
@@ -378,17 +377,18 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       el('div', {
         className: 'activity-actions',
         children: [
-          inRoom
-            ? button(s.backOffice, () => {
-                api.backToOffice();
-              })
-            : button(
-                s.enterRoom,
-                () => {
-                  api.enterRoom(d.company.id);
-                },
-                true,
-              ),
+          // Đang làm ở công ty này thì chỉ ở phòng công ty, không quay về văn phòng chung.
+          ...(inRoom
+            ? []
+            : [
+                button(
+                  s.enterRoom,
+                  () => {
+                    api.enterRoom(d.company.id);
+                  },
+                  true,
+                ),
+              ]),
           ...(d.isOwner
             ? []
             : [

@@ -364,7 +364,7 @@ function start(): void {
   /** Mở bảng công ty trong một hộp thoại (dùng ở văn phòng và ở màn "Ở nhà"). */
   const mountCompany = (
     modal: Modal,
-    ctl: Pick<CompanyApi, 'enterRoom' | 'backToOffice' | 'currentCompanyRoom' | 'onLeft'>,
+    ctl: Pick<CompanyApi, 'enterRoom' | 'currentCompanyRoom' | 'onLeft'>,
   ): void => {
     track(store, 'company_open');
     modal.body.closest('.modal')?.classList.add('modal-wide');
@@ -463,10 +463,6 @@ function start(): void {
             enterRoom: (companyId) => {
               current.close();
               showOffice(profile, null, `company:${companyId}`);
-            },
-            backToOffice: () => {
-              current.close();
-              showOffice(profile, null, 'office');
             },
             currentCompanyRoom: () => null,
             onLeft: () => {
@@ -947,10 +943,6 @@ function start(): void {
       mountCompany(modal, {
         enterRoom: (companyId) => {
           room.send({ type: 'switch_room', roomId: `company:${companyId}` });
-          modal.close();
-        },
-        backToOffice: () => {
-          room.send({ type: 'switch_room', roomId: 'office' });
           modal.close();
         },
         currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),

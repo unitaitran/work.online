@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import {
   MAX_CLIENT_MESSAGE_BYTES,
+  OFFICE_FLOOR,
   WS_PATH,
   parseClientMessage,
   type ClientMessage,
@@ -48,6 +49,11 @@ export interface RoomAccess {
   capacity(kind: string): number;
   /** Chủ công ty: có thẻ vào phòng CEO trong phòng công ty. */
   isCeo?(userId: string, kind: string): boolean;
+  /**
+   * Phòng của nơi đang làm: "company:<id>" (chủ hoặc thành viên công ty) hoặc "office"
+   * (văn phòng chung Mây Hồng). Người chơi chỉ được vào phòng này.
+   */
+  homeRoom?(userId: string): string;
 }
 
 export interface Gateway extends Presence {
@@ -153,7 +159,11 @@ export function attachWebSocketGateway(
       return;
     }
 
-    const room = rooms.assign(userId);
+    // Vào thẳng phòng của nơi đang làm (cả khi kết nối lại): làm ở công ty nào thì vào công ty đó.
+    const home = access.homeRoom?.(userId) ?? 'office';
+    const room = home.startsWith('company:')
+      ? rooms.assign(userId, home, OFFICE_FLOOR, access.capacity(home))
+      : rooms.assign(userId);
     // Kết nối cũ của cùng tài khoản (tab khác) bị thay ở room.join.
     const session: Session = { userId, room, send };
     sessions.set(userId, session);
@@ -259,6 +269,11 @@ export function attachWebSocketGateway(
           }
           roomId = rooms.ensure(roomId, access.capacity(roomId)).id;
         } else if (roomId === 'office') {
+          // Đang làm ở công ty riêng thì không vào văn phòng chung Mây Hồng.
+          if ((access.homeRoom?.(userId) ?? 'office') !== 'office') {
+            session.send({ type: 'switch_failed', reason: 'forbidden' });
+            return;
+          }
           roomId = rooms.ensure('office', ctx.config.roomCapacity).id;
         } else if (rooms.get(roomId)?.kind !== 'office') {
           session.send({ type: 'switch_failed', reason: 'forbidden' });

@@ -756,7 +756,6 @@ export const STRINGS = {
     leaveConfirm: 'Bấm lần nữa để rời công ty',
     rejoin: 'Quay lại Văn phòng Mây Hồng',
     enterRoom: 'Vào văn phòng công ty',
-    backOffice: 'Về văn phòng chung',
     directory: 'Danh bạ công ty',
     directoryEmpty: 'Chưa có công ty nào. Ai lên Senior sẽ mở công ty đầu tiên!',
     apply: 'Nộp đơn',

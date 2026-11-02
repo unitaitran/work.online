@@ -346,3 +346,7 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Vách đặc giữa các phòng** tự mờ khi nhân vật đứng trong phòng phía nam hoặc camera ở sau vách, để không che tầm nhìn. "Xuyên thấu" làm mờ cả tường bao (độ đục 0,25).
 - **Đèn thật** (2 đèn rọi, đèn cây, đèn phòng sếp, đèn đỏ hắt tượng gấu) chỉ bật ở mức đồ họa vừa/cao; mức thấp dùng vệt sáng giả (mặt phẳng cộng màu) và bóng đèn tự sáng.
 - Bảng "lật task" và "tường than thở" chuyển lên tường tây cạnh dãy ngồi (2 bảng dán note). Ống quẻ KPI ở góc tây bắc.
+
+## Chỉ vào phòng nơi đang làm (2026-11-02)
+- Server quyết định phòng khi kết nối (kể cả kết nối lại): người có `employer` là công ty (chủ hoặc nhân viên) vào thẳng `company:<id>`; người làm ở Mây Hồng/NPC vào văn phòng chung.
+- Người thuộc một công ty gửi `switch_room` sang `office` bị từ chối (`forbidden`). Nút "Về văn phòng chung" trong bảng công ty đã bỏ; muốn về văn phòng chung thì phải nghỉ việc.

@@ -298,14 +298,12 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
         .statusCode,
     ).toBe(403);
     await post(app, a, '/api/company/applications', { applicationId, approve: true });
+    // Đã là người của công ty: kết nối vào thẳng phòng công ty.
     const botA = await Bot.connect(host, a.token);
-    await botA.waitFor('welcome');
-    botA.send({ type: 'switch_room', roomId: `company:${companyId}` });
-    const roomA = await botA.waitFor('welcome', (m) => m.room.startsWith('company:'));
+    const roomA = await botA.waitFor('welcome');
+    expect(roomA.room.startsWith('company:')).toBe(true);
     const botB = await Bot.connect(host, b.token);
-    await botB.waitFor('welcome');
-    botB.send({ type: 'switch_room', roomId: `company:${companyId}` });
-    const roomB = await botB.waitFor('welcome', (m) => m.room.startsWith('company:'));
+    const roomB = await botB.waitFor('welcome');
     expect(roomB.room).toBe(roomA.room);
     expect(roomB.players.map((p) => p.name)).toEqual(['Chủ An']);
     const feed =
@@ -435,10 +433,21 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     botB.ws.terminate();
     await post(app, a, '/api/company/applications', { applicationId, approve: true });
     const again = await Bot.connect(host, b.token);
-    await again.waitFor('welcome');
-    again.send({ type: 'switch_room', roomId: `company:${companyId}` });
-    const w = await again.waitFor('welcome', (m) => m.room.startsWith('company:'));
+    const w = await again.waitFor('welcome');
+    expect(w.room.startsWith('company:')).toBe(true);
     expect(w.you.x).toBeCloseTo(OFFICE_FLOOR.spawn.x);
     expect(app.game.engine.state(b.userId).employer).toBe(`company:${companyId}`);
+  });
+
+  it('đang làm công ty nào thì kết nối vào thẳng phòng công ty đó, không vào được văn phòng chung', async () => {
+    const { host, a, b, companyId } = await setup();
+    const botA = await Bot.connect(host, a.token);
+    const first = await botA.waitFor('welcome');
+    expect(first.room.startsWith(`company:${companyId}`)).toBe(true);
+    botA.send({ type: 'switch_room', roomId: 'office' });
+    expect((await botA.waitFor('switch_failed')).reason).toBe('forbidden');
+    // Người chưa vào công ty nào vẫn ở văn phòng chung.
+    const botB = await Bot.connect(host, b.token);
+    expect((await botB.waitFor('welcome')).room.startsWith('office')).toBe(true);
   });
 });
