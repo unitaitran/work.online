@@ -226,3 +226,13 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 
 - **Khi đang mở hộp thoại hoạt động**, cảnh 3D bị khoá điều khiển (không đi, không chạm vật, không nhận phím E). Esc, nút ×, hoặc bấm ra nền mờ để đóng.
 - **Lật task**: mỗi lượt chia 3 lá (việc nhỏ khác nhau), chỉ lật được 1 lá. Đánh dấu "Đã xong!" thì phát `task-flip` với `completed: true`. Đóng khi đã lật mà chưa xong thì phát `completed: false`.
+
+## Phase 3: cấp độ, chức danh, nhiệm vụ
+
+- **Cấp 1–500 tự tăng theo XP; 10 chức danh qua kỳ đánh giá 7 ngày + phỏng vấn.** Hai hệ thống tách nhau. Bảng cấp cũ (10 cấp) trong GAME_DESIGN được thay.
+- **Mở công ty cần cấp 150 và không còn thuộc công ty nào.** Đường cong tính để chơi đều 190 XP/ngày trong 5 ngày thì vừa 950 XP (cấp 150); tới cấp 500 mất khoảng 150 ngày.
+- **Việc sếp giao**: ngẫu nhiên theo hạt giống (ngày, mã người chơi, thứ tự) để server tái tạo được; tối đa 3 mỗi ngày; không giao việc đã không làm được trong ngày (quẻ đã xin, đã chấm công).
+- **Ngày lịch lùi lại (đổi múi giờ)** không mở "rổ" XP ngày mới, tránh nhận giới hạn hai lần.
+- **Phase 3 tính XP ở client** (`ProgressService`, lưu localStorage, mã lưu `DLO.<v>.<base64url>.<crc32>` để chuyển máy). Checksum chỉ chống chép sai, không phải bảo mật; Phase 4 chuyển cùng các hàm thuần lên server và không tin client.
+- **Công ty**: 1 công ty = 1 tầng = 1 server, tối đa 30 mỗi toà (Phase 4/6). Phase này chỉ có hằng số và `canOpenCompany`/`buildingHasRoom`; rời và mở công ty làm ở Phase 6.
+- **Tua ngày chỉ có ở `npm run dev`** (`clock.ts`, bảng dev); bản build không có.
