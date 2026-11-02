@@ -42,6 +42,7 @@ import { RemotePlayers } from './remotePlayers';
 import { RoomPlants } from './roomPlants';
 import { buildLanterns } from './lanterns';
 import { CompanySign, type SignInfo } from './companySign';
+import { WallClock } from './wallClock';
 import type { BufferGeometry, Group } from 'three';
 import type { DayMood } from '@dilam/shared';
 import { Companions } from '../avatar/companions';
@@ -226,6 +227,10 @@ export class OfficeScene implements SceneController {
     this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
     this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
     this.plants = new RoomPlants(this.material);
+    // Đồng hồ lớn trên tường trái (dễ thấy từ góc camera mặc định), giữa kệ quẻ và khu sofa.
+    this.clock.group.position.set(layout.bounds.minX + 0.04, 1.85, 3.2);
+    this.clock.group.rotation.y = Math.PI / 2;
+    this.scene.add(this.clock.group);
     this.scene.add(this.plants.group);
 
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
@@ -259,6 +264,7 @@ export class OfficeScene implements SceneController {
 
   private moodGroup: Group | null = null;
   private sign: CompanySign | null = null;
+  private readonly clock = new WallClock();
 
   /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
   setCompanySign(info: SignInfo | null): void {
@@ -480,6 +486,7 @@ export class OfficeScene implements SceneController {
 
     this.office.update(frameSeconds);
     this.dust.update(frameSeconds);
+    this.clock.update(Date.now());
     this.updateBubbles(frameSeconds);
     this.remotes.update(frameSeconds, { x, z }, (px, py, pz) => this.bubbleScreen(px, py, pz));
     this.companions?.update(frameSeconds, { x, z, facing: this.facing, pose: this.avatar.pose });
@@ -512,6 +519,7 @@ export class OfficeScene implements SceneController {
     this.remotes.dispose();
     this.plants.dispose();
     this.sign?.dispose();
+    this.clock.dispose();
     this.companions?.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();
