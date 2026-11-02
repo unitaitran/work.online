@@ -39,12 +39,20 @@ export interface Session {
   send(message: ServerMessage): void;
 }
 
+export type SessionListener = (session: Session) => void;
+
 export interface Gateway extends Presence {
   rooms: RoomManager;
   /** Đăng ký xử lý thêm; trả true nếu đã xử lý tin. */
   addHandler(handler: MessageHandler): void;
   /** Phiên đang mở của một người (để đẩy tin từ REST/sự kiện). */
   sessionOf(userId: string): Session | null;
+  /** Mọi phiên đang mở. */
+  sessions(): Session[];
+  /** Gọi mỗi khi một người vừa vào phòng. */
+  onSession(listener: SessionListener): void;
+  /** Gọi khi một phiên đóng. */
+  onSessionEnd(listener: SessionListener): void;
 }
 
 /**
@@ -62,6 +70,8 @@ export function attachWebSocketGateway(
   if (!options.manualTick) rooms.start();
   const handlers: MessageHandler[] = [];
   const sessions = new Map<string, Session>();
+  const joinListeners: SessionListener[] = [];
+  const endListeners: SessionListener[] = [];
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -110,6 +120,7 @@ export function attachWebSocketGateway(
     const session: Session = { userId, room, send };
     sessions.set(userId, session);
     room.join({ userId, profile: publicProfile(ctx.repos, userId) }, conn);
+    for (const listener of joinListeners) listener(session);
 
     const bucket = createTokenBucket(rateLimit, now);
     let warnedRateLimit = false;
@@ -163,7 +174,10 @@ export function attachWebSocketGateway(
 
     ws.on('close', () => {
       clearInterval(heartbeat);
-      if (sessions.get(userId) === session) sessions.delete(userId);
+      if (sessions.get(userId) === session) {
+        sessions.delete(userId);
+        for (const listener of endListeners) listener(session);
+      }
       session.room.disconnect(userId, conn);
     });
 
@@ -218,6 +232,13 @@ export function attachWebSocketGateway(
       handlers.push(handler);
     },
     sessionOf: (userId) => sessions.get(userId) ?? null,
+    sessions: () => [...sessions.values()],
+    onSession(listener) {
+      joinListeners.push(listener);
+    },
+    onSessionEnd(listener) {
+      endListeners.push(listener);
+    },
   };
 }
 

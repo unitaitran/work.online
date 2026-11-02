@@ -112,3 +112,22 @@ Ngồi ở bàn làm việc trong 10 phút với nhạc nền, tiếng điều h
 **Không rò bộ nhớ**: heap không tăng (12,12 → 12,07 MB), số nút DOM đứng yên, số giọng đang phát cao nhất là 16 rồi tự giải phóng. Số geometry và texture trên GPU giữ nguyên (37/8).
 
 Khi tab bị ẩn hoặc tắt âm thanh, `AudioContext` chuyển sang `suspended` và bộ lên lịch nhạc dừng. Kịch bản kiểm thử phải giả lập sự kiện `visibilitychange`, vì Chrome headless không đổi `document.hidden` khi chuyển tab.
+
+## Phase 4B: tải thử 100 bot trong một phòng
+
+Chạy: `npm run loadtest -w @dilam/server -- 100 20` (tạo 100 tài khoản vào SQLite tạm, chạy server thật ở tiến trình con, 100 bot WebSocket đi lại 10 lần/giây, mỗi giây ping một lần, 20% cơ hội vẫy tay).
+
+Máy đo: container Linux dùng chung (Node 22), server và bot chạy cùng máy.
+
+| Chỉ số                     | Kết quả                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| Số bot / phòng             | 100 / 1 phòng (`ROOM_CAPACITY=100`)                                             |
+| Băng thông xuống mỗi người | 11,6 KB/s (27,6 tin/giây, gồm 5 lần `states`/giây và vẫy tay của 99 người khác) |
+| Băng thông lên mỗi người   | 1,0 KB/s                                                                        |
+| Độ trễ ping/pong           | p50 1 ms, p95 10 ms, tối đa 24 ms                                               |
+| CPU server                 | 23,7% một nhân                                                                  |
+| Bộ nhớ server (RSS)        | 115 MB lúc rảnh → 155 MB khi có 100 người                                       |
+
+Ghi chú: phòng chung mặc định 40 người nên tải thật mỗi phòng nhẹ hơn khoảng 6 lần (số cặp người giảm theo bình phương). Phần `states` chỉ gửi người trong 14 m và chỉ khi đổi, nên người đứng yên không tốn băng thông.
+
+**Client**: người chơi khác vẽ chi tiết tối đa 6/12/20 người gần nhất (chất lượng thấp/vừa/cao); xa hơn vẽ khối trụ cùng màu áo bằng **một InstancedMesh** (1 draw call cho mọi người ở xa).

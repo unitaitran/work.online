@@ -1,6 +1,7 @@
 // Nối các hoạt động với văn phòng: vật nào mở hoạt động nào, phát sự kiện qua bus.
 // Mỗi hoạt động vẫn là một module riêng (logic thuần + giao diện) trong thư mục của nó.
-import type { ApplyResult, CheckInState } from '@dilam/shared';
+import type { Action, CheckInState } from '@dilam/shared';
+import type { ActionReply } from '../net/roomClient';
 import type { SoundName } from '../audio/audioEngine';
 import { clock } from '../clock';
 import type { KeyValueStore } from '../storage';
@@ -43,11 +44,11 @@ export interface ActivityHud {
   setCoffee(phase: CoffeeState['phase']): void;
 }
 
-/** Phần tiến độ hoạt động cần đọc (Phase 3: client; Phase 4: server trả về). */
+/** Tiến độ (Phase 4C: server tính). Hoạt động gửi hành động và đọc trạng thái server trả về. */
 export interface ActivityProgress {
   checkIn(): CheckInState;
-  /** Kết quả áp sự kiện gần nhất (đọc ngay sau khi phát sự kiện). */
-  lastResult(): ApplyResult | null;
+  /** Gửi một hành động lên server. */
+  act(action: Action): Promise<ActionReply>;
 }
 
 export interface OfficeActivitiesOptions {
@@ -119,8 +120,11 @@ export class OfficeActivities {
 
   onSeatChange(item: Interactable | null): void {
     if (this.meeting && item?.id !== this.meeting.seatId) this.endMeeting();
-    if (item?.kind === 'meeting' && !this.meeting)
+    if (item?.kind === 'meeting' && !this.meeting) {
       this.meeting = { seatId: item.id, since: clock.now() };
+      // Server tự đo thời gian họp từ lúc này.
+      void this.o.progress.act({ kind: 'meeting_start', seatId: item.id });
+    }
     this.seatedAtDesk = item?.kind === 'desk';
     this.o.hud.setFocusAvailable(this.seatedAtDesk && !this.focus);
     if (!this.seatedAtDesk) this.focus?.stop();
@@ -156,6 +160,8 @@ export class OfficeActivities {
     const modal = this.openPanel(STRINGS.focus.chooseTitle);
     mountFocusChooser(modal.body, (minutes) => {
       modal.close();
+      // Server bắt đầu đo giờ phiên tập trung (client chỉ báo bắt đầu và kết thúc).
+      void this.o.progress.act({ kind: 'focus_start', minutes: minutes });
       this.o.scene.setInputLocked(true);
       this.o.scene.setManualTyping(true);
       this.o.hud.setFocusAvailable(false);
@@ -220,8 +226,8 @@ export class OfficeActivities {
       floorName: this.o.floorName,
       state: this.o.progress.checkIn(),
       now: () => clock.date(),
-      onSwipe: () => {
-        // Tiến độ (luật trong @dilam/shared) tự tính chuỗi; sự kiện chỉ báo "vừa quẹt thẻ".
+      onSwipe: async () => {
+        // Server tự tính chuỗi theo ngày của nó; sự kiện chỉ báo "vừa quẹt thẻ".
         const day = dayKey(clock.date());
         const before = this.o.progress.checkIn();
         this.o.bus.emit(
@@ -231,10 +237,11 @@ export class OfficeActivities {
             total: before.total,
           }),
         );
-        const status = this.o.progress.lastResult()?.checkIn ?? 'already';
+        const reply = await this.o.progress.act({ kind: 'checkin' });
+        if (!reply.ok) return null;
+        const status = reply.outcome?.checkIn ?? 'already';
         if (status === 'checked') this.o.play('ting');
-        const result = { status, state: this.o.progress.checkIn(), day };
-        return result;
+        return { status, state: reply.state.checkIn, day: reply.today };
       },
     });
   }
@@ -306,6 +313,7 @@ export class OfficeActivities {
     if (this.coffee.phase === 'brewing') return;
     const now = clock.now();
     this.coffee = startBrew(this.coffee, now, BREW_MS);
+    void this.o.progress.act({ kind: 'coffee_brew' });
     this.o.hud.setCoffee('brewing');
     this.o.hud.showToast(STRINGS.coffee.brewing);
     this.o.play('coffee');

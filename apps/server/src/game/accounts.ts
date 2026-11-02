@@ -13,6 +13,10 @@ export interface AccountService {
   authenticate(token: string): UserRecord | null;
   /** Đăng nhập lại bằng mã khôi phục: cấp token mới, token cũ mất hiệu lực. */
   recover(recoveryCode: string): { userId: string; token: string } | null;
+  /** Cấp mã khôi phục mới (mã cũ hết hiệu lực). */
+  rotateRecovery(userId: string): string;
+  /** Xoá tài khoản và toàn bộ dữ liệu (khoá ngoại ON DELETE CASCADE). */
+  remove(userId: string): void;
 }
 
 export function createAccountService(
@@ -65,6 +69,16 @@ export function createAccountService(
       repos.users.setToken(user.id, hashSecret(token), at + ttl);
       repos.users.touch(user.id, at, at + ttl);
       return { userId: user.id, token };
+    },
+
+    rotateRecovery(userId) {
+      const code = newRecoveryCode();
+      repos.users.setRecovery(userId, hashSecret(code));
+      return code;
+    },
+
+    remove(userId) {
+      repos.users.delete(userId);
     },
   };
 }

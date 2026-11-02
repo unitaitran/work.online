@@ -274,3 +274,45 @@ describe('lưu trữ', () => {
     }
   });
 });
+
+describe('mã khôi phục mới, xoá tài khoản', () => {
+  it('tạo mã mới: mã cũ hết hiệu lực, mã mới dùng được', async () => {
+    const app = makeApp();
+    const acc = await createAccount(app);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/me/recovery',
+      headers: auth(acc.token),
+    });
+    const { recoveryCode } = res.json<{ recoveryCode: string }>();
+    expect(recoveryCode).not.toBe(acc.recoveryCode);
+    const old = await app.inject({
+      method: 'POST',
+      url: '/api/accounts/recover',
+      payload: { recoveryCode: acc.recoveryCode },
+    });
+    expect(old.statusCode).toBe(401);
+    const fresh = await app.inject({
+      method: 'POST',
+      url: '/api/accounts/recover',
+      payload: { recoveryCode },
+    });
+    expect(fresh.statusCode).toBe(200);
+  });
+
+  it('xoá tài khoản: 204, token và mã khôi phục không dùng được nữa', async () => {
+    const app = makeApp();
+    const acc = await createAccount(app);
+    const del = await app.inject({ method: 'DELETE', url: '/api/me', headers: auth(acc.token) });
+    expect(del.statusCode).toBe(204);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/me', headers: auth(acc.token) })).statusCode,
+    ).toBe(401);
+    const rec = await app.inject({
+      method: 'POST',
+      url: '/api/accounts/recover',
+      payload: { recoveryCode: acc.recoveryCode },
+    });
+    expect(rec.statusCode).toBe(401);
+  });
+});

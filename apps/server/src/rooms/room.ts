@@ -229,6 +229,12 @@ export class Room {
     this.broadcast(message, null);
   }
 
+  /** Vị trí hiện tại theo server (null nếu không ở phòng). */
+  positionOf(userId: string): { x: number; z: number } | null {
+    const member = this.members.get(userId);
+    return member ? { x: member.x, z: member.z } : null;
+  }
+
   userIds(): string[] {
     return [...this.members.keys()];
   }

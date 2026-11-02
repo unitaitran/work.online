@@ -252,3 +252,21 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Nhập mã lưu cục bộ** một lần, giới hạn XP ≤ 400/ngày tính từ `createdAt` của mã và cấp ≤ 150; chỉ khi tài khoản chưa chơi trên server (≤ 50 XP).
 - **Tên người chơi** qua bộ lọc từ tục, số điện thoại, đường dẫn, email (không chặn thương hiệu ở tên người). Bộ lọc nằm ở `packages/shared/src/filter.ts`, dùng chung cho tường than thở và tên công ty.
 - **Log không ghi IP, header hay query** (token WebSocket nằm ở query).
+
+## Phase 4B: phòng và đồng bộ
+
+- **Mã phiên `sid`** (số nhỏ trong phòng) thay id người chơi trong gói `states` để gói tin gọn; mã nhân viên công khai `NV-XXXXXX` (băm từ id) dùng để ẩn/chặn lâu dài.
+- **Vùng quan tâm 14 m**: văn phòng 26 × 18 m nên đa số thấy nhau; phòng lớn hơn (công ty Phase 6) hưởng lợi nhiều hơn.
+- **Ẩn/chặn người chơi chỉ ở phía mình** (lưu localStorage), không báo server, vì chỉ có biểu cảm và câu nhanh có sẵn (không có chat tự do).
+- **Kéo về khi sai vị trí** thay vì ngắt kết nối: giật mạng không bị phạt nặng.
+- **Phòng trống thì xoá**, phòng mới đánh số tiếp (`office-3`...), không tái dùng số.
+
+## Phase 4C: XP do server tính
+
+- **Ngày trong game đổi lúc 4 giờ sáng** theo múi giờ đã lưu của người chơi (chấm công, giới hạn XP ngày, việc sếp giao). Người chơi khuya không bị cắt ngang lúc nửa đêm; đây cũng là mốc "làm mới nhiệm vụ ngày lúc 4 giờ" của Phase 5A.
+- **Khoá chống gửi trùng** lưu ở bảng `processed_actions` (giữ 2 ngày) nên khởi động lại server vẫn chống trùng được.
+- **Trạng thái đang diễn ra** (phiên tập trung, họp, ly cà phê đang pha) chỉ giữ trong bộ nhớ server: khởi động lại server giữa chừng thì phiên đó không được tính (chấp nhận được, phiên ngắn).
+- **Kiểm tra khoảng cách** dùng vị trí server đang giữ (đã qua kiểm tra va chạm), ≤ 2,5 m tới chỗ đứng của vật.
+- **Tặng cà phê cho NPC**: NPC chạy ở client nên server không kiểm tra NPC đứng đâu, chỉ kiểm tra đã pha xong một ly.
+- **Mã lưu cục bộ** (Phase 3) tự nhập lên server ở lần đăng nhập đầu tiên rồi đánh dấu đã nhập; tab "Lưu trữ" thay bằng tab "Tài khoản" (mã khôi phục mới, vào tài khoản khác, xoá tài khoản).
+- **Công cụ dev chuyển lên server** (`--dev`): tua ngày và cộng XP chỉ đổi dữ liệu trên server cho đúng luồng thật.

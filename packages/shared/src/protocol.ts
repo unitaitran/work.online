@@ -1,5 +1,6 @@
 // Gói tin WebSocket client <-> server (xem docs/PROTOCOL.md). Mọi tin vào server qua zod.
 import { z } from 'zod';
+import { clientActionSchema, type ActionServerMessage } from './actions';
 import type { Appearance } from './character';
 import type { Branch } from './levels';
 
@@ -127,6 +128,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   clientActiveSchema,
   clientLeaveSchema,
   clientProfileChangedSchema,
+  clientActionSchema,
 ]);
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
@@ -157,7 +159,8 @@ export type ServerMessage =
   | { type: 'idle_check'; deadline: number }
   | { type: 'kicked'; reason: KickReason }
   | { type: 'pong'; t: number; serverTime: number }
-  | { type: 'error'; code: ServerErrorCode };
+  | { type: 'error'; code: ServerErrorCode }
+  | ActionServerMessage;
 
 // ---------------------------------------------------------------------------
 // Đọc tin từ chuỗi JSON

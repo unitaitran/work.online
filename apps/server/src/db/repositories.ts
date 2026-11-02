@@ -27,6 +27,7 @@ export interface UserRepo {
   setToken(id: string, tokenHash: string, expiresAt: number): void;
   touch(id: string, now: number, tokenExpiresAt: number): void;
   setTimeZone(id: string, timeZone: string): void;
+  setRecovery(id: string, recoveryHash: string): void;
   delete(id: string): void;
   count(): number;
 }
@@ -63,11 +64,18 @@ export interface ActivityLogRepo {
   recent(userId: string, limit: number): ActivityLogEntry[];
 }
 
+export interface ActionRepo {
+  /** Ghi khoá hành động; false nếu đã có (gửi trùng). */
+  claim(userId: string, actionId: string, at: number): boolean;
+  pruneBefore(at: number): void;
+}
+
 export interface Repositories {
   users: UserRepo;
   characters: CharacterRepo;
   progress: ProgressRepo;
   activity: ActivityLogRepo;
+  actions: ActionRepo;
   /** Chạy nhiều thao tác trong một transaction. */
   transaction<T>(fn: () => T): T;
 }
@@ -111,6 +119,7 @@ export function createSqliteRepositories(db: Db): Repositories {
     userSetToken: db.prepare('UPDATE users SET token_hash = ?, token_expires_at = ? WHERE id = ?'),
     userTouch: db.prepare('UPDATE users SET last_seen_at = ?, token_expires_at = ? WHERE id = ?'),
     userSetTz: db.prepare('UPDATE users SET time_zone = ? WHERE id = ?'),
+    userSetRecovery: db.prepare('UPDATE users SET recovery_hash = ? WHERE id = ?'),
     userDelete: db.prepare('DELETE FROM users WHERE id = ?'),
     userCount: db.prepare('SELECT COUNT(*) AS n FROM users'),
     charGet: db.prepare('SELECT name, appearance FROM characters WHERE user_id = ?'),
@@ -131,6 +140,10 @@ export function createSqliteRepositories(db: Db): Repositories {
     logAdd: db.prepare(
       'INSERT INTO activity_log (user_id, at, kind, xp, coins, detail) VALUES (?, ?, ?, ?, ?, ?)',
     ),
+    actionClaim: db.prepare(
+      'INSERT OR IGNORE INTO processed_actions (user_id, action_id, at) VALUES (?, ?, ?)',
+    ),
+    actionPrune: db.prepare('DELETE FROM processed_actions WHERE at < ?'),
     logRecent: db.prepare(
       'SELECT user_id, at, kind, xp, coins, detail FROM activity_log WHERE user_id = ? ORDER BY id DESC LIMIT ?',
     ),
@@ -151,6 +164,9 @@ export function createSqliteRepositories(db: Db): Repositories {
     },
     setTimeZone(id, timeZone) {
       q.userSetTz.run(timeZone, id);
+    },
+    setRecovery(id, recoveryHash) {
+      q.userSetRecovery.run(recoveryHash, id);
     },
     delete(id) {
       q.userDelete.run(id);
@@ -238,11 +254,19 @@ export function createSqliteRepositories(db: Db): Repositories {
     },
   };
 
+  const actions: ActionRepo = {
+    claim: (userId, actionId, at) => q.actionClaim.run(userId, actionId, at).changes === 1,
+    pruneBefore(at) {
+      q.actionPrune.run(at);
+    },
+  };
+
   return {
     users,
     characters,
     progress,
     activity,
+    actions,
     transaction: (fn) => db.transaction(fn)(),
   };
 }

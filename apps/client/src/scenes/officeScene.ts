@@ -38,6 +38,8 @@ import { NpcAgent, type NpcSpec } from '../npc/npcAgent';
 import { seededRng } from '../npc/schedule';
 import { STRINGS } from '../strings';
 import { BubbleLayer } from '../ui/bubbles';
+import { RemotePlayers } from './remotePlayers';
+import type { PoseName } from '../avatar/pose';
 import type { InteractionHint } from '../ui/officeHud';
 import { moveWithCollisions, type Aabb, type Vec2 } from '../world/collision';
 import { DustMotes } from '../world/dust';
@@ -112,6 +114,8 @@ export class OfficeScene implements SceneController {
   private readonly pickBoxes: { item: Interactable; box: Box3 }[];
   private readonly seats = new SeatRegistry();
   private readonly npcs: NpcAgent[];
+  /** Người chơi khác trong phòng (Phase 4B). */
+  readonly remotes: RemotePlayers;
   private readonly canvas: HTMLElement;
   private readonly options: OfficeSceneOptions;
 
@@ -205,6 +209,8 @@ export class OfficeScene implements SceneController {
       return npc;
     });
 
+    this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
+
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
     this.joystick = new VirtualJoystick(options.hudLayer, STRINGS.office.joystick);
     this.pointer = new PointerControls(options.canvas, {
@@ -282,6 +288,19 @@ export class OfficeScene implements SceneController {
 
   getPlayerPosition(): Vec2 {
     return { ...this.position };
+  }
+
+  /** Vị trí, hướng, tư thế hiện tại để gửi lên server. */
+  getPlayerState(): { x: number; z: number; facing: number; pose: PoseName } {
+    return { x: this.position.x, z: this.position.z, facing: this.facing, pose: this.avatar.pose };
+  }
+
+  /** Server báo vị trí không hợp lệ: kéo nhân vật về chỗ server chấp nhận. */
+  correctPosition(x: number, z: number): void {
+    if (this.seated) this.standUp();
+    this.cancelPath();
+    this.position = { x, z };
+    this.previous = { x, z };
   }
 
   getOrbit(): OrbitState {
@@ -376,6 +395,7 @@ export class OfficeScene implements SceneController {
     this.office.update(frameSeconds);
     this.dust.update(frameSeconds);
     this.updateBubbles();
+    this.remotes.update(frameSeconds, { x, z }, (px, py, pz) => this.bubbleScreen(px, py, pz));
     this.updateHint();
   }
 
@@ -385,6 +405,7 @@ export class OfficeScene implements SceneController {
     this.lighting.applyQuality(preset);
     this.avatar.setShadows(preset.shadows);
     for (const npc of this.npcs) npc.avatar.setShadows(preset.shadows);
+    this.remotes.setQuality(preset.detailedAvatars, preset.shadows);
     this.blobAllowed = !preset.shadows;
     this.dust.setCount(preset.particles);
   }
@@ -400,6 +421,7 @@ export class OfficeScene implements SceneController {
     this.keyboard.dispose();
     this.joystick.dispose();
     this.pointer.dispose();
+    this.remotes.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();
     this.avatar.dispose();
@@ -623,22 +645,26 @@ export class OfficeScene implements SceneController {
     );
   }
 
+  /** Điểm 3D -> toạ độ màn hình cho bong bóng; null nếu quá xa hoặc ngoài khung nhìn. */
+  private bubbleScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    const far =
+      Math.hypot(x - this.camera.position.x, z - this.camera.position.z) > BUBBLE_MAX_DISTANCE;
+    const screen = far ? null : this.projectPoint(x, y, z);
+    const rect = this.canvas.getBoundingClientRect();
+    const visible =
+      screen !== null &&
+      screen.x > rect.left - 40 &&
+      screen.x < rect.right + 40 &&
+      // Không cho bong bóng chui vào vùng thanh trên cùng của HUD.
+      screen.y > rect.top + BUBBLE_TOP_MARGIN &&
+      screen.y < rect.bottom + 40;
+    return visible ? screen : null;
+  }
+
   private updateBubbles(): void {
     for (const npc of this.npcs) {
       const p = npc.getPosition();
-      const far =
-        Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) >
-        BUBBLE_MAX_DISTANCE;
-      const screen = far ? null : this.projectPoint(p.x, BUBBLE_HEIGHT, p.z);
-      const rect = this.canvas.getBoundingClientRect();
-      const visible =
-        screen !== null &&
-        screen.x > rect.left - 40 &&
-        screen.x < rect.right + 40 &&
-        // Không cho bong bóng chui vào vùng thanh trên cùng của HUD.
-        screen.y > rect.top + BUBBLE_TOP_MARGIN &&
-        screen.y < rect.bottom + 40;
-      this.bubbles.update(npc.spec.id, visible ? screen : null, npc.status());
+      this.bubbles.update(npc.spec.id, this.bubbleScreen(p.x, BUBBLE_HEIGHT, p.z), npc.status());
     }
   }
 }

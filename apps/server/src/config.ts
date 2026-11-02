@@ -25,6 +25,8 @@ const envSchema = z.object({
   TRUST_PROXY: boolish.default(false),
   /** Nguồn được phép gọi API (CORS), phân tách bằng dấu phẩy. Bỏ trống = chỉ cùng nguồn. */
   CORS_ORIGINS: z.string().optional(),
+  /** Bật API dev (tua ngày, cộng XP). CHỈ dùng khi phát triển. */
+  DEV_TOOLS: boolish.default(false),
 });
 
 export interface ServerConfig {
@@ -38,6 +40,7 @@ export interface ServerConfig {
   adminKey: string | null;
   trustProxy: boolean;
   corsOrigins: string[];
+  devTools: boolean;
 }
 
 /** Đọc cấu hình từ biến môi trường. Ném lỗi rõ ràng nếu giá trị sai. */
@@ -63,6 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
+    devTools: d.DEV_TOOLS,
   };
 }
 

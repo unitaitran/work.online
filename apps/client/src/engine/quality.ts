@@ -11,12 +11,26 @@ export interface QualityPreset {
   shadowMapSize: number;
   /** Số hạt bụi lơ lửng trong phòng (hiệu ứng trang trí). */
   particles: number;
+  /** Số người chơi khác vẽ chi tiết (gần nhất); xa hơn vẽ khối đơn giản. */
+  detailedAvatars: number;
 }
 
 export const QUALITY_PRESETS: Readonly<Record<QualityLevel, QualityPreset>> = {
-  low: { pixelRatioCap: 1, shadows: false, shadowMapSize: 512, particles: 0 },
-  medium: { pixelRatioCap: 1.5, shadows: true, shadowMapSize: 1024, particles: 40 },
-  high: { pixelRatioCap: 2, shadows: true, shadowMapSize: 2048, particles: 120 },
+  low: { pixelRatioCap: 1, shadows: false, shadowMapSize: 512, particles: 0, detailedAvatars: 6 },
+  medium: {
+    pixelRatioCap: 1.5,
+    shadows: true,
+    shadowMapSize: 1024,
+    particles: 40,
+    detailedAvatars: 12,
+  },
+  high: {
+    pixelRatioCap: 2,
+    shadows: true,
+    shadowMapSize: 2048,
+    particles: 120,
+    detailedAvatars: 20,
+  },
 };
 
 export function isQualityMode(value: unknown): value is QualityMode {

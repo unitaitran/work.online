@@ -228,5 +228,20 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
     return reply.send(me(user));
   });
 
+  app.post('/api/me/recovery', (request, reply) => {
+    const user = helpers.requireUser(request, reply);
+    if (!user || !helpers.allowWrite(request, reply, user.id)) return reply;
+    return reply.send({ recoveryCode: accounts.rotateRecovery(user.id) });
+  });
+
+  app.delete('/api/me', (request, reply) => {
+    const user = helpers.requireUser(request, reply);
+    if (!user || !helpers.allowWrite(request, reply, user.id)) return reply;
+    // Rời phòng ngay rồi xoá mọi dữ liệu (nhân vật, tiến độ, nhật ký, bài đăng...).
+    app.gateway.sessionOf(user.id)?.room.remove(user.id, 'unauthorized');
+    accounts.remove(user.id);
+    return reply.code(204).send();
+  });
+
   return helpers;
 }

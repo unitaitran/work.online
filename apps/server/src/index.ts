@@ -6,7 +6,11 @@ import { loadConfig, loadDotEnvIfPresent } from './config';
 // .env nằm ở gốc repo. src/index.ts (dev) và dist/index.js (build) đều sâu 3 cấp.
 loadDotEnvIfPresent(fileURLToPath(new URL('../../../.env', import.meta.url)));
 
-const config = loadConfig(process.env);
+// `--dev` (npm run dev): bật API dev (tua ngày, cộng XP) để thử vòng chơi.
+const config = loadConfig({
+  ...process.env,
+  ...(process.argv.includes('--dev') ? { DEV_TOOLS: '1' } : {}),
+});
 const app = buildApp({ config });
 
 let shuttingDown = false;

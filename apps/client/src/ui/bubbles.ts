@@ -38,6 +38,11 @@ export class BubbleLayer {
     bubble.element.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -100%)`;
   }
 
+  remove(id: string): void {
+    this.bubbles.get(id)?.element.remove();
+    this.bubbles.delete(id);
+  }
+
   dispose(): void {
     this.root.remove();
     this.bubbles.clear();

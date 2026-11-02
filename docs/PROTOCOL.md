@@ -35,4 +35,66 @@ Không thu email hay thông tin cá nhân. Server chỉ lưu bản băm SHA-256 
 
 ## WebSocket
 
-Xem mục bên dưới (Phase 4B).
+Kết nối `GET /ws?token=<token>` (wss khi chạy https). Token sai hoặc hết hạn: server trả `401` ngay lúc nâng cấp. Mọi tin là JSON, tối đa 2048 byte (vượt thì đóng mã `1009`). Server kiểm tra mọi tin bằng zod; tin sai bị bỏ, trả `{type:"error", code:"bad_message"}`; sai quá 20 lần thì bị đóng (`kicked: abuse`). Giới hạn tần suất: dồn 40 tin, hồi 20 tin/giây (vượt thì `error: rate_limited` một lần và bỏ tin thừa).
+
+### Vào phòng
+
+- Server đưa người chơi vào phòng văn phòng còn chỗ (đông nhất trước). Mỗi phòng tối đa `ROOM_CAPACITY` (mặc định 40); hết chỗ thì mở phòng mới cùng loại (`office-1`, `office-2`...).
+- Toàn server quá `SERVER_CAPACITY` người: `kicked: full`, đóng `1013`.
+- Mở tab thứ hai cùng tài khoản: tab cũ nhận `kicked: replaced`.
+- Mất kết nối: người khác thấy `player_leave`, nhưng chỗ được giữ **30 giây**; kết nối lại trong thời gian đó thì về đúng phòng, đúng vị trí, cùng `sid`.
+- Heartbeat: server gửi ping khung WebSocket mỗi 15 giây, không có pong thì ngắt.
+- Đứng yên 5 phút (không đi, không biểu cảm): `idle_check`; không trả `active` trong 60 giây thì `kicked: idle` và giải phóng chỗ.
+
+### Client → server
+
+| type              | Trường               | Ghi chú                                                                                      |
+| ----------------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| `state`           | `x, z, facing, pose` | ~10 lần/giây, chỉ khi đổi (đứng yên gửi lại mỗi 3 giây). `pose`: `stand / walk / sit / type` |
+| `emote`           | `emote`              | `wave, clap, laugh, heart, think, sleepy, coffee, cheer`                                     |
+| `quick_chat`      | `index`              | Chỉ số trong `QUICK_CHATS` (12 câu có sẵn). **Không có chat tự do**                          |
+| `ping`            | `t`                  | Server trả `pong { t, serverTime }`                                                          |
+| `active`          |                      | Trả lời `idle_check`                                                                         |
+| `leave`           |                      | Rời hẳn (giải phóng chỗ ngay)                                                                |
+| `profile_changed` |                      | Vừa đổi nhân vật/trang bị: server đọc lại từ DB và báo cả phòng                              |
+| `action`          | `id, action`         | Hành động tính điểm (Phase 4C), xem dưới                                                     |
+
+### Server → client
+
+| type                                             | Trường                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `welcome`                                        | `protocol, room, you, players[], serverTime` (hồ sơ + vị trí mọi người đang online trong phòng)     |
+| `player_join` / `player_update` / `player_leave` | hồ sơ đầy đủ khi vừa vào hoặc khi đổi; `sid` khi rời                                                |
+| `states`                                         | `s: [sid, x, z, facing, poseIndex][]`, 5 lần/giây, **chỉ người trong bán kính 14 m và chỉ khi đổi** |
+| `emote` / `quick_chat`                           | `sid` + nội dung, gửi tới người trong bán kính                                                      |
+| `correct`                                        | `x, z`: vị trí gửi lên không hợp lệ, kéo về đây                                                     |
+| `idle_check`                                     | `deadline`                                                                                          |
+| `kicked`                                         | `reason`: `idle / replaced / full / unauthorized / abuse / shutdown`                                |
+| `progress`                                       | `state, today, id?, outcome?` (Phase 4C)                                                            |
+| `action_rejected`                                | `id, reason`                                                                                        |
+| `mission_assigned`                               | `mission`                                                                                           |
+
+**Kiểm tra vị trí**: server dùng cùng hàm `moveWithCollisions` ở `packages/shared` với client. Quãng đi tối đa giữa hai tin = 2,6 m/s × thời gian × 1,35 + 0,35 m; đi xuyên bàn, tường kính, vật cản thì bị kéo về điểm hợp lệ. Ngồi vào ghế/đứng dậy được "nhảy" ngắn (≤ 1,5 m) vào đúng chỗ ngồi/chỗ đứng của vật.
+
+### Hành động tính điểm (Phase 4C)
+
+Client gửi `{ type: "action", id, action }`. `id` là khoá chống gửi trùng (8–40 ký tự, mỗi hành động một khoá mới); gửi lại cùng khoá thì `action_rejected: duplicate`. Client **không gửi XP, thời lượng hay chuỗi**: server tự đo giờ và tính bằng `applyEvent` trong `packages/shared/rules.ts`.
+
+| action.kind                                                                   | Server kiểm tra                                                                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `checkin`                                                                     | đứng gần máy quẹt thẻ; ngày theo múi giờ đã lưu, đổi ngày lúc 4 giờ sáng                                                  |
+| `fortune`                                                                     | gần kệ quẻ; quẻ chọn theo (ngày, mã nhân viên); lần đầu trong ngày mới có XP                                              |
+| `task_flip { taskId, completed }`                                             | gần bảng việc                                                                                                             |
+| `coffee_brew` → `coffee_gift { npcId }` / `coffee_drink`                      | gần máy pha; tặng/uống chỉ khi đã pha xong ≥ 3,2 giây, mỗi lần pha một ly                                                 |
+| `chore { target }`                                                            | gần đúng chậu cây đó                                                                                                      |
+| `print`                                                                       | gần máy in                                                                                                                |
+| `meeting_start { seatId }` → `meeting_end`                                    | gần ghế họp; server đo thời gian ngồi                                                                                     |
+| `focus_start { minutes: 1/3/5 }` → `focus_end { presses, scoredKeys, lines }` | gần bàn làm việc; server đo giờ (kết thúc sớm chỉ tính phần đã ngồi); số phím/dòng bị chặn ≤ 8,5 phím/giây × thời gian đo |
+| `vent { length, anonymous }`                                                  | không có XP                                                                                                               |
+| `choose_department` / `choose_branch`                                         | chỉ khi đủ chức danh và chưa chọn                                                                                         |
+
+Lý do từ chối: `too_fast` (cùng loại quá dày), `too_far`, `not_started` (sai thứ tự), `duplicate`, `not_allowed`, `invalid`. Mỗi hành động được tính ghi vào `activity_log` (loại, XP, xu).
+
+### Phát triển
+
+Server chạy với cờ `--dev` (`npm run dev`) có thêm `POST /api/dev/shift-day { days }` (tua ngày riêng cho tài khoản) và `POST /api/dev/grant { xp?, coins? }`. Bản chạy thật không có các API này.

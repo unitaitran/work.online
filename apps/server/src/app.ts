@@ -3,6 +3,7 @@ import type { ServerConfig } from './config';
 import { openDatabase } from './db/database';
 import { createSqliteRepositories, type Repositories } from './db/repositories';
 import { createAccountService, type AccountService } from './game/accounts';
+import { attachGameService, type GameService } from './game/gameService';
 import { registerApiRoutes, type AuthedHelpers, type Presence } from './http/routes';
 import { attachWebSocketGateway, type Gateway, type GatewayOptions } from './ws/gateway';
 
@@ -25,6 +26,7 @@ export interface AppContext {
 declare module 'fastify' {
   interface FastifyInstance {
     gateway: Gateway;
+    game: GameService;
   }
 }
 
@@ -72,6 +74,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const gateway = attachWebSocketGateway(app, context, options.gateway);
   presence = gateway;
   app.decorate('gateway', gateway);
+  app.decorate('game', attachGameService(app, context, gateway));
 
   app.addHook('onClose', (_instance, done) => {
     db?.close();

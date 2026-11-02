@@ -19,6 +19,7 @@ export interface OfficeHudOptions {
   onFocusStart(): void;
   onDrinkCoffee(): void;
   onOpenProfile(): void;
+  onOpenSocial(): void;
 }
 
 /** Thông tin tiến độ hiển thị trên HUD. */
@@ -56,6 +57,8 @@ export interface OfficeHud {
   /** Chữ "+XP" bay lên cạnh thanh XP. */
   showXpGain(xp: number, capped: boolean): void;
   setMission(mission: MissionView | null): void;
+  /** Trạng thái kết nối (số người online, đang kết nối lại...). */
+  setNetStatus(text: string, tone: 'ok' | 'warn'): void;
   dispose(): void;
 }
 
@@ -206,6 +209,16 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   coffeeChip.hidden = true;
 
+  const socialButton = el('button', {
+    className: 'button button-soft social-button',
+    text: STRINGS.social.open,
+    attrs: { type: 'button' },
+  });
+  socialButton.addEventListener('click', () => {
+    options.onOpenSocial();
+  });
+  const netStatus = el('p', { className: 'net-status', attrs: { role: 'status' } });
+
   const eventsLink = el('a', {
     className: 'events-link',
     text: STRINGS.eventsPage.open,
@@ -237,7 +250,19 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   const layer = el('div', {
     className: 'office-hud',
-    children: [bar, missionCard, toast, stats, eventsLink, coffeeChip, focusButton, interact, hint],
+    children: [
+      bar,
+      missionCard,
+      toast,
+      stats,
+      eventsLink,
+      netStatus,
+      socialButton,
+      coffeeChip,
+      focusButton,
+      interact,
+      hint,
+    ],
   });
   root.append(layer);
 
@@ -300,6 +325,10 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       if (!mission) return;
       missionGoal.textContent = mission.goalText;
       missionCount.textContent = STRINGS.progress.mission.progress(mission.progress, mission.total);
+    },
+    setNetStatus(text, tone) {
+      netStatus.textContent = text;
+      netStatus.dataset.tone = tone;
     },
     setFocusAvailable(available) {
       focusButton.hidden = !available;

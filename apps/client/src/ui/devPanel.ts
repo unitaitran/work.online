@@ -1,36 +1,30 @@
-// Công cụ dev (chỉ có khi chạy `npm run dev`): tua ngày, tạo nhanh sự kiện để thử vòng thăng tiến.
-import { daysBetween, dayKey, makeEvent, type ActivityEvent } from '@dilam/shared';
-import { clock } from '../clock';
+// Công cụ dev (chỉ có khi chạy `npm run dev`): gọi API dev của server để tua ngày, cộng XP/xu,
+// nhằm thử nhanh vòng thăng tiến. Server chỉ bật API này khi chạy với cờ --dev.
 import { STRINGS } from '../strings';
 import { el } from './dom';
 
-const DAY_MS = 86_400_000;
-
 export interface DevPanelOptions {
-  emit(event: ActivityEvent): void;
-  forceMission(): void;
-  /** Sau khi tua ngày (để cập nhật HUD). */
-  onTimeChange(): void;
+  /** Gọi API dev; trả false nếu server không bật công cụ dev. */
+  call(path: string, body: unknown): Promise<boolean>;
+  today(): string | null;
+  toast(text: string): void;
 }
 
 export function mountDevPanel(root: HTMLElement, o: DevPanelOptions): { dispose(): void } {
   const s = STRINGS.progress.dev;
   const label = el('p', { className: 'dev-day' });
   const render = (): void => {
-    const real = dayKey(new Date());
-    label.textContent = s.day(clock.today(), daysBetween(real, clock.today()));
+    label.textContent = s.day(o.today() ?? '…');
   };
-  const button = (text: string, onClick: () => void): HTMLButtonElement => {
+  const button = (text: string, path: string, body: unknown): HTMLButtonElement => {
     const b = el('button', { className: 'dev-button', text, attrs: { type: 'button' } });
     b.addEventListener('click', () => {
-      onClick();
-      render();
+      void o.call(path, body).then((ok) => {
+        if (!ok) o.toast(s.failed);
+        window.setTimeout(render, 300);
+      });
     });
     return b;
-  };
-  const shift = (days: number): void => {
-    clock.setOffset(clock.offsetMs() + days * DAY_MS);
-    o.onTimeChange();
   };
   const panel = el('details', {
     className: 'dev-panel',
@@ -40,45 +34,16 @@ export function mountDevPanel(root: HTMLElement, o: DevPanelOptions): { dispose(
       el('div', {
         className: 'dev-buttons',
         children: [
-          button(s.plusDay, () => {
-            shift(1);
-          }),
-          button(s.plusWeek, () => {
-            shift(7);
-          }),
-          button(s.reset, () => {
-            clock.setOffset(0);
-            o.onTimeChange();
-          }),
-          button(s.checkin, () => {
-            o.emit(
-              makeEvent('checkin', clock.now(), 0, { day: clock.today(), streak: 0, total: 0 }),
-            );
-          }),
-          button(s.focus, () => {
-            o.emit(
-              makeEvent('focus-typing', clock.now() - 300_000, 300_000, {
-                plannedMs: 300_000,
-                presses: 300,
-                scoredKeys: 280,
-                lines: 280,
-                completed: true,
-              }),
-            );
-          }),
-          button(s.gift, () => {
-            o.emit(makeEvent('coffee-gift', clock.now(), 0, { npcId: 'npc-0' }));
-          }),
-          button(s.chore, () => {
-            o.emit(makeEvent('chore', clock.now(), 0, { target: 'plant-0' }));
-          }),
-          button(s.mission, () => {
-            o.forceMission();
-          }),
+          button(s.plusDay, '/api/dev/shift-day', { days: 1 }),
+          button(s.plusWeek, '/api/dev/shift-day', { days: 7 }),
+          button(s.xp, '/api/dev/grant', { xp: 200 }),
+          button(s.xpBig, '/api/dev/grant', { xp: 5000 }),
+          button(s.coins, '/api/dev/grant', { coins: 1000 }),
         ],
       }),
     ],
   });
+  panel.addEventListener('toggle', render);
   root.append(panel);
   render();
   return {

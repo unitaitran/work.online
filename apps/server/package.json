@@ -5,7 +5,7 @@
   "description": "Server Đi làm Online: Fastify (REST) + ws (WebSocket)",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "dev": "tsx watch --clear-screen=false src/index.ts --dev",
     "build": "tsx scripts/build.ts",
     "start": "node dist/index.js",
     "test": "vitest run",

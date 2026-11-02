@@ -18,17 +18,22 @@ import {
 import { STRINGS } from '../strings';
 import { el } from './dom';
 
-export type ProfileTab = 'card' | 'log' | 'roadmap' | 'save';
-const TABS: readonly ProfileTab[] = ['card', 'log', 'roadmap', 'save'];
+export type ProfileTab = 'card' | 'log' | 'roadmap' | 'account';
+const TABS: readonly ProfileTab[] = ['card', 'log', 'roadmap', 'account'];
 
 export interface ProfileSource {
   readonly state: ProgressState;
   todayEarned(): number;
-  exportCode(): string;
-  importCode(
-    code: string,
-  ): { ok: true } | { ok: false; error: 'format' | 'checksum' | 'version' | 'data' };
   onChange(listener: () => void): () => void;
+}
+
+export interface AccountActions {
+  /** Vào tài khoản khác bằng mã khôi phục; true nếu thành công (trang sẽ tải lại). */
+  recover(code: string): Promise<boolean>;
+  /** Tạo mã khôi phục mới (mã cũ hết hiệu lực); null nếu lỗi. */
+  newRecoveryCode(): Promise<string | null>;
+  /** Xoá tài khoản và toàn bộ dữ liệu. */
+  deleteAccount(): Promise<boolean>;
 }
 
 export interface ProfilePanelOptions {
@@ -36,6 +41,7 @@ export interface ProfilePanelOptions {
   playerId: string;
   progress: ProfileSource;
   initialTab?: ProfileTab;
+  account: AccountActions;
 }
 
 const s = STRINGS.progress;
@@ -186,53 +192,88 @@ function renderRoadmap(state: ProgressState): HTMLElement {
   });
 }
 
-function renderSave(o: ProfilePanelOptions): HTMLElement {
-  const exportBox = el('textarea', {
-    className: 'save-code',
-    attrs: { readonly: '', rows: '3', 'aria-label': s.save.exportTitle },
-  });
-  exportBox.value = o.progress.exportCode();
-  const copy = el('button', {
-    className: 'button button-soft',
-    text: s.save.copy,
-    attrs: { type: 'button' },
-  });
+function renderAccount(o: ProfilePanelOptions): HTMLElement {
+  const a = STRINGS.account;
   const message = el('p', { className: 'activity-message', attrs: { role: 'status' } });
-  copy.addEventListener('click', () => {
-    exportBox.select();
-    // Trang không chạy HTTPS thì không có clipboard: vẫn đã bôi đen sẵn để người chơi tự chép.
-    void Promise.resolve()
-      .then(() => navigator.clipboard.writeText(exportBox.value))
-      .catch(() => undefined);
-    message.textContent = s.save.copied;
-    message.dataset.tone = 'ok';
-  });
-  const importBox = el('textarea', {
+  const say = (text: string, tone: 'ok' | 'error'): void => {
+    message.textContent = text;
+    message.dataset.tone = tone;
+  };
+
+  const codeBox = el('input', {
     className: 'save-code',
-    attrs: { rows: '3', 'aria-label': s.save.importTitle, spellcheck: 'false' },
+    attrs: { type: 'text', 'aria-label': a.recoverTitle, spellcheck: 'false', autocomplete: 'off' },
   });
-  const importButton = el('button', {
+  const recover = el('button', {
     className: 'button button-primary',
-    text: s.save.import,
+    text: a.recover,
     attrs: { type: 'button' },
   });
-  importButton.addEventListener('click', () => {
-    const result = o.progress.importCode(importBox.value);
-    message.textContent = result.ok ? s.save.imported : s.save.errors[result.error];
-    message.dataset.tone = result.ok ? 'ok' : 'error';
-    if (result.ok) exportBox.value = o.progress.exportCode();
+  recover.addEventListener('click', () => {
+    recover.disabled = true;
+    void o.account.recover(codeBox.value).then((ok) => {
+      recover.disabled = false;
+      if (!ok) say(a.recoverFailed, 'error');
+    });
   });
+
+  const fresh = el('code', { className: 'recovery-code' });
+  fresh.hidden = true;
+  const newCode = el('button', {
+    className: 'button button-soft',
+    text: a.newCode,
+    attrs: { type: 'button' },
+  });
+  newCode.addEventListener('click', () => {
+    newCode.disabled = true;
+    void o.account.newRecoveryCode().then((code) => {
+      newCode.disabled = false;
+      if (!code) {
+        say(STRINGS.net.actionFailed, 'error');
+        return;
+      }
+      fresh.textContent = code;
+      fresh.hidden = false;
+    });
+  });
+
+  const confirm = el('input', {
+    className: 'save-code',
+    attrs: { type: 'text', 'aria-label': a.deleteConfirm, placeholder: a.deleteConfirm },
+  });
+  const del = el('button', {
+    className: 'button button-danger',
+    text: a.delete,
+    attrs: { type: 'button' },
+  });
+  del.addEventListener('click', () => {
+    if (confirm.value.trim().toUpperCase() !== 'XOA') {
+      say(a.deleteConfirm, 'error');
+      return;
+    }
+    del.disabled = true;
+    void o.account.deleteAccount().then((ok) => {
+      say(ok ? a.deleted : STRINGS.net.actionFailed, ok ? 'ok' : 'error');
+      if (!ok) del.disabled = false;
+    });
+  });
+
   return el('div', {
     className: 'profile-save',
     children: [
-      el('h3', { text: s.save.exportTitle }),
-      el('p', { className: 'activity-intro', text: s.save.exportHint }),
-      exportBox,
-      el('div', { className: 'activity-actions', children: [copy] }),
-      el('h3', { text: s.save.importTitle }),
-      el('p', { className: 'activity-intro', text: s.save.importHint }),
-      importBox,
-      el('div', { className: 'activity-actions', children: [importButton] }),
+      el('dl', { className: 'profile-grid', children: [row(a.code, o.playerId)] }),
+      el('h3', { text: a.recoveryTitle }),
+      el('p', { className: 'activity-intro', text: a.newCodeHint }),
+      el('div', { className: 'activity-actions', children: [newCode] }),
+      fresh,
+      el('h3', { text: a.recoverTitle }),
+      el('p', { className: 'activity-intro', text: a.recoverHint }),
+      codeBox,
+      el('div', { className: 'activity-actions', children: [recover] }),
+      el('h3', { text: a.deleteTitle }),
+      el('p', { className: 'activity-intro', text: a.deleteHint }),
+      confirm,
+      el('div', { className: 'activity-actions', children: [del] }),
       message,
     ],
   });
@@ -264,7 +305,7 @@ export function mountProfilePanel(body: HTMLElement, o: ProfilePanelOptions): { 
       }),
     );
     const state = o.progress.state;
-    // Tab lưu trữ không vẽ lại khi tiến độ đổi (giữ nội dung đang nhập).
+    // Tab tài khoản không vẽ lại khi tiến độ đổi (giữ nội dung đang nhập).
     const view =
       tab === 'card'
         ? renderCard(state, o)
@@ -272,14 +313,14 @@ export function mountProfilePanel(body: HTMLElement, o: ProfilePanelOptions): { 
           ? renderLog(state)
           : tab === 'roadmap'
             ? renderRoadmap(state)
-            : renderSave(o);
+            : renderAccount(o);
     content.replaceChildren(view);
   };
 
   body.append(tabBar, content);
   render();
   const off = o.progress.onChange(() => {
-    if (tab !== 'save') render();
+    if (tab !== 'account') render();
   });
   return { dispose: off };
 }

@@ -58,4 +58,17 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      -- Khoá chống gửi trùng hành động (idempotency), dọn định kỳ.
+      CREATE TABLE processed_actions (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        action_id TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, action_id)
+      );
+      CREATE INDEX processed_actions_at ON processed_actions(at);
+    `,
+  },
 ];
