@@ -163,9 +163,7 @@ export function createSqliteRepositories(db: Db): Repositories {
       const row = q.charGet.get(userId) as { name: string; appearance: string } | undefined;
       if (!row) return null;
       const appearance = appearanceSchema.safeParse(JSON.parse(row.appearance));
-      return appearance.success
-        ? { name: row.name, appearance: appearance.data }
-        : null;
+      return appearance.success ? { name: row.name, appearance: appearance.data } : null;
     },
     save(userId, profile, now) {
       q.charSave.run(userId, profile.name, JSON.stringify(profile.appearance), now);
