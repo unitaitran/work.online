@@ -11,6 +11,8 @@ export {
   officeInteractables,
   officeObstacles,
   PLANT_SIZE,
+  seatLift,
+  seatLiftNear,
   WALL_THICKNESS,
 } from '@dilam/shared';
 export type {

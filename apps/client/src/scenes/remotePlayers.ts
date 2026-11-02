@@ -80,6 +80,7 @@ export class RemotePlayers {
   private detailed = 12;
   private shadows = false;
   private hiddenCodes: ReadonlySet<string> = new Set();
+  private seatLiftAt: (x: number, z: number) => number = () => 0;
 
   constructor(
     private readonly scene: Scene,
@@ -93,6 +94,11 @@ export class RemotePlayers {
     this.proxies.count = 0;
     this.proxies.frustumCulled = false;
     scene.add(this.proxies);
+  }
+
+  /** Độ nâng nhân vật khi ngồi tại (x, z) (sofa cao hơn ghế văn phòng). */
+  setSeatLift(fn: (x: number, z: number) => number): void {
+    this.seatLiftAt = fn;
   }
 
   setQuality(detailedAvatars: number, shadows: boolean): void {
@@ -234,7 +240,12 @@ export class RemotePlayers {
         }
         player.companions?.update(dt, player);
         player.avatar.root.visible = true;
-        player.avatar.root.position.set(player.x, 0, player.z);
+        const seated = player.pose === 'sit' || player.pose === 'type';
+        player.avatar.root.position.set(
+          player.x,
+          seated ? this.seatLiftAt(player.x, player.z) : 0,
+          player.z,
+        );
         player.avatar.root.rotation.y = player.facing;
         player.avatar.setPose(player.pose);
         player.avatar.update(dt);

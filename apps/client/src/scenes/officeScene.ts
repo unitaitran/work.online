@@ -63,6 +63,8 @@ import {
   officeObstacles,
   type Interactable,
   type OfficeLayout,
+  seatLift,
+  seatLiftNear,
 } from '../world/office/layout';
 import { PERIOD_LIGHTING, type DayPeriod } from '../world/office/period';
 import { findPath } from '../world/pathfinding';
@@ -242,6 +244,8 @@ export class OfficeScene implements SceneController {
     });
 
     this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
+    // Người chơi khác đang ngồi: nâng lên theo độ cao chỗ ngồi gần nhất (sofa cao hơn ghế).
+    this.remotes.setSeatLift((x, z) => seatLiftNear(this.items, x, z));
     this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
     this.plants = new RoomPlants(this.material);
     // Đồng hồ lớn trên tường bắc, bên phải dãy cửa sổ (logo công ty ở tường sảnh).
@@ -532,7 +536,7 @@ export class OfficeScene implements SceneController {
   frameUpdate(frameSeconds: number, alpha: number): void {
     const x = lerp(this.previous.x, this.position.x, alpha);
     const z = lerp(this.previous.z, this.position.z, alpha);
-    this.avatar.root.position.set(x, 0, z);
+    this.avatar.root.position.set(x, this.seated ? seatLift(this.seated) : 0, z);
     this.avatar.root.rotation.y = this.facing;
     this.blob.position.set(x, 0.006, z);
     this.blob.visible = this.blobAllowed && !this.seated;

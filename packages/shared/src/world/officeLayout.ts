@@ -38,8 +38,41 @@ export interface Interactable {
   /** Chỗ ngồi (nếu là ghế); có thể sát mép bàn hơn chỗ đứng. */
   seat?: Vec2;
   pose: UsePose;
+  /**
+   * Độ cao hông khi ngồi (mét). Thiếu = ghế văn phòng (DEFAULT_SEAT_HIP). Sofa nệm cao hơn nên
+   * cần nâng nhân vật lên, không thì người lún vào nệm.
+   */
+  seatHeight?: number;
   /** Hộp 3D để bấm/chạm trực tiếp vào đồ vật. */
   pick: Box3Data;
+}
+
+/** Độ cao hông của tư thế ngồi chuẩn (khớp với ghế văn phòng cao 0,27 m). */
+export const DEFAULT_SEAT_HIP = 0.29;
+
+/** Độ nâng nhân vật khi ngồi ở chỗ này (0 với ghế thường). */
+export function seatLift(item: Pick<Interactable, 'seatHeight'>): number {
+  return (item.seatHeight ?? DEFAULT_SEAT_HIP) - DEFAULT_SEAT_HIP;
+}
+
+/** Độ nâng khi ngồi tại (x, z): tìm chỗ ngồi gần nhất trong bán kính (dùng cho người chơi khác). */
+export function seatLiftNear(
+  items: readonly Interactable[],
+  x: number,
+  z: number,
+  radius = 0.25,
+): number {
+  let best: Interactable | null = null;
+  let bestDistance = radius;
+  for (const item of items) {
+    if (!item.seat) continue;
+    const d = Math.hypot(item.seat.x - x, item.seat.z - z);
+    if (d <= bestDistance) {
+      best = item;
+      bestDistance = d;
+    }
+  }
+  return best ? seatLift(best) : 0;
 }
 
 export interface Desk {
@@ -255,7 +288,7 @@ export const OFFICE_FLOOR: OfficeLayout = {
     rug: { minX: 4.6, maxX: 7.6, minZ: 3.7, maxZ: 6.3 },
     sofa: { minX: 4.9, maxX: 7.3, minZ: 5.65, maxZ: 6.5 },
     table: box(6.1, 4.4, 1, 0.5),
-    seatXs: [5.35, 6.1, 6.85],
+    seatXs: [5.45, 6.1, 6.75],
     daybed: { minX: 7.65, maxX: 8.43, minZ: 2.5, maxZ: 4.5 },
     sideTable: box(7.95, 5.0, 0.4, 0.4),
     lamp: { x: 7.95, z: 6.05 },
@@ -402,9 +435,11 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
       id: `sofa-${String(i)}`,
       kind: 'sofa',
       approach: { x, z: sofa.minZ - APPROACH_GAP - 0.05 },
-      seat: { x, z: sofa.minZ + 0.25 },
+      // Ngồi gần mép trước để chân thả qua mép nệm; hông ngang mặt nệm (cao 0,42 m).
+      seat: { x, z: sofa.minZ + 0.2 },
       facing: Math.PI,
       pose: 'sit',
+      seatHeight: 0.46,
       pick: { min: [x - 0.75, 0, sofa.minZ], max: [x + 0.75, 0.75, sofa.maxZ] },
     });
   });
@@ -418,6 +453,7 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
     seat: { x: daybed.minX + 0.28, z: bedZ },
     facing: -Math.PI / 2,
     pose: 'sit',
+    seatHeight: 0.34,
     pick: { min: [daybed.minX, 0, daybed.minZ], max: [daybed.maxX, 0.6, daybed.maxZ] },
   });
 

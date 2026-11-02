@@ -741,12 +741,16 @@ function loungePieces(layout: OfficeLayout): Piece[] {
       }),
     );
   }
-  for (const x of [sofa.minX + 0.4, sofa.maxX - 0.4]) {
+  // Gối decor (một đỏ, một kem) tựa sát tay vịn, nhỏ và nằm sau lưng chỗ ngồi để không đè
+  // lên người đang ngồi.
+  for (const [x, color, tilt] of [
+    [sofa.minX + 0.3, RED, 0.25],
+    [sofa.maxX - 0.3, CREAM, -0.25],
+  ] as const) {
     pieces.push(
-      // Gối decor: một đỏ, một kem.
-      piece(new BoxGeometry(0.34, 0.3, 0.1), x < 6 ? RED : CREAM, {
-        position: [x, 0.58, sofa.maxZ - 0.38],
-        rotation: [-0.25, 0, x < 6 ? 0.2 : -0.2],
+      piece(new BoxGeometry(0.24, 0.24, 0.08), color, {
+        position: [x, 0.56, sofa.maxZ - 0.34],
+        rotation: [-0.25, 0, tilt],
       }),
     );
   }
