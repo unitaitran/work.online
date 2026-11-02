@@ -1,12 +1,9 @@
-// Kỳ đánh giá: phỏng vấn 5 tình huống → màn chúc mừng (pháo giấy + nhạc) → chọn phòng ban / nhánh.
+// Lên chức danh (tự động theo cấp): màn chúc mừng (pháo giấy + nhạc) → chọn phòng ban / nhánh nếu cần.
 import {
   BRANCHES,
   BRANCH_NAMES,
   DEPARTMENTS,
   DEPARTMENT_NAMES,
-  pickInterview,
-  scoreInterview,
-  titleName,
   type Branch,
   type Department,
 } from '@dilam/shared';
@@ -17,7 +14,7 @@ import type { Modal } from './modal';
 
 const s = STRINGS.progress;
 
-export interface ReviewFlowDeps {
+export interface PromotionDeps {
   root: HTMLElement;
   /** Mở hộp thoại (khoá điều khiển cảnh trong lúc mở). */
   openPanel(title: string, onClose?: () => void): Modal;
@@ -25,10 +22,6 @@ export interface ReviewFlowDeps {
   /** Khoá/mở điều khiển cảnh 3D (màn chúc mừng không đi qua openPanel). */
   lockInput(locked: boolean): void;
   progress: {
-    readonly state: { title: number; branch: Branch | null };
-    reviewStatus(): { due: boolean; eligible: boolean; nextTitle: number | null };
-    interviewSeed(): number;
-    finishReview(passed: boolean, personality?: ReturnType<typeof scoreInterview>): void;
     chooseDepartment(department: Department): void;
     chooseBranch(branch: Branch): void;
     needsDepartment(): boolean;
@@ -37,79 +30,16 @@ export interface ReviewFlowDeps {
   onDone?(): void;
 }
 
-/** Vào kỳ đánh giá (chỉ khi đã tới hạn). */
-export function startReview(deps: ReviewFlowDeps): void {
-  const status = deps.progress.reviewStatus();
-  if (!status.due) return;
-  if (!status.eligible) {
-    deps.progress.finishReview(false);
-    const modal = deps.openPanel(s.tabs.review);
-    modal.body.append(el('p', { className: 'activity-intro', text: s.review.notEligible }));
-    return;
-  }
-  runInterview(deps);
-}
-
-function runInterview(deps: ReviewFlowDeps): void {
-  const questions = pickInterview(deps.progress.interviewSeed());
-  const choices: number[] = [];
-  let finished = false;
-  const modal = deps.openPanel(s.interview.title, () => {
-    // Đóng giữa chừng: không sao, lần sau mở lại vẫn là bộ câu hỏi đó.
-    if (finished) afterInterview(deps, questions, choices);
-  });
-
-  const render = (): void => {
-    const index = choices.length;
-    const question = questions[index];
-    if (!question) {
-      finished = true;
-      modal.close();
-      return;
-    }
-    modal.body.replaceChildren(
-      el('p', { className: 'review-period', text: s.interview.step(index + 1, questions.length) }),
-      ...(index === 0 ? [el('p', { className: 'activity-intro', text: s.interview.intro })] : []),
-      el('p', { className: 'interview-prompt', text: question.prompt }),
-      el('div', {
-        className: 'interview-options',
-        children: question.options.map((option, i) => {
-          const button = el('button', {
-            className: 'interview-option',
-            text: option.text,
-            attrs: { type: 'button' },
-          });
-          button.addEventListener('click', () => {
-            choices.push(i);
-            deps.play('keyboard');
-            render();
-          });
-          return button;
-        }),
-      }),
-    );
-    modal.body.querySelector<HTMLButtonElement>('.interview-option')?.focus();
-  };
-  render();
-}
-
-function afterInterview(
-  deps: ReviewFlowDeps,
-  questions: ReturnType<typeof pickInterview>,
-  choices: readonly number[],
-): void {
-  const before = deps.progress.state.title;
-  deps.progress.finishReview(true, scoreInterview(questions, choices));
-  const after = deps.progress.state.title;
-  if (after <= before) return;
-  showCelebration(deps, titleName(after, deps.progress.state.branch), () => {
+/** Chúc mừng lên chức rồi hỏi phòng ban / nhánh nếu vừa mở khoá. */
+export function celebratePromotion(deps: PromotionDeps, titleText: string): void {
+  showCelebration(deps, titleText, () => {
     askChoices(deps);
   });
 }
 
 /** Màn chúc mừng: pháo giấy bằng CSS (không ảnh), nhạc chiến thắng sinh bằng Web Audio. */
 export function showCelebration(
-  deps: Pick<ReviewFlowDeps, 'root' | 'play' | 'lockInput'>,
+  deps: Pick<PromotionDeps, 'root' | 'play' | 'lockInput'>,
   title: string,
   onClose: () => void,
 ): void {
@@ -169,7 +99,7 @@ export function showCelebration(
 }
 
 /** Sau khi lên chức: chọn phòng ban (chức danh 3) hoặc nhánh (chức danh 5) nếu cần. */
-export function askChoices(deps: ReviewFlowDeps): void {
+export function askChoices(deps: PromotionDeps): void {
   if (deps.progress.needsDepartment()) {
     // Đóng mà chưa chọn thì thôi (lần vào văn phòng sau sẽ hỏi lại), chọn xong mới hỏi tiếp.
     const modal = deps.openPanel(s.department.title, () => {

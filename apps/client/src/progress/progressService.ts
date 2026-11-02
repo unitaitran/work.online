@@ -4,25 +4,21 @@ import {
   applyEvent,
   chooseBranch,
   chooseDepartment,
-  completeReview,
   createProgress,
   decodeSaveCode,
   encodeSaveCode,
-  hashString,
   levelFor,
+  titleFor,
   migrateProgress,
   needsBranch,
   needsDepartment,
-  reviewStatus,
   tickBossMissions,
   type ActivityEvent,
   type ApplyResult,
   type Branch,
   type Department,
   type Mission,
-  type Personality,
   type ProgressState,
-  type ReviewStatus,
   type SaveCodeError,
 } from '@dilam/shared';
 import type { clock as Clock } from '../clock';
@@ -31,7 +27,6 @@ import type { ProgressStore } from './progressStore';
 export type ProgressChange =
   | { kind: 'event'; event: ActivityEvent; result: ApplyResult }
   | { kind: 'missionAssigned'; mission: Mission }
-  | { kind: 'review'; promoted: boolean; titleBefore: number; titleAfter: number }
   | { kind: 'choice' }
   | { kind: 'import' };
 
@@ -75,6 +70,11 @@ export class ProgressService {
     return this.current.daily.day === this.time.today() ? this.current.daily.earned : 0;
   }
 
+  /** Chức danh hiện tại (tự lên theo cấp). */
+  get title(): number {
+    return titleFor(this.current.xp);
+  }
+
   get level(): number {
     return levelFor(this.current.xp);
   }
@@ -109,31 +109,6 @@ export class ProgressService {
     this.persist();
     if (assigned) this.notify({ kind: 'missionAssigned', mission: assigned });
     return assigned;
-  }
-
-  reviewStatus(): ReviewStatus {
-    return reviewStatus(this.current, this.time.today());
-  }
-
-  /** Hạt giống chọn câu phỏng vấn: cố định trong một kỳ (mở lại không đổi câu). */
-  interviewSeed(): number {
-    return hashString(
-      `interview|${this.playerId}|${this.current.review.periodStart ?? ''}|${String(this.current.title)}`,
-    );
-  }
-
-  finishReview(passed: boolean, personality?: Personality): void {
-    const titleBefore = this.current.title;
-    const next = completeReview(this.current, this.time.today(), {
-      passed,
-      ...(personality ? { personality } : {}),
-    });
-    this.commit(next, {
-      kind: 'review',
-      promoted: next.title > titleBefore,
-      titleBefore,
-      titleAfter: next.title,
-    });
   }
 
   needsDepartment(): boolean {

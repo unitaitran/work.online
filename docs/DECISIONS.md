@@ -236,3 +236,9 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Phase 3 tính XP ở client** (`ProgressService`, lưu localStorage, mã lưu `DLO.<v>.<base64url>.<crc32>` để chuyển máy). Checksum chỉ chống chép sai, không phải bảo mật; Phase 4 chuyển cùng các hàm thuần lên server và không tin client.
 - **Công ty**: 1 công ty = 1 tầng = 1 server, tối đa 30 mỗi toà (Phase 4/6). Phase này chỉ có hằng số và `canOpenCompany`/`buildingHasRoom`; rời và mở công ty làm ở Phase 6.
 - **Tua ngày chỉ có ở `npm run dev`** (`clock.ts`, bảng dev); bản build không có.
+
+### Đổi hệ chức danh (sau Phase 3)
+
+- **Chức danh tự lên theo cấp** theo yêu cầu người chơi thử: 13 bậc, vài cấp một bậc, bậc cuối "Senior" ở cấp 150 = điều kiện cấp để mở công ty. Bỏ kỳ đánh giá 7 ngày và phỏng vấn (trước đây chức danh tụt xa sau cấp).
+- **Tiến độ phiên bản 3**: bỏ `title`, `review`, `personality`; thêm `coins`, `reputation`. Migrate v2 → v3 chuyển số lần giúp trong kỳ thành uy tín.
+- **Xu tính cùng XP** trong `applyEvent` (đưa sớm phần xu của Phase 5A để không phải đổi phiên bản dữ liệu lần nữa).

@@ -2,7 +2,7 @@
 // Không tin số liệu trong sự kiện khi tự tính được (chuỗi chấm công, thời lượng...).
 import type { ActivityEvent } from './activityEvents';
 import { BALANCE } from './balance';
-import { levelFor, type Department } from './levels';
+import { levelFor, titleForLevel, type Department } from './levels';
 import {
   MISSION_TEMPLATES,
   pickMission,
@@ -195,9 +195,6 @@ export function rollDay(state: ProgressState, today: string): ProgressState {
   if (next.daily.day === null || daysBetween(next.daily.day, today) > 0) {
     next = { ...next, daily: emptyDaily(today) };
   }
-  if (next.review.periodStart === null) {
-    next = { ...next, review: { ...next.review, periodStart: today } };
-  }
   return next;
 }
 
@@ -219,6 +216,11 @@ export interface ApplyResult {
   base: number;
   levelBefore: number;
   levelAfter: number;
+  /** Chức danh trước và sau (tự lên theo cấp). */
+  titleBefore: number;
+  titleAfter: number;
+  /** Xu nhận được. */
+  coins: number;
   checkIn: CheckInStatus | null;
   completedMission: Mission | null;
 }
@@ -234,9 +236,9 @@ export function applyEvent(
 ): ApplyResult {
   let state = rollDay(input, ctx.today);
   const levelBefore = levelFor(state.xp);
+  const titleBefore = titleForLevel(levelBefore);
   let checkInStatus: CheckInStatus | null = null;
   let counts = state.daily.counts;
-  let review = state.review;
 
   // Chấm công: tự tính lại từ trạng thái, không tin streak trong sự kiện.
   if (event.type === 'checkin') {
@@ -249,14 +251,14 @@ export function applyEvent(
         base: 0,
         levelBefore,
         levelAfter: levelBefore,
+        titleBefore,
+        titleAfter: titleBefore,
+        coins: 0,
         checkIn: 'already',
         completedMission: null,
       };
     }
     state = { ...state, checkIn: result.state };
-    if (!review.checkInDays.includes(ctx.today)) {
-      review = { ...review, checkInDays: [...review.checkInDays, ctx.today] };
-    }
   }
 
   const xp = xpFor(event, {
@@ -267,7 +269,7 @@ export function applyEvent(
     linesCarry: state.linesCarry,
   });
 
-  // Đếm số lần đã tính (chỉ khi thật sự được XP) và chỉ số cho kỳ đánh giá.
+  // Đếm số lần đã tính (chỉ khi thật sự được XP).
   let fortuneClaimed = state.daily.fortuneClaimed;
   for (const part of xp.parts) {
     if (part.category === 'task') counts = bump(counts, 'taskDone');
@@ -279,15 +281,10 @@ export function applyEvent(
       counts = bump(counts, 'meetingMinutes', Math.round(part.xp / BALANCE.meeting.perMinute));
     }
   }
-  if (event.type === 'focus-typing') {
-    review = {
-      ...review,
-      focusMs: review.focusMs + Math.min(event.durationMs, event.detail.plannedMs),
-    };
-  }
-  if (xp.parts.some((part) => part.category === 'coffeeGift' || part.category === 'chore')) {
-    review = { ...review, helps: review.helps + 1 };
-  }
+  // Uy tín: mỗi lần giúp đồng nghiệp được tính.
+  const helped = xp.parts.some(
+    (part) => part.category === 'coffeeGift' || part.category === 'chore',
+  );
 
   // Việc sếp giao.
   let missionXp = 0;
@@ -313,11 +310,16 @@ export function applyEvent(
     log.push({ at: ctx.now, source: 'mission', xp: granted - grantedEvent, base: missionXp });
   }
 
+  // Xu: một phần XP thực nhận + thưởng việc sếp giao.
+  const coins =
+    Math.floor(granted * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
+
   state = {
     ...state,
     xp: state.xp + granted,
+    coins: state.coins + coins,
+    reputation: state.reputation + (helped ? BALANCE.reputationPerHelp : 0),
     linesCarry: xp.linesCarry,
-    review,
     daily: {
       ...state.daily,
       earned: state.daily.earned + granted,
@@ -335,6 +337,9 @@ export function applyEvent(
     base,
     levelBefore,
     levelAfter: levelFor(state.xp),
+    titleBefore,
+    titleAfter: titleForLevel(levelFor(state.xp)),
+    coins,
     checkIn: checkInStatus,
     completedMission,
   };

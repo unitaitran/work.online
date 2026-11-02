@@ -2,29 +2,31 @@
 
 Tài liệu gốc về luật chơi. Các prompt sau tham chiếu file này; số liệu cụ thể (công thức XP, giới hạn mỗi ngày) sẽ được bổ sung khi làm tới phase tương ứng và đặt trong `packages/shared`.
 
-## Cấp độ (1–500) và chức danh (10 bậc)
+## Cấp độ (1–500) và chức danh (13 bậc)
 
-Hai hệ thống tách nhau (số liệu ở `packages/shared/src/balance.ts`, xem `docs/BALANCE.md`):
+Số liệu ở `packages/shared/src/balance.ts`, xem `docs/BALANCE.md`.
 
-- **Cấp độ 1–500** tăng _tự động_ theo tổng XP (bảng `XP_TABLE`).
-- **Chức danh** có 10 bậc, mỗi bậc cần đạt cấp tối thiểu _và_ qua kỳ đánh giá 7 ngày kèm phỏng vấn.
+- **Cấp độ 1–500** tăng tự động theo tổng XP (bảng `XP_TABLE`).
+- **Chức danh tự lên theo cấp**: cứ vài cấp lên một bậc, không cần kỳ đánh giá. Lên bậc thì có màn chúc mừng.
 
-| Bậc | Chức danh (nhánh Quản lý / Chuyên môn)   | Cấp tối thiểu |
-| --: | ---------------------------------------- | ------------: |
-|   1 | Thực tập sinh                            |             1 |
-|   2 | Thử việc                                 |             5 |
-|   3 | Nhân viên chính thức                     |            15 |
-|   4 | Chuyên viên                              |            35 |
-|   5 | Chuyên viên cao cấp                      |            70 |
-|   6 | Trưởng nhóm / Chuyên gia                 |           120 |
-|   7 | Trưởng phòng / Chuyên gia cao cấp        |           200 |
-|   8 | Giám đốc bộ phận / Chuyên gia trưởng     |           290 |
-|   9 | Giám đốc điều hành / Giám đốc chuyên môn |           390 |
-|  10 | Tổng giám đốc / Chuyên gia đầu ngành     |           500 |
+| Bậc | Chức danh (Quản lý / Chuyên môn)        | Từ cấp |
+| --: | --------------------------------------- | -----: |
+|   1 | Thực tập sinh                           |      1 |
+|   2 | Thử việc                                |      5 |
+|   3 | Nhân viên chính thức (chọn phòng ban)   |     12 |
+|   4 | Nhân viên                               |     22 |
+|   5 | Chuyên viên (chọn nhánh)                |     35 |
+|   6 | Chuyên viên chính                       |     50 |
+|   7 | Trưởng nhóm / Chuyên gia                |     65 |
+|   8 | Phó phòng / Chuyên gia chính            |     80 |
+|   9 | Trưởng phòng / Chuyên gia cao cấp       |     95 |
+|  10 | Phó giám đốc / Chuyên gia trưởng        |    110 |
+|  11 | Giám đốc bộ phận / Chuyên gia đầu ngành |    125 |
+|  12 | Giám đốc điều hành / Cố vấn chuyên môn  |    138 |
+|  13 | Giám đốc Senior / Chuyên gia Senior     |    150 |
 
-- Chức danh 3: chọn **phòng ban**. Chức danh 5: chọn nhánh **Chuyên môn** hoặc **Quản lý**.
-- **Mở công ty riêng**: cần **cấp 150** và đã **rời công ty hiện tại**. Chơi đều 5 ngày, mỗi ngày đủ giới hạn 190 XP, là vừa tới cấp 150 (950 XP). Từ 150 lên 500 chậm dần, khoảng 150 ngày.
-- Kiến trúc: **1 công ty = 1 tầng = 1 server**, một toà nhà tối đa 30 công ty (Phase 4 và 6). Phase 3 mới có hằng số và hàm kiểm tra điều kiện (`company.ts`); thao tác rời/mở công ty làm ở Phase 6.
+- **Senior (cấp 150) = đủ sức mở công ty riêng**: cần rời công ty hiện tại và đủ vốn xu (Phase 6). Chơi đều 5 ngày, mỗi ngày đủ giới hạn 190 XP, là vừa tới cấp 150. Từ 150 lên 500 chậm dần (khoảng 150 ngày), là cấp danh dự để tiếp tục phát triển.
+- Kiến trúc: **1 công ty = 1 tầng = 1 phòng server**, một toà nhà tối đa 30 công ty.
 
 ## Nguồn XP
 
@@ -42,15 +44,13 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 
 ## Thăng chức
 
-- Đủ XP chưa lên ngay.
-- Mỗi kỳ đánh giá 7 ngày lịch gồm điều kiện cứng (cấp, số ngày chấm công, phút tập trung, lần giúp đồng nghiệp, đã chọn nhánh) và phỏng vấn 5 tình huống (không có câu sai, chỉ cộng nhẹ tính cách).
-- Chưa đạt thì không mất cấp.
+- Đủ cấp là lên chức danh ngay (không có kỳ đánh giá hay phỏng vấn). Không bao giờ mất cấp hay chức danh.
 
 ## Tiền tệ
 
 - **XP** quyết định cấp.
-- **Xu** là lương ảo, dùng để mua đồ.
-- **Uy tín** tăng khi giúp đồng nghiệp, cần từ cấp 6.
+- **Xu** là lương ảo: 50% XP thực nhận (làm tròn xuống) + 20 xu mỗi việc sếp giao. Dùng mua đồ và làm vốn mở công ty.
+- **Uy tín** +1 mỗi lần giúp đồng nghiệp (tặng cà phê, công quả).
 
 ## Hoạt động
 

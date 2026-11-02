@@ -30,4 +30,6 @@ Giới hạn mềm: 190 XP/ngày, phần vượt chỉ nhận 25%. Phòng ban nh
 | 400 |       17391 |  91,5 |
 | 500 |       28500 | 150,0 |
 
-Chức danh bị giới hạn bởi kỳ đánh giá 7 ngày: bậc N sớm nhất ở ngày 7 × (N − 1) (bậc 10: ngày 150 vì cấp 500; bậc 9 sớm nhất ngày 87 theo XP).
+Chức danh tự lên theo cấp (13 bậc, xem GAME_DESIGN). Với nhịp 190 XP/ngày: bậc 5 (Chuyên viên, cấp 35) sau khoảng 1 ngày, bậc 9 (cấp 95) khoảng 3 ngày, Senior (cấp 150) đúng 5 ngày.
+
+Xu: 50% XP thực nhận + 20 xu mỗi việc sếp giao, tức khoảng 95–155 xu mỗi ngày chơi đủ.

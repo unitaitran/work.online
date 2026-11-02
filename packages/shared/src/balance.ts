@@ -29,6 +29,11 @@ export const BALANCE = {
     meetingMinutes: 30,
   },
 
+  /** Xu (điểm trong game): tỉ lệ theo XP thực nhận và thưởng thêm khi xong việc sếp giao. */
+  coins: { perXp: 0.5, missionBonus: 20 },
+  /** Uy tín cộng cho mỗi lần giúp đồng nghiệp. */
+  reputationPerHelp: 1,
+
   /** Phòng ban: hệ số cho loại hoạt động được ưu đãi. */
   departmentBuff: 1.3,
 
@@ -45,18 +50,14 @@ export const BALANCE = {
     lateExponent: 1.6,
   },
 
-  /** 10 chức danh, mỗi chức danh cần đạt cấp tối thiểu (và qua kỳ đánh giá). */
-  titleLevels: [1, 5, 15, 35, 70, 120, 200, 290, 390, 500] as readonly number[],
+  /**
+   * 13 chức danh, tự lên khi đạt cấp tối thiểu (vài cấp một bậc).
+   * Bậc cuối (Senior) đúng bằng cấp mở công ty.
+   */
+  titleLevels: [1, 5, 12, 22, 35, 50, 65, 80, 95, 110, 125, 138, 150] as readonly number[],
   departmentFromTitle: 3,
+  /** Chọn nhánh ở bậc này (trước bậc đầu tiên có tên theo nhánh). */
   branchFromTitle: 5,
-
-  review: {
-    periodDays: 7,
-    minCheckInDays: 4,
-    minFocusMinutes: 30,
-    minHelps: 3,
-    interviewQuestions: 5,
-  },
 
   missions: {
     perDay: 3,

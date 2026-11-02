@@ -1,4 +1,4 @@
-// Cấp độ (1–500, tăng tự động theo XP) và chức danh (10 bậc, lên qua kỳ đánh giá).
+// Cấp độ (1–500, tăng tự động theo XP) và chức danh (13 bậc, tự lên theo cấp).
 import { BALANCE } from './balance';
 
 export type Branch = 'specialist' | 'manager';
@@ -20,35 +20,40 @@ export const DEPARTMENT_NAMES: Readonly<Record<Department, string>> = {
   hr: 'HR',
 };
 
-/** Chức danh 1–5 dùng chung; 6–10 khác nhau theo nhánh. */
+/** Chức danh 1–6 dùng chung; 7–13 khác nhau theo nhánh. Bậc cuối "Senior" = đủ sức mở công ty. */
 const COMMON_TITLES = [
   'Thực tập sinh',
   'Thử việc',
   'Nhân viên chính thức',
+  'Nhân viên',
   'Chuyên viên',
-  'Chuyên viên cao cấp',
+  'Chuyên viên chính',
 ] as const;
 
 const BRANCH_TITLES: Readonly<Record<Branch, readonly string[]>> = {
   manager: [
     'Trưởng nhóm',
+    'Phó phòng',
     'Trưởng phòng',
+    'Phó giám đốc',
     'Giám đốc bộ phận',
     'Giám đốc điều hành',
-    'Tổng giám đốc',
+    'Giám đốc Senior',
   ],
   specialist: [
     'Chuyên gia',
+    'Chuyên gia chính',
     'Chuyên gia cao cấp',
     'Chuyên gia trưởng',
-    'Giám đốc chuyên môn',
     'Chuyên gia đầu ngành',
+    'Cố vấn chuyên môn',
+    'Chuyên gia Senior',
   ],
 };
 
-export const TITLE_COUNT = 10;
+export const TITLE_COUNT = BALANCE.titleLevels.length;
 
-/** Tên chức danh. Chưa chọn nhánh ở bậc ≥ 6 thì dùng nhánh Quản lý làm tên mặc định. */
+/** Tên chức danh. Chưa chọn nhánh ở bậc có tên theo nhánh thì dùng nhánh Quản lý làm tên mặc định. */
 export function titleName(title: number, branch: Branch | null): string {
   if (title <= COMMON_TITLES.length)
     return COMMON_TITLES[Math.max(1, title) - 1] ?? COMMON_TITLES[0];
@@ -58,9 +63,24 @@ export function titleName(title: number, branch: Branch | null): string {
   );
 }
 
-/** Cấp tối thiểu để được xét lên chức danh `title`. */
+/** Bậc đầu tiên có tên khác nhau theo nhánh. */
+export const FIRST_BRANCH_TITLE = COMMON_TITLES.length + 1;
+
+/** Cấp tối thiểu của chức danh `title`. */
 export function titleMinLevel(title: number): number {
   return BALANCE.titleLevels[Math.min(Math.max(title, 1), TITLE_COUNT) - 1] ?? BALANCE.levels.max;
+}
+
+/** Chức danh tự lên theo cấp: bậc cao nhất có cấp tối thiểu ≤ `level`. */
+export function titleForLevel(level: number): number {
+  let title = 1;
+  for (let t = 1; t <= TITLE_COUNT; t += 1) if (level >= titleMinLevel(t)) title = t;
+  return title;
+}
+
+/** Chức danh theo tổng XP. */
+export function titleFor(xp: number): number {
+  return titleForLevel(levelFor(xp));
 }
 
 /** Mở khoá theo chức danh và theo cấp (hiển thị cho người chơi). */
@@ -71,11 +91,10 @@ export const UNLOCKS: readonly { kind: 'title' | 'level'; at: number; text: stri
     text: 'Chọn phòng ban (mỗi phòng có ưu đãi riêng)',
   },
   { kind: 'title', at: BALANCE.branchFromTitle, text: 'Chọn nhánh Chuyên môn hoặc Quản lý' },
-  { kind: 'title', at: 6, text: 'Uy tín: được ghi nhận khi giúp đồng nghiệp' },
   {
     kind: 'level',
     at: BALANCE.company.unlockLevel,
-    text: 'Mở công ty riêng (cần rời công ty hiện tại)',
+    text: 'Senior: đủ sức mở công ty riêng (cần rời công ty hiện tại và đủ vốn)',
   },
 ];
 

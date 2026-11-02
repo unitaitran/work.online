@@ -18,7 +18,7 @@ export interface OfficeHudOptions {
   onInteract(): void;
   onFocusStart(): void;
   onDrinkCoffee(): void;
-  onOpenProfile(tab?: 'card' | 'review'): void;
+  onOpenProfile(): void;
 }
 
 /** Thông tin tiến độ hiển thị trên HUD. */
@@ -29,7 +29,7 @@ export interface ProgressView {
   into: number;
   needed: number;
   isMax: boolean;
-  reviewDue: boolean;
+  coins: number;
 }
 
 export interface MissionView {
@@ -142,17 +142,10 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     ],
   });
   badge.addEventListener('click', () => {
-    options.onOpenProfile('card');
+    options.onOpenProfile();
   });
-  const reviewButton = el('button', {
-    className: 'button button-primary review-due',
-    text: STRINGS.progress.reviewDue,
-    attrs: { type: 'button' },
-  });
-  reviewButton.hidden = true;
-  reviewButton.addEventListener('click', () => {
-    options.onOpenProfile('review');
-  });
+  // Số xu hiện có (điểm trong game).
+  const coinChip = el('span', { className: 'coin-chip', attrs: { 'aria-live': 'polite' } });
 
   // Thẻ việc sếp giao.
   const missionGoal = el('span', { className: 'mission-goal' });
@@ -223,7 +216,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   const bar = el('div', {
     className: 'office-bar',
     children: [
-      el('div', { className: 'office-badge-group', children: [badge, reviewButton] }),
+      el('div', { className: 'office-badge-group', children: [badge, coinChip] }),
       el('div', {
         className: 'office-actions',
         children: [
@@ -293,7 +286,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
         : STRINGS.progress.xpBar(view.into, view.needed);
       xpBar.setAttribute('aria-valuenow', String(Math.round(view.ratio * 100)));
       xpBar.setAttribute('aria-label', xpText.textContent);
-      reviewButton.hidden = !view.reviewDue;
+      coinChip.textContent = STRINGS.progress.coins(view.coins);
     },
     showXpGain(xp, capped) {
       xpFloat.textContent = STRINGS.progress.xpGain(xp);

@@ -298,15 +298,14 @@ export const STRINGS = {
     levelLabel: (level: number, title: string) => `Cấp ${String(level)} · ${title}`,
     xpBar: (into: number, needed: number) => `${String(into)}/${String(needed)} XP`,
     xpMax: 'Cấp tối đa',
+    coins: (coins: number) => `${String(coins)} xu`,
     xpGain: (xp: number) => `+${String(xp)} XP`,
     xpCapped: 'Đã quá giới hạn hôm nay, chỉ nhận 25% XP.',
     levelUp: (level: number) => `Lên cấp ${String(level)}!`,
-    reviewDue: 'Kỳ đánh giá!',
     openProfile: 'Xem hồ sơ',
     profileTitle: 'Hồ sơ nhân viên',
     tabs: {
       card: 'Thẻ nhân viên',
-      review: 'Kỳ đánh giá',
       log: 'Nhật ký',
       roadmap: 'Lộ trình',
       save: 'Lưu trữ',
@@ -326,39 +325,8 @@ export const STRINGS = {
       noBranch: 'Chưa chọn (từ chức danh 5)',
       unemployed: 'Đang tự do',
       employers: { 'may-hong': 'Văn phòng Mây Hồng' } as Record<string, string>,
-      personality: 'Tính cách',
-      traits: { diligence: 'Chăm chỉ', sociability: 'Hoà đồng', creativity: 'Sáng tạo' },
-    },
-    review: {
-      period: (day: number, total: number) =>
-        `Ngày ${String(day)}/${String(total)} của kỳ đánh giá`,
-      dueIn: (days: number) => `Còn ${String(days)} ngày nữa tới kỳ đánh giá.`,
-      due: 'Đã tới kỳ đánh giá! Kiểm tra điều kiện rồi vào phỏng vấn nhé.',
-      next: (title: string) => `Xét lên: ${title}`,
-      maxTitle: 'Bạn đã ở chức danh cao nhất. Tiếp tục lên cấp để mở thêm tính năng!',
-      checks: {
-        level: (current: number, target: number) =>
-          `Đạt cấp ${String(target)} (hiện cấp ${String(current)})`,
-        checkins: (current: number, target: number) =>
-          `Chấm công ít nhất ${String(target)} ngày trong kỳ (đã ${String(current)})`,
-        focus: (current: number, target: number) =>
-          `Tập trung gõ phím ít nhất ${String(target)} phút (đã ${String(current)})`,
-        helps: (current: number, target: number) =>
-          `Giúp đồng nghiệp ít nhất ${String(target)} lần: tặng cà phê, tưới cây (đã ${String(current)})`,
-        branch: () => 'Đã chọn nhánh Chuyên môn hoặc Quản lý',
-      },
-      start: 'Vào phỏng vấn thăng chức',
-      endPeriod: 'Kết thúc kỳ này',
-      notEligible:
-        'Kỳ này chưa đủ điều kiện. Không sao cả: bạn giữ nguyên cấp và chức danh, kỳ mới bắt đầu từ hôm nay.',
-      lastPassed: (title: string) => `Kỳ trước: lên chức ${title}.`,
-      lastFailed: 'Kỳ trước: chưa đủ điều kiện, đã chờ sang kỳ này.',
-      notYet: 'Chưa tới hạn đánh giá. Cứ làm việc đều, tới ngày sẽ có nút vào phỏng vấn.',
-    },
-    interview: {
-      title: 'Phỏng vấn thăng chức',
-      step: (index: number, total: number) => `Tình huống ${String(index)}/${String(total)}`,
-      intro: 'Không có câu trả lời sai. Cứ chọn theo cách của bạn nhé!',
+      coins: 'Xu',
+      reputation: 'Uy tín',
     },
     promoted: {
       title: 'Chúc mừng thăng chức!',

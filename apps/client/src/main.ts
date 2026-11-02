@@ -5,6 +5,7 @@ import {
   BALANCE,
   goalAmount,
   levelProgress,
+  titleFor,
   titleName,
   type ProgressState,
 } from '@dilam/shared';
@@ -40,7 +41,7 @@ import { showCoachMarks } from './ui/coachMarks';
 import { mountDevPanel } from './ui/devPanel';
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
-import { askChoices, startReview, type ReviewFlowDeps } from './ui/reviewFlow';
+import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
 
@@ -223,8 +224,8 @@ function start(): void {
       onDrinkCoffee: () => {
         activities?.drinkCoffee();
       },
-      onOpenProfile: (tab) => {
-        openProfile(tab ?? 'card');
+      onOpenProfile: () => {
+        openProfile();
       },
     });
     officeHud = hud;
@@ -248,17 +249,17 @@ function start(): void {
     activities = officeActivities;
     const officeHudView = hud;
 
-    // ---------- Tiến độ: thanh XP, lên cấp, việc sếp giao, kỳ đánh giá ----------
+    // ---------- Tiến độ: thanh XP, lên cấp, lên chức danh, việc sếp giao ----------
     const refreshProgress = (state: ProgressState = progress.state): void => {
       const p = levelProgress(state.xp);
       officeHudView.setProgress({
         level: p.level,
-        title: titleName(state.title, state.branch),
+        title: titleName(titleFor(state.xp), state.branch),
         ratio: p.ratio,
         into: p.into,
         needed: p.needed,
         isMax: p.isMax,
-        reviewDue: progress.reviewStatus().due,
+        coins: state.coins,
       });
       const mission = activeMission(state);
       officeHudView.setMission(
@@ -271,6 +272,17 @@ function start(): void {
           : null,
       );
     };
+    const promotionDeps: PromotionDeps = {
+      root: hudRoot,
+      openPanel: (title, onClose) => officeActivities.openPanel(title, onClose),
+      lockInput: (locked) => {
+        scene.setInputLocked(locked);
+      },
+      play: (sound) => {
+        audio.play(sound);
+      },
+      progress,
+    };
     const offProgress = progress.onChange((state, change) => {
       refreshProgress(state);
       if (change.kind === 'event') {
@@ -281,7 +293,10 @@ function start(): void {
           audio.play('ting');
           officeHudView.showToast(STRINGS.progress.mission.done(BALANCE.mission));
         }
-        if (result.levelAfter > result.levelBefore) {
+        if (result.titleAfter > result.titleBefore) {
+          // Lên chức danh: màn chúc mừng (có nhạc riêng) rồi hỏi phòng ban / nhánh nếu vừa mở khoá.
+          celebratePromotion(promotionDeps, titleName(result.titleAfter, state.branch));
+        } else if (result.levelAfter > result.levelBefore) {
           audio.play('levelup');
           officeHudView.showToast(STRINGS.progress.levelUp(result.levelAfter));
         }
@@ -296,18 +311,7 @@ function start(): void {
       refreshProgress();
     }, 3000);
 
-    const reviewDeps: ReviewFlowDeps = {
-      root: hudRoot,
-      openPanel: (title, onClose) => officeActivities.openPanel(title, onClose),
-      lockInput: (locked) => {
-        scene.setInputLocked(locked);
-      },
-      play: (sound) => {
-        audio.play(sound);
-      },
-      progress,
-    };
-    const openProfile = (tab: ProfileTab): void => {
+    const openProfile = (tab: ProfileTab = 'card'): void => {
       let panel: { dispose(): void } | null = null;
       const modal = officeActivities.openPanel(STRINGS.progress.profileTitle, () =>
         panel?.dispose(),
@@ -317,14 +321,10 @@ function start(): void {
         playerId,
         progress,
         initialTab: tab,
-        onStartReview: () => {
-          modal.close();
-          startReview(reviewDeps);
-        },
       });
     };
     // Lỡ đóng màn chọn phòng ban / nhánh: lần vào văn phòng sau hỏi lại.
-    if (progress.needsDepartment() || progress.needsBranch()) askChoices(reviewDeps);
+    if (progress.needsDepartment() || progress.needsBranch()) askChoices(promotionDeps);
 
     const devPanel = import.meta.env.DEV
       ? mountDevPanel(hudRoot, {
@@ -405,7 +405,6 @@ function start(): void {
         audio: () => audio.stats(),
         events: () => bus.history(),
         progress: () => progress.state,
-        review: () => progress.reviewStatus(),
         today: () => clock.today(),
         playerId: () => playerId,
         setPeriod: (period: DayPeriod) => {

@@ -6,7 +6,7 @@ import { BRANCHES, DEPARTMENTS, type Branch, type Department } from './levels';
 import type { Mission } from './missions';
 import { isDayKey } from './time';
 
-export const PROGRESS_VERSION = 2;
+export const PROGRESS_VERSION = 3;
 
 export interface CheckInState {
   lastDay: string | null;
@@ -28,23 +28,6 @@ export interface DailyState {
   nextMissionAt: number | null;
 }
 
-export type ReviewCheckId = 'level' | 'checkins' | 'focus' | 'helps' | 'branch';
-
-export interface ReviewState {
-  /** Ngày bắt đầu kỳ đánh giá hiện tại. */
-  periodStart: string | null;
-  checkInDays: string[];
-  focusMs: number;
-  helps: number;
-  last: { day: string; passed: boolean; missing: ReviewCheckId[]; fromTitle: number } | null;
-}
-
-export interface Personality {
-  diligence: number;
-  sociability: number;
-  creativity: number;
-}
-
 export interface LogEntry {
   at: number;
   /** Loại sự kiện hoặc 'mission'. */
@@ -52,13 +35,16 @@ export interface LogEntry {
   xp: number;
   /** XP trước giới hạn ngày. */
   base: number;
-  note?: string;
+  note?: string | undefined;
 }
 
 export interface ProgressState {
   version: typeof PROGRESS_VERSION;
   xp: number;
-  title: number;
+  /** Xu: điểm trong game (không quy đổi tiền thật). */
+  coins: number;
+  /** Uy tín: tăng khi giúp đồng nghiệp (tặng cà phê, công quả). */
+  reputation: number;
   branch: Branch | null;
   department: Department | null;
   /** Công ty đang làm; null = đã nghỉ (điều kiện để mở công ty riêng). */
@@ -67,8 +53,6 @@ export interface ProgressState {
   daily: DailyState;
   /** Số dòng kinh công sở chưa đủ mốc để quy ra XP. */
   linesCarry: number;
-  review: ReviewState;
-  personality: Personality;
   log: LogEntry[];
   createdAt: number;
 }
@@ -77,15 +61,14 @@ export function createProgress(now: number): ProgressState {
   return {
     version: PROGRESS_VERSION,
     xp: 0,
-    title: 1,
+    coins: 0,
+    reputation: 0,
     branch: null,
     department: null,
     employer: BALANCE.company.defaultEmployer,
     checkIn: { lastDay: null, lastAt: null, streak: 0, total: 0 },
     daily: emptyDaily(null),
     linesCarry: 0,
-    review: { periodStart: null, checkInDays: [], focusMs: 0, helps: 0, last: null },
-    personality: { diligence: 0, sociability: 0, creativity: 0 },
     log: [],
     createdAt: now,
   };
@@ -131,6 +114,46 @@ const missionSchema = z.object({
   completedAt: z.number().nullable(),
 });
 
+const dailySchema = z.object({
+  day: dayKeySchema.nullable(),
+  earned: nonNegInt,
+  counts: z.record(z.string(), nonNegInt),
+  fortuneClaimed: z.boolean(),
+  missions: z.array(missionSchema).max(10),
+  nextMissionAt: z.number().nullable(),
+});
+
+const logSchema = z
+  .array(
+    z.object({
+      at: z.number(),
+      source: z.string(),
+      xp: nonNegInt,
+      base: nonNegInt,
+      note: z.string().optional(),
+    }),
+  )
+  .max(500);
+
+const branchSchema = z.enum(BRANCHES as [Branch, ...Branch[]]).nullable();
+const departmentSchema = z.enum(DEPARTMENTS as [Department, ...Department[]]).nullable();
+
+const progressV3Schema = z.object({
+  version: z.literal(3),
+  xp: nonNegInt,
+  coins: nonNegInt,
+  reputation: nonNegInt,
+  branch: branchSchema,
+  department: departmentSchema,
+  employer: z.string().max(64).nullable(),
+  checkIn: checkInSchema,
+  daily: dailySchema,
+  linesCarry: nonNegInt,
+  log: logSchema,
+  createdAt: z.number(),
+});
+
+/** Phiên bản 2 (Phase 3 bản đầu): có chức danh lưu riêng, kỳ đánh giá và tính cách. */
 const progressV2Schema = z.object({
   version: z.literal(2),
   xp: nonNegInt,
@@ -207,7 +230,18 @@ export function migrateProgress(raw: unknown, now: number): MigrateResult {
   if (version === 2) {
     const parsed = progressV2Schema.safeParse(raw);
     if (!parsed.success) return { ok: false, reason: 'invalid' };
-    return { ok: true, migratedFrom: null, state: parsed.data as ProgressState };
+    // Chức danh nay suy ra từ cấp; kỳ đánh giá và tính cách bỏ. Lần giúp trong kỳ thành uy tín.
+    const { title: _title, review, personality: _personality, ...rest } = parsed.data;
+    return {
+      ok: true,
+      migratedFrom: 2,
+      state: { ...rest, version: PROGRESS_VERSION, coins: 0, reputation: review.helps },
+    };
+  }
+  if (version === 3) {
+    const parsed = progressV3Schema.safeParse(raw);
+    if (!parsed.success) return { ok: false, reason: 'invalid' };
+    return { ok: true, migratedFrom: null, state: parsed.data };
   }
   return { ok: false, reason: typeof version === 'number' ? 'unknown_version' : 'invalid' };
 }
