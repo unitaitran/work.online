@@ -310,3 +310,15 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Chống lạm dụng**: 5 đơn/ngày mỗi người, 10 mã mời/ngày mỗi công ty. IP được băm bằng HMAC với khoá bí mật lưu trong DB (`server_settings`), không lưu IP thật; trùng IP băm với chủ thì đánh dấu nghi tài khoản phụ (không nhận thưởng thăng chức).
 - **Offer**: chỉ từ công ty NPC tự đặt tên (`NPC_COMPANIES`), mỗi 3 ngày một lời mời cho người đang làm ở Mây Hồng / công ty NPC / công ty người chơi còn ở Garage hoặc Co-working. Nhận lời: lên ngay một cấp (luật `acceptOffer` trong shared), đổi công ty, giảm 10% uy tín.
 - **Bảng tin công ty** chỉ có thông báo hệ thống (khai trương, dự án xong, thành viên vào/rời/thăng chức, nâng cấp, IPO, sự kiện), không có chat tự do.
+
+## Phase 7: tối ưu, bảo mật, triển khai
+
+- **Server phục vụ luôn client** (`CLIENT_DIST`) để cùng nguồn: CSP chỉ cần `'self'`, không cần CORS. CORS chỉ mở cho nguồn trong `CORS_ORIGINS`.
+- **CSP** cho phép `style-src 'unsafe-inline'` vì dev server của Vite chèn style; bản build không có style nội tuyến trong HTML, còn thuộc tính style do JS đặt (CSSOM) không bị CSP chặn. Script không có ngoại lệ. Trang `/admin` (script nội tuyến nhỏ) có CSP riêng, chặn mọi nguồn ngoài.
+- **WebSocket**: chặn Origin lạ (403), tối đa `WS_PER_IP` kết nối/IP (429). Không có Origin (bot, công cụ) vẫn cần token.
+- **PWA**: biểu tượng là SVG nội tuyến (data URI) trong manifest, tuân thủ "không file ảnh". Service worker chỉ cache `/assets/*` (tên đã băm, bất biến), HTML/API luôn đi mạng.
+- **Phiên bản**: `BUILD_ID` gắn lúc build (client) và qua biến môi trường (server, `/api/meta`). Khác giao thức thì bắt buộc tải lại; chỉ khác bản build thì gợi ý.
+- **Thống kê ẩn danh** chỉ có bảng đếm (ngày, sự kiện); endpoint không cần đăng nhập, không ghi ai gửi; gửi với `credentials: 'omit'`.
+- **Sao lưu** dùng API backup trực tuyến của SQLite (không dừng server), bản sao chuyển về một tệp (journal DELETE) và kiểm tra toàn vẹn. Tải ra ngoài qua lệnh cấu hình (`BACKUP_UPLOAD_CMD`, chạy không qua shell).
+- **Điều khoản và quyền riêng tư** chỉ là bản nháp trong `docs/legal/` (không phục vụ trên trang) theo yêu cầu "không đưa nội dung pháp lý lên khi chưa có người có chuyên môn rà soát". Trong game có mục "Dữ liệu của bạn" mô tả đúng những gì được lưu.
+- **Docker chưa build được trong container phát triển** (Docker Hub giới hạn lượt tải, CDN bị chặn); CI có job build và khởi động thử image. Đường chạy không Docker đã kiểm chứng từ clone sạch.

@@ -149,3 +149,33 @@ Máy đo: container không có GPU, Chromium vẽ bằng SwiftShader (phần m�
 - Có bóng thì mỗi mesh vẽ thêm một lượt vào shadow map, nên mức vừa/cao tăng gấp đôi số draw call.
 - Đã sửa trong đợt đo: đọc khung canvas một lần mỗi khung hình (trước đó mỗi bong bóng gọi `getBoundingClientRect`), và chỉ hiện nhãn tên cho người gần (vẽ chi tiết) hoặc đang nói.
 - Mục tiêu điện thoại tầm trung (≤ 100 draw call): chế độ tự động bắt đầu ở mức thấp trên màn cảm ứng, đúng ngân sách.
+
+## Phase 7: trước/sau tối ưu
+
+Đo bằng `node scripts/perf-client.cjs <url> 3`: Chromium giả lập CPU chậm 4 lần khi tải, rồi chơi 3 phút lặp các thao tác hay gây rò rỉ (đi lại, mở/đóng cửa hàng, giao lưu, menu, hồ sơ; cứ 3 vòng thì "Sửa thẻ" và vào lại văn phòng để dựng lại toàn cảnh). Máy đo không có GPU (SwiftShader), mạng nội bộ.
+
+**Ngân sách** (mục tiêu điện thoại tầm trung, 30 fps):
+
+| Chỉ số                                         | Ngân sách                                            |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| Tải tới màn tạo nhân vật (CPU ×4, mạng nội bộ) | ≤ 3 giây                                             |
+| JS tải ban đầu                                 | ≤ 900 KB thô / ≤ 260 KB gzip                         |
+| Draw call ở chất lượng thấp, phòng đông        | ≤ 100                                                |
+| Bộ nhớ sau 30 phút                             | heap tăng ≤ 5 MB, số hình học/texture không tăng dần |
+
+| Chỉ số                                |            Trước |                                                                                                                                  Sau |
+| ------------------------------------- | ---------------: | -----------------------------------------------------------------------------------------------------------------------------------: |
+| Tải tới màn tạo nhân vật (CPU ×4)     |         1 648 ms |                                                                                                                             1 615 ms |
+| JS tải ban đầu                        | 862 KB (2 chunk) |                                                                   847 KB (11 chunk; three 550 KB và zod 92 KB tách riêng, cache lâu) |
+| JS màn ít dùng (tải lười)             |          gộp sẵn | cửa hàng 5 KB, công ty 11 KB, xếp hạng 1,6 KB, tường 1,8 KB, bản đồ 0,9 KB, thẻ khoe 3 KB, công cụ dev 0,8 KB (không có ở bản build) |
+| Draw call (một mình, chất lượng thấp) |               27 |                                                                                                                                   27 |
+| Sau 3 phút / 20 vòng: hình học        |          29 → 31 |                                                                                                                              29 → 31 |
+| Sau 3 phút / 20 vòng: texture         |            6 → 6 |                                                                                                                                6 → 6 |
+| Sau 3 phút / 20 vòng: heap JS         |   14,9 → 13,7 MB |                                                                                                                       13,0 → 13,6 MB |
+| Nút DOM                               |          83 → 83 |                                                                                                                              93 → 94 |
+
+Kết luận: không thấy rò rỉ (hình học dao động 29-36 theo NPC và nhân vật dựng lại, trở về 29-31). Phần lớn JS là three.js, cần ngay từ màn tạo nhân vật nên không tải lười được; lợi ích chính của việc tách chunk là cache: bản cập nhật chỉ đổi `main`/`strings`, three và zod giữ nguyên trong cache. Gzip ở reverse proxy giảm JS ban đầu còn khoảng 240 KB.
+
+**Chế độ máy yếu** (tự phát hiện khi ≤ 4 nhân CPU, ≤ 4 GB RAM hoặc bật tiết kiệm dữ liệu): bắt đầu ở mức thấp (không bóng, không bụi, pixel ratio 1, chỉ 5 người vẽ chi tiết), bộ điều tiết vẫn tự hạ thêm nếu fps < 30 kéo dài.
+
+**Sửa trong Phase 7**: thẻ khoe trả context WebGL ngay sau khi chụp (trước đây chờ trình duyệt thu hồi), tránh chạm giới hạn số context khi mở thẻ khoe nhiều lần.

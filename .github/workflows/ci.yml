@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (eslint + prettier)
+        run: npm run lint
+      - name: Test (gồm test bảo mật cơ bản, sao lưu/khôi phục)
+        run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          BUILD_ID: ${{ github.sha }}
+      - name: Tải thử rút gọn (20 bot, 5 giây)
+        run: npm run loadtest -w @dilam/server -- 20 5
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --build-arg BUILD_ID=${{ github.sha }} -t dilam-online:${{ github.sha }} .
+      - name: Khởi động thử image
+        run: |
+          docker run -d --name dilam -p 3000:3000 dilam-online:${{ github.sha }}
+          for i in $(seq 1 30); do curl -sf localhost:3000/api/health && break; sleep 1; done
+          curl -sf localhost:3000/api/health
+          curl -sf -o /dev/null localhost:3000/
+          docker stop dilam

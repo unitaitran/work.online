@@ -66,6 +66,8 @@ const server = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
     LOG_LEVEL: 'warn',
     ROOM_CAPACITY: String(Math.max(BOTS, 40)),
     SERVER_CAPACITY: String(BOTS + 10),
+    // Mọi bot chạy từ cùng một máy (một IP).
+    WS_PER_IP: String(BOTS + 10),
   },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
