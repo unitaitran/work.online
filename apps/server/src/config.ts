@@ -3,16 +3,53 @@ import { z } from 'zod';
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+const boolish = z
+  .enum(['0', '1', 'true', 'false'])
+  .transform((value) => value === '1' || value === 'true');
+
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   HOST: z.string().trim().min(1).default('127.0.0.1'),
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
+  /** Đường dẫn file SQLite (":memory:" khi thử). */
+  DB_PATH: z.string().trim().min(1).default('data/dilam.sqlite'),
+  /** Token hết hạn sau chừng này ngày không dùng (gia hạn trượt mỗi lần dùng). */
+  TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+  /** Số người tối đa mỗi phòng văn phòng chung. */
+  ROOM_CAPACITY: z.coerce.number().int().min(2).max(500).default(40),
+  /** Số người online tối đa toàn server. */
+  SERVER_CAPACITY: z.coerce.number().int().min(1).max(100_000).default(400),
+  /** Khoá trang quản trị (bỏ trống = tắt trang quản trị). Tối thiểu 24 ký tự. */
+  ADMIN_KEY: z.string().min(24).optional(),
+  /** Đứng sau reverse proxy (Caddy/Nginx): tin X-Forwarded-For để lấy IP thật. */
+  TRUST_PROXY: boolish.default(false),
+  /** Nguồn được phép gọi API (CORS), phân tách bằng dấu phẩy. Bỏ trống = chỉ cùng nguồn. */
+  CORS_ORIGINS: z.string().optional(),
+  /** Bật API dev (tua ngày, cộng XP). CHỈ dùng khi phát triển. */
+  DEV_TOOLS: boolish.default(false),
+  /** Mã bản build (ví dụ git sha), client so để báo có bản mới. */
+  BUILD_ID: z.string().max(80).optional(),
+  /** Thư mục bản build client để server phục vụ cùng nguồn (bỏ trống = không phục vụ). */
+  CLIENT_DIST: z.string().optional(),
+  /** Số kết nối WebSocket tối đa từ một IP. */
+  WS_PER_IP: z.coerce.number().int().min(1).max(1000).default(8),
 });
 
 export interface ServerConfig {
   port: number;
   host: string;
   logLevel: LogLevel;
+  dbPath: string;
+  tokenTtlDays: number;
+  roomCapacity: number;
+  serverCapacity: number;
+  adminKey: string | null;
+  trustProxy: boolean;
+  corsOrigins: string[];
+  devTools: boolean;
+  buildId: string | null;
+  clientDist: string | null;
+  wsPerIp: number;
 }
 
 /** Đọc cấu hình từ biến môi trường. Ném lỗi rõ ràng nếu giá trị sai. */
@@ -23,8 +60,31 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
   if (!result.success) {
     throw new Error(`Invalid server environment:\n${z.prettifyError(result.error)}`);
   }
-  const { PORT, HOST, LOG_LEVEL } = result.data;
-  return { port: PORT, host: HOST, logLevel: LOG_LEVEL };
+  const d = result.data;
+  return {
+    port: d.PORT,
+    host: d.HOST,
+    logLevel: d.LOG_LEVEL,
+    dbPath: d.DB_PATH,
+    tokenTtlDays: d.TOKEN_TTL_DAYS,
+    roomCapacity: d.ROOM_CAPACITY,
+    serverCapacity: d.SERVER_CAPACITY,
+    adminKey: d.ADMIN_KEY ?? null,
+    trustProxy: d.TRUST_PROXY,
+    corsOrigins: (d.CORS_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    devTools: d.DEV_TOOLS,
+    buildId: d.BUILD_ID ?? null,
+    clientDist: d.CLIENT_DIST ?? null,
+    wsPerIp: d.WS_PER_IP,
+  };
+}
+
+/** Cấu hình mặc định cho test (DB trong bộ nhớ, không log). */
+export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig {
+  return { ...loadConfig({ LOG_LEVEL: 'silent', DB_PATH: ':memory:' }), ...overrides };
 }
 
 /** Nạp file .env nếu có. Không có file thì bỏ qua; biến đã đặt sẵn không bị ghi đè. */

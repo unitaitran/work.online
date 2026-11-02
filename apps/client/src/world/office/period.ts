@@ -21,32 +21,43 @@ export interface PeriodLighting {
   hemiIntensity: number;
   sunColor: number;
   sunIntensity: number;
+  /**
+   * Hệ số nhân màu sàn và tường (1 = giữ tông đen xám gốc). Ban ngày > 1 để phòng thật sự sáng
+   * (sàn đá và tường vữa vốn tối, chỉ tăng đèn thì vẫn trông như buổi tối).
+   */
+  surfaceBoost: number;
 }
 
-/** Ánh sáng trong phòng theo buổi: đêm thì nắng gần tắt, đèn trần ấm thay vào. */
+/**
+ * Văn phòng tông đen xám: ban ngày nắng tràn qua cửa kính, phòng sáng sủa, nền ngoài là trời sáng;
+ * ban đêm gần tắt nắng, chỉ còn đèn thả và đèn cây ấm.
+ */
 export const PERIOD_LIGHTING: Readonly<Record<DayPeriod, PeriodLighting>> = {
   morning: {
-    background: 0xfdf3e7,
-    hemiSky: 0xfff6ea,
-    hemiGround: 0xc9a98a,
-    hemiIntensity: 1.7,
-    sunColor: 0xffffff,
-    sunIntensity: 2.1,
+    background: 0xdfe8f2,
+    hemiSky: 0xffffff,
+    hemiGround: 0xb0aaa2,
+    hemiIntensity: 3.3,
+    sunColor: 0xfff6e8,
+    sunIntensity: 3.6,
+    surfaceBoost: 2.5,
   },
   afternoon: {
-    background: 0xfbe6d2,
-    hemiSky: 0xffe9d2,
-    hemiGround: 0xc49478,
-    hemiIntensity: 1.55,
-    sunColor: 0xffc58f,
-    sunIntensity: 1.9,
+    background: 0xf2e6d8,
+    hemiSky: 0xfff4e6,
+    hemiGround: 0xb0a292,
+    hemiIntensity: 3.0,
+    sunColor: 0xffdcb0,
+    sunIntensity: 3.3,
+    surfaceBoost: 2.3,
   },
   night: {
-    background: 0x2a2a44,
-    hemiSky: 0xfff0dc,
-    hemiGround: 0x6d5a6a,
-    hemiIntensity: 1.35,
-    sunColor: 0x9fb4ff,
-    sunIntensity: 0.55,
+    background: 0x08080c,
+    hemiSky: 0xd8ccff,
+    hemiGround: 0x2a1818,
+    hemiIntensity: 1.05,
+    sunColor: 0x8fa2ff,
+    sunIntensity: 0.4,
+    surfaceBoost: 1,
   },
 };

@@ -2,26 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { makeEvent, type ActivityEvent } from './activityEvents';
 import { BALANCE } from './balance';
 import { canOpenCompany, leaveCompany, buildingHasRoom } from './company';
-import { INTERVIEW_QUESTIONS, pickInterview, scoreInterview } from './interview';
 import {
   levelFor,
   levelProgress,
   MAX_LEVEL,
+  titleFor,
+  titleForLevel,
   titleMinLevel,
   titleName,
+  TITLE_COUNT,
   XP_TABLE,
   xpForLevel,
 } from './levels';
 import { MISSION_TEMPLATES } from './missions';
 import { createProgress, migrateProgress, PROGRESS_VERSION, type ProgressState } from './progress';
-import {
-  chooseBranch,
-  chooseDepartment,
-  completeReview,
-  needsBranch,
-  needsDepartment,
-  reviewStatus,
-} from './review';
+import { chooseBranch, chooseDepartment, needsBranch, needsDepartment } from './career';
 import {
   activeMission,
   applyDailyCap,
@@ -56,6 +51,8 @@ const focus = (minutes: number, completed: boolean, lines = 0, actualMs?: number
     lines,
     completed,
   });
+const tick = (kind: 'desk' | 'focus' | 'meeting', minutes: number): ActivityEvent =>
+  makeEvent('work-tick', T0, minutes * 60_000, { kind, minutes });
 const checkin = (at = T0): ActivityEvent =>
   makeEvent('checkin', at, 0, { day: DAY, streak: 99, total: 99 });
 const gift = (): ActivityEvent => makeEvent('coffee-gift', T0, 0, { npcId: 'npc-0' });
@@ -113,15 +110,40 @@ describe('cấp độ 1–500', () => {
     expect(levelProgress(xpForLevel(MAX_LEVEL)).isMax).toBe(true);
   });
 
-  it('chức danh: 5 bậc chung, từ bậc 6 khác theo nhánh', () => {
+  it('chức danh: 6 bậc chung, từ bậc 7 khác theo nhánh, bậc cuối là Senior', () => {
+    expect(TITLE_COUNT).toBe(13);
     expect(titleName(1, null)).toBe('Thực tập sinh');
-    expect(titleName(5, 'specialist')).toBe('Chuyên viên cao cấp');
-    expect(titleName(6, 'manager')).toBe('Trưởng nhóm');
-    expect(titleName(6, 'specialist')).toBe('Chuyên gia');
-    expect(titleName(10, 'manager')).toBe('Tổng giám đốc');
-    expect(titleName(10, 'specialist')).not.toBe(titleName(10, 'manager'));
+    expect(titleName(5, 'specialist')).toBe('Chuyên viên');
+    expect(titleName(7, 'manager')).toBe('Trưởng nhóm');
+    expect(titleName(7, 'specialist')).toBe('Chuyên gia');
+    expect(titleName(13, 'manager')).toBe('Giám đốc Senior');
+    expect(titleName(13, 'specialist')).toBe('Chuyên gia Senior');
     expect(titleMinLevel(1)).toBe(1);
-    expect(titleMinLevel(10)).toBe(MAX_LEVEL);
+    expect(titleMinLevel(TITLE_COUNT)).toBe(BALANCE.company.unlockLevel);
+  });
+
+  it('chức danh tự lên theo cấp, vài cấp một bậc', () => {
+    expect(titleForLevel(1)).toBe(1);
+    expect(titleForLevel(4)).toBe(1);
+    expect(titleForLevel(5)).toBe(2);
+    expect(titleForLevel(149)).toBe(12);
+    expect(titleForLevel(150)).toBe(13);
+    expect(titleForLevel(500)).toBe(13);
+    for (let t = 2; t <= TITLE_COUNT; t += 1) {
+      const gap = titleMinLevel(t) - titleMinLevel(t - 1);
+      expect(gap).toBeGreaterThanOrEqual(4);
+      expect(gap).toBeLessThanOrEqual(15);
+      expect(titleFor(xpForLevel(titleMinLevel(t)))).toBe(t);
+      expect(titleFor(xpForLevel(titleMinLevel(t)) - 1)).toBe(t - 1);
+    }
+  });
+
+  it('applyEvent báo chức danh trước/sau khi lên', () => {
+    const s = { ...createProgress(T0), xp: xpForLevel(5) - 3 };
+    const task = makeEvent('task-flip', T0, 0, { taskId: 1, completed: true });
+    const r = applyEvent(s, task, { today: DAY, now: T0 });
+    expect(r.titleBefore).toBe(1);
+    expect(r.titleAfter).toBe(2);
   });
 });
 
@@ -132,20 +154,25 @@ describe('xpFor', () => {
     expect(xpFor(checkin(), ctx({ streak: 30 })).xp).toBe(55);
   });
 
-  it('gõ phím tập trung: trọn phiên 1/3/5 phút = 10/35/70; dừng sớm 5 XP mỗi phút trọn', () => {
-    expect(xpFor(focus(1, true), ctx()).xp).toBe(10);
-    expect(xpFor(focus(3, true), ctx()).xp).toBe(35);
-    expect(xpFor(focus(5, true), ctx()).xp).toBe(70);
-    expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(10);
-    // Báo "xong" nhưng thời gian không đủ: không tin, tính như dừng sớm.
-    expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(5);
+  it('hết phiên tập trung trọn vẹn: thưởng 3/10/20; dừng sớm hoặc báo xong mà thiếu giờ thì không', () => {
+    expect(xpFor(focus(1, true), ctx()).xp).toBe(3);
+    expect(xpFor(focus(3, true), ctx()).xp).toBe(10);
+    expect(xpFor(focus(5, true), ctx()).xp).toBe(20);
+    expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(0);
+    expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(0);
   });
 
-  it('mỗi 50 dòng kinh công sở = 10 XP, phần dư cộng dồn', () => {
+  it('XP nhỏ giọt mỗi phút: ngồi máy 2, phiên tập trung 4, họp 2', () => {
+    expect(xpFor(tick('desk', 1), ctx()).xp).toBe(2);
+    expect(xpFor(tick('focus', 3), ctx()).xp).toBe(12);
+    expect(xpFor(tick('meeting', 5), ctx()).xp).toBe(10);
+  });
+
+  it('mỗi 50 dòng kinh công sở = 5 XP, phần dư cộng dồn', () => {
     const a = xpFor(focus(1, true, 70), ctx());
-    expect(a.xp).toBe(10 + 10);
+    expect(a.xp).toBe(3 + 5);
     expect(a.linesCarry).toBe(20);
-    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(20);
+    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(8);
   });
 
   it('task, cà phê, công quả, quẻ, họp', () => {
@@ -162,8 +189,8 @@ describe('xpFor', () => {
         ctx({ fortuneClaimed: true }),
       ).xp,
     ).toBe(0);
-    expect(xpFor(meeting(3), ctx()).xp).toBe(12);
-    expect(xpFor(meeting(60), ctx()).xp).toBe(BALANCE.meeting.maxMinutesPerSession * 4);
+    // Kết thúc buổi họp không cho thêm XP (đã nhỏ giọt theo phút).
+    expect(xpFor(meeting(3), ctx()).xp).toBe(0);
     expect(xpFor(makeEvent('vent', T0, 0, { length: 5, anonymous: true }), ctx()).xp).toBe(0);
   });
 
@@ -171,17 +198,21 @@ describe('xpFor', () => {
     expect(xpFor(gift(), ctx({ countToday: (k) => (k === 'coffeeGift' ? 5 : 0) })).xp).toBe(0);
     expect(xpFor(chore(), ctx({ countToday: (k) => (k === 'chore' ? 6 : 0) })).xp).toBe(0);
     expect(
-      xpFor(meeting(10), ctx({ countToday: (k) => (k === 'meetingMinutes' ? 28 : 0) })).xp,
+      xpFor(tick('meeting', 10), ctx({ countToday: (k) => (k === 'meetingMinutes' ? 56 : 0) })).xp,
     ).toBe(8);
+    expect(
+      xpFor(tick('desk', 5), ctx({ countToday: (k) => (k === 'deskMinutes' ? 180 : 0) })).xp,
+    ).toBe(0);
   });
 
   it('phòng ban: x1.3 đúng loại hoạt động', () => {
-    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(91);
-    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(70);
+    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(26);
+    expect(xpFor(tick('focus', 10), ctx({ department: 'dev' })).xp).toBe(52);
+    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(20);
     expect(xpFor(gift(), ctx({ department: 'sales' })).xp).toBe(10);
     expect(xpFor(gift(), ctx({ department: 'hr' })).xp).toBe(10);
     expect(xpFor(chore(), ctx({ department: 'hr' })).xp).toBe(16);
-    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(10 + 13);
+    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(3 + 7);
     // Kế toán: chỉ phần thưởng chuỗi.
     expect(xpFor(checkin(), ctx({ department: 'accounting', streak: 7 })).xp).toBe(20 + 46);
   });
@@ -199,13 +230,13 @@ describe('giới hạn mềm mỗi ngày', () => {
 
   it('applyEvent cộng dồn đúng giới hạn trong ngày, sang ngày mới thì mở lại', () => {
     let s = createProgress(T0);
-    s = applyAll(s, [focus(5, true), focus(5, true)]); // 140
-    s = applyAll(s, [focus(5, true)]); // +50 đủ, +20 → 5
-    expect(s.daily.earned).toBe(140 + 50 + 5);
-    expect(s.xp).toBe(195);
-    const next = applyEvent(s, focus(5, true), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
-    expect(next.granted).toBe(70);
-    expect(next.state.daily.earned).toBe(70);
+    s = applyAll(s, [tick('focus', 35)]); // 140
+    s = applyAll(s, [tick('focus', 25)]); // +50 đủ, +50 vượt → 12
+    expect(s.daily.earned).toBe(140 + 50 + 12);
+    expect(s.daily.counts.deskMinutes).toBe(60);
+    const next = applyEvent(s, tick('focus', 10), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
+    expect(next.granted).toBe(40);
+    expect(next.state.daily.earned).toBe(40);
   });
 
   it('đổi sang múi giờ chậm hơn (ngày lịch lùi lại): không mở rổ ngày mới', () => {
@@ -229,7 +260,6 @@ describe('chấm công trong tiến độ', () => {
     for (let d = 1; d <= 3; d += 1)
       s = applyEvent(s, checkin(), { today: addDays(DAY, d), now: T0 + d * 86_400_000 }).state;
     expect(s.checkIn.streak).toBe(4);
-    expect(s.review.checkInDays).toHaveLength(4);
     s = applyEvent(s, checkin(), { today: addDays(DAY, 6), now: T0 }).state;
     expect(s.checkIn.streak).toBe(1);
   });
@@ -338,98 +368,34 @@ describe('sếp giao việc', () => {
   });
 });
 
-describe('kỳ đánh giá', () => {
-  /** Người chơi chăm: đủ mọi điều kiện cho chức danh 2 trong 7 ngày. */
-  function diligentWeek(): ProgressState {
-    let s = createProgress(T0);
-    for (let d = 0; d < 7; d += 1) {
-      const today = addDays(DAY, d);
-      const now = T0 + d * 86_400_000;
-      s = applyAll(s, [checkin(now), focus(5, true), gift()], today, now);
-    }
-    return s;
-  }
-
-  it('chưa đủ 7 ngày thì chưa tới hạn', () => {
-    const s = diligentWeek();
-    const status = reviewStatus(s, addDays(DAY, 6));
-    expect(status.due).toBe(false);
-    expect(status.daysLeft).toBe(1);
-  });
-
-  it('đủ 7 ngày + đủ điều kiện: qua phỏng vấn thì lên chức danh 2, kỳ mới bắt đầu', () => {
-    const s = diligentWeek();
-    const today = addDays(DAY, 7);
-    const status = reviewStatus(s, today);
-    expect(status.due).toBe(true);
-    expect(status.eligible).toBe(true);
-    const questions = pickInterview(1);
-    const after = completeReview(s, today, {
-      passed: true,
-      personality: scoreInterview(questions, [0, 1, 2, 0, 1]),
-    });
-    expect(after.title).toBe(2);
-    expect(after.review.periodStart).toBe(today);
-    expect(after.review.checkInDays).toHaveLength(0);
-    expect(
-      after.personality.diligence + after.personality.sociability + after.personality.creativity,
-    ).toBe(10);
-  });
-
-  it('thiếu điều kiện: không mất chức danh, ghi lại thiếu gì, chờ kỳ sau', () => {
-    let s = createProgress(T0);
-    s = applyAll(s, [checkin(), focus(5, true)]);
-    s = { ...s, title: 3, xp: xpForLevel(40) };
-    const today = addDays(DAY, 8);
-    const status = reviewStatus(s, today);
-    expect(status.eligible).toBe(false);
-    const after = completeReview(s, today, { passed: true });
-    expect(after.title).toBe(3);
-    expect(after.review.last?.passed).toBe(false);
-    expect(after.review.last?.missing).toEqual(
-      expect.arrayContaining(['checkins', 'focus', 'helps']),
-    );
-  });
-
-  it('lên chức danh 6 cần đã chọn nhánh; chọn phòng ban từ chức danh 3', () => {
-    let s = { ...createProgress(T0), title: 5, xp: xpForLevel(130) };
-    expect(needsBranch(s)).toBe(true);
-    expect(reviewStatus(s, DAY).checks.find((c) => c.id === 'branch')?.met).toBe(false);
-    s = chooseBranch(s, 'specialist');
-    expect(s.branch).toBe('specialist');
-    expect(chooseBranch(s, 'manager').branch).toBe('specialist');
-    const t3 = { ...createProgress(T0), title: 3 };
+describe('lựa chọn sự nghiệp, xu, uy tín', () => {
+  it('chọn phòng ban từ chức danh 3, nhánh từ chức danh 5; chỉ chọn một lần', () => {
+    const t3 = { ...createProgress(T0), xp: xpForLevel(titleMinLevel(3)) };
+    expect(needsDepartment(createProgress(T0))).toBe(false);
     expect(needsDepartment(t3)).toBe(true);
+    expect(needsBranch(t3)).toBe(false);
     expect(chooseDepartment(t3, 'dev').department).toBe('dev');
     expect(chooseDepartment(createProgress(T0), 'dev').department).toBeNull();
-  });
-});
-
-describe('phỏng vấn', () => {
-  it('20 tình huống, mỗi tình huống 3 lựa chọn đều có cộng chỉ số (không câu sai)', () => {
-    expect(INTERVIEW_QUESTIONS).toHaveLength(20);
-    for (const q of INTERVIEW_QUESTIONS) {
-      expect(q.options).toHaveLength(3);
-      for (const option of q.options) {
-        const sum = Object.values(option.effect).reduce((a, b) => a + b, 0);
-        expect(sum).toBeGreaterThan(0);
-        expect(sum).toBeLessThanOrEqual(3);
-      }
-    }
+    const t5 = { ...createProgress(T0), xp: xpForLevel(titleMinLevel(5)) };
+    const chosen = chooseBranch(t5, 'specialist');
+    expect(chosen.branch).toBe('specialist');
+    expect(chooseBranch(chosen, 'manager').branch).toBe('specialist');
   });
 
-  it('chọn ngẫu nhiên 5 câu khác nhau, cùng hạt giống cùng bộ câu', () => {
-    const a = pickInterview(42);
-    expect(a).toHaveLength(5);
-    expect(new Set(a.map((q) => q.id)).size).toBe(5);
-    expect(pickInterview(42).map((q) => q.id)).toEqual(a.map((q) => q.id));
+  it('xu = 50% XP thực nhận (làm tròn xuống); giúp đồng nghiệp tăng uy tín', () => {
+    let s = createProgress(T0);
+    const r = applyEvent(s, checkin(), { today: DAY, now: T0 });
+    expect(r.coins).toBe(12);
+    s = applyAll(r.state, [gift(), chore()]);
+    expect(s.coins).toBe(12 + 4 + 6);
+    expect(s.reputation).toBe(2);
   });
 });
 
 describe('mã lưu và migrate', () => {
   const sample = (): ProgressState => {
     let s = applyAll(createProgress(T0), [checkin(), focus(5, true, 60), gift()]);
-    s = { ...s, title: 3, department: 'marketing' };
+    s = { ...s, department: 'marketing' };
     return s;
   };
 
@@ -459,7 +425,7 @@ describe('mã lưu và migrate', () => {
     expect(decodeSaveCode(`${body}.${crc32(body)}`, T0)).toEqual({ ok: false, error: 'data' });
   });
 
-  it('migrate v1 (dữ liệu chấm công Phase 2B) → v2, giữ chuỗi', () => {
+  it('migrate v1 (dữ liệu chấm công Phase 2B) → bản hiện tại, giữ chuỗi', () => {
     const r = migrateProgress(
       { version: 1, checkIn: { lastDay: DAY, lastAt: T0, streak: 4, total: 9 }, fortuneDay: DAY },
       T0,
@@ -467,12 +433,31 @@ describe('mã lưu và migrate', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.migratedFrom).toBe(1);
-    expect(r.state.version).toBe(2);
+    expect(r.state.version).toBe(PROGRESS_VERSION);
     expect(r.state.checkIn.streak).toBe(4);
     expect(r.state.xp).toBe(0);
   });
 
-  it('migrate: v2 hợp lệ giữ nguyên; rác hoặc phiên bản lạ thì từ chối', () => {
+  it('migrate v2 (có chức danh, kỳ đánh giá) → v3: bỏ trường cũ, lần giúp thành uy tín', () => {
+    // Dữ liệu v2 thật chưa có số liệu ngày (stats).
+    const { stats: _stats, ...dailyV2 } = sample().daily;
+    const { coins: _c, reputation: _r, ...rest } = { ...sample(), daily: dailyV2 };
+    const v2 = {
+      ...rest,
+      version: 2,
+      title: 4,
+      review: { periodStart: DAY, checkInDays: [DAY], focusMs: 0, helps: 3, last: null },
+      personality: { diligence: 2, sociability: 0, creativity: 0 },
+    };
+    const r = migrateProgress(JSON.parse(JSON.stringify(v2)), T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.migratedFrom).toBe(2);
+    expect(r.state).toEqual({ ...sample(), daily: dailyV2, coins: 0, reputation: 3 });
+    expect('title' in r.state).toBe(false);
+  });
+
+  it('migrate: bản hiện tại hợp lệ giữ nguyên; rác hoặc phiên bản lạ thì từ chối', () => {
     const s = sample();
     expect(migrateProgress(JSON.parse(JSON.stringify(s)), T0)).toEqual({
       ok: true,
@@ -494,7 +479,9 @@ describe('mở công ty', () => {
     expect(canOpenCompany(s).missing).toEqual(['level', 'employed']);
     const high = { ...s, xp: xpForLevel(BALANCE.company.unlockLevel) };
     expect(canOpenCompany(high).missing).toEqual(['employed']);
-    expect(canOpenCompany(leaveCompany(high))).toEqual({ ok: true, missing: [] });
+    expect(canOpenCompany(leaveCompany(high))).toMatchObject({ ok: true, missing: [] });
+    expect(canOpenCompany(leaveCompany(high), { totalEarned: 8000 }).missing).toEqual(['capital']);
+    expect(canOpenCompany(leaveCompany(high), { totalEarned: 8000 }).capital).toBe(2000);
     expect(buildingHasRoom(29)).toBe(true);
     expect(buildingHasRoom(30)).toBe(false);
   });

@@ -1,5 +1,5 @@
 import { STRINGS } from '../../strings';
-import { formatClock } from '../../ui/connectionStatus';
+import { formatClock } from '../../ui/format';
 import { el } from '../../ui/dom';
 import { hasCheckedInToday, visibleStreak, type CheckInResult, type CheckInState } from './checkIn';
 
@@ -9,8 +9,8 @@ export interface CheckInPanelOptions {
   floorName: string;
   state: CheckInState;
   now(): Date;
-  /** Quẹt thẻ: trả về kết quả để hiện thông báo. */
-  onSwipe(): CheckInResult;
+  /** Quẹt thẻ: server trả kết quả để hiện thông báo; null nếu không gửi được (mất mạng). */
+  onSwipe(): Promise<CheckInResult | null>;
 }
 
 /** Thẻ nhân viên với nút quẹt thẻ (có hiệu ứng thẻ trượt qua máy đọc). */
@@ -78,16 +78,23 @@ export function mountCheckInPanel(body: HTMLElement, options: CheckInPanelOption
   swipe.addEventListener('click', () => {
     swipe.disabled = true;
     card.classList.add('is-swiping');
+    const pending = options.onSwipe();
     window.setTimeout(() => {
-      card.classList.remove('is-swiping');
-      const result = options.onSwipe();
-      state = result.state;
-      message.textContent =
-        result.status === 'checked'
-          ? `${s.beep} ${s.newStreak(result.state.streak)}`
-          : s.already(formatClock(result.state.lastAt ?? Date.now()).slice(0, 5));
-      reader.classList.add(result.status === 'checked' ? 'is-ok' : 'is-done');
-      render();
+      void pending.then((result) => {
+        card.classList.remove('is-swiping');
+        if (!result) {
+          message.textContent = STRINGS.net.actionFailed;
+          swipe.disabled = false;
+          return;
+        }
+        state = result.state;
+        message.textContent =
+          result.status === 'checked'
+            ? `${s.beep} ${s.newStreak(result.state.streak)}`
+            : s.already(formatClock(result.state.lastAt ?? Date.now()).slice(0, 5));
+        reader.classList.add(result.status === 'checked' ? 'is-ok' : 'is-done');
+        render();
+      });
     }, 750);
   });
 

@@ -6,8 +6,12 @@ import { loadConfig, loadDotEnvIfPresent } from './config';
 // .env nằm ở gốc repo. src/index.ts (dev) và dist/index.js (build) đều sâu 3 cấp.
 loadDotEnvIfPresent(fileURLToPath(new URL('../../../.env', import.meta.url)));
 
-const config = loadConfig(process.env);
-const app = buildApp({ logLevel: config.logLevel });
+// `--dev` (npm run dev): bật API dev (tua ngày, cộng XP) để thử vòng chơi.
+const config = loadConfig({
+  ...process.env,
+  ...(process.argv.includes('--dev') ? { DEV_TOOLS: '1' } : {}),
+});
+const app = buildApp({ config });
 
 let shuttingDown = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
@@ -16,6 +20,10 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, 'shutting down');
   await app.close();
   process.exit(0);
+}
+// Thiếu biến bắt buộc khi chạy thật thì dừng ngay với thông báo rõ.
+if (process.env.NODE_ENV === 'production' && config.devTools) {
+  throw new Error('DEV_TOOLS must not be enabled in production');
 }
 process.once('SIGINT', (signal) => void shutdown(signal));
 process.once('SIGTERM', (signal) => void shutdown(signal));

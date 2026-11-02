@@ -18,9 +18,14 @@ const externalizeNpmPackages: Plugin = {
 
 rmSync('dist', { recursive: true, force: true });
 
+// Server + công cụ vận hành (sao lưu, khôi phục).
 await build({
-  entryPoints: ['src/index.ts'],
-  outfile: 'dist/index.js',
+  entryPoints: {
+    index: 'src/index.ts',
+    backup: 'src/ops/backup.ts',
+    restore: 'src/ops/restore.ts',
+  },
+  outdir: 'dist',
   bundle: true,
   platform: 'node',
   format: 'esm',

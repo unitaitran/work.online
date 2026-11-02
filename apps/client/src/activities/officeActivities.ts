@@ -1,6 +1,7 @@
 // Nối các hoạt động với văn phòng: vật nào mở hoạt động nào, phát sự kiện qua bus.
 // Mỗi hoạt động vẫn là một module riêng (logic thuần + giao diện) trong thư mục của nó.
-import type { ApplyResult, CheckInState } from '@dilam/shared';
+import type { Action, CheckInState } from '@dilam/shared';
+import type { ActionReply } from '../net/roomClient';
 import type { SoundName } from '../audio/audioEngine';
 import { clock } from '../clock';
 import type { KeyValueStore } from '../storage';
@@ -8,6 +9,8 @@ import { STRINGS } from '../strings';
 import { openModal, type Modal } from '../ui/modal';
 import type { Interactable } from '../world/office/layout';
 import { mountCheckInPanel } from './checkIn/checkInPanel';
+import { mountChoreGame } from './chores/choreGame';
+import { printerJams, type ChoreKind } from './chores/choreLogic';
 import {
   BREW_MS,
   handOver,
@@ -26,8 +29,6 @@ import {
 import { fortuneFor, lastFortuneDay, saveFortuneDay } from './fortune/fortune';
 import { mountFortunePanel } from './fortune/fortunePanel';
 import { mountTaskFlipPanel } from './taskFlip/taskFlipPanel';
-import { addVent, loadVents, saveVents } from './ventWall/ventWall';
-import { mountVentWallPanel } from './ventWall/ventWallPanel';
 
 /** Những gì hoạt động cần từ cảnh 3D. */
 export interface ActivityScene {
@@ -40,14 +41,16 @@ export interface ActivityScene {
 export interface ActivityHud {
   showToast(text: string): void;
   setFocusAvailable(available: boolean): void;
+  /** Nút "Lau bàn" (khi đang ngồi ở bàn làm việc). */
+  setWipeAvailable(available: boolean): void;
   setCoffee(phase: CoffeeState['phase']): void;
 }
 
-/** Phần tiến độ hoạt động cần đọc (Phase 3: client; Phase 4: server trả về). */
+/** Tiến độ (Phase 4C: server tính). Hoạt động gửi hành động và đọc trạng thái server trả về. */
 export interface ActivityProgress {
   checkIn(): CheckInState;
-  /** Kết quả áp sự kiện gần nhất (đọc ngay sau khi phát sự kiện). */
-  lastResult(): ApplyResult | null;
+  /** Gửi một hành động lên server. */
+  act(action: Action): Promise<ActionReply>;
 }
 
 export interface OfficeActivitiesOptions {
@@ -55,6 +58,10 @@ export interface OfficeActivitiesOptions {
   store: KeyValueStore | null;
   bus: ActivityBus;
   progress: ActivityProgress;
+  /** Tường than thở chung (server). */
+  openWall(): void;
+  /** Đang có sự kiện "hết cà phê": bấm máy pha để đổ hạt; trả true nếu đã xử lý. */
+  coffeeOut(): boolean;
   playerId: string;
   playerName: string;
   floorName: string;
@@ -69,6 +76,8 @@ export class OfficeActivities {
   private modal: Modal | null = null;
   private focus: { stop(): void } | null = null;
   private seatedAtDesk = false;
+  /** Bàn đang ngồi (để lau bàn). */
+  private deskId: string | null = null;
   /** Đang ngồi ghế phòng họp từ lúc nào (để tính thời gian họp). */
   private meeting: { seatId: string; since: number } | null = null;
 
@@ -92,16 +101,23 @@ export class OfficeActivities {
         this.openTaskFlip();
         return true;
       case 'ventwall':
-        this.openVentWall();
+        this.o.openWall();
         return true;
       case 'coffee':
-        this.brewCoffee();
+        if (!this.o.coffeeOut()) this.brewCoffee();
         return true;
-      // Tưới cây = công quả; máy in phát sự kiện in. Vẫn hiện lời nhắn và âm thanh mặc định.
+      // Công quả: tưới cây, dọn pantry (tủ lạnh), gỡ kẹt máy in; mỗi việc là một mini-game.
       case 'plant':
-        this.o.bus.emit(makeEvent('chore', clock.now(), 0, { target: item.id }));
-        return false;
+        this.openChore('water', item.id);
+        return true;
+      case 'fridge':
+        this.openChore('tidy', 'fridge');
+        return true;
       case 'printer':
+        if (printerJams(Math.random)) {
+          this.openChore('unjam', 'printer');
+          return true;
+        }
         this.o.bus.emit(makeEvent('print', clock.now(), 0, {}));
         return false;
       default:
@@ -109,17 +125,25 @@ export class OfficeActivities {
     }
   }
 
+  /** Rời ghế họp: phát sự kiện họp kèm thời gian đã ngồi. */
+  private endMeeting(): void {
+    if (!this.meeting) return;
+    const { seatId, since } = this.meeting;
+    this.meeting = null;
+    this.o.bus.emit(makeEvent('meeting', since, clock.now() - since, { seatId }));
+  }
+
   onSeatChange(item: Interactable | null): void {
-    // Rời ghế họp: phát sự kiện họp kèm thời gian đã ngồi.
-    if (this.meeting && item?.id !== this.meeting.seatId) {
-      const { seatId, since } = this.meeting;
-      this.meeting = null;
-      this.o.bus.emit(makeEvent('meeting', since, clock.now() - since, { seatId }));
-    }
-    if (item?.kind === 'meeting' && !this.meeting)
+    if (this.meeting && item?.id !== this.meeting.seatId) this.endMeeting();
+    if (item?.kind === 'meeting' && !this.meeting) {
       this.meeting = { seatId: item.id, since: clock.now() };
-    this.seatedAtDesk = item?.kind === 'desk';
+      // Server tự đo thời gian họp từ lúc này.
+      void this.o.progress.act({ kind: 'meeting_start', seatId: item.id });
+    }
+    this.seatedAtDesk = item?.kind === 'desk' || item?.kind === 'ceodesk';
+    this.deskId = this.seatedAtDesk && item ? item.id : null;
     this.o.hud.setFocusAvailable(this.seatedAtDesk && !this.focus);
+    this.o.hud.setWipeAvailable(this.seatedAtDesk && !this.focus);
     if (!this.seatedAtDesk) this.focus?.stop();
   }
 
@@ -153,6 +177,8 @@ export class OfficeActivities {
     const modal = this.openPanel(STRINGS.focus.chooseTitle);
     mountFocusChooser(modal.body, (minutes) => {
       modal.close();
+      // Server bắt đầu đo giờ phiên tập trung (client chỉ báo bắt đầu và kết thúc).
+      void this.o.progress.act({ kind: 'focus_start', minutes: minutes });
       this.o.scene.setInputLocked(true);
       this.o.scene.setManualTyping(true);
       this.o.hud.setFocusAvailable(false);
@@ -182,7 +208,31 @@ export class OfficeActivities {
     });
   }
 
+  /** Nút "Lau bàn" khi đang ngồi ở bàn làm việc. */
+  wipeDesk(): void {
+    if (this.deskId) this.openChore('wipe', this.deskId);
+  }
+
+  /** Mở một mini-game công quả; xong thì phát sự kiện (server kiểm tra và tính XP). */
+  private openChore(kind: ChoreKind, target: string): void {
+    let game: { dispose(): void } | null = null;
+    const modal = this.openPanel(STRINGS.chores[kind].title, () => game?.dispose());
+    game = mountChoreGame(modal.body, {
+      kind,
+      onDone: (success) => {
+        if (!success) return;
+        this.o.play('ting');
+        this.o.bus.emit(makeEvent('chore', clock.now(), 0, { target }));
+        window.setTimeout(() => {
+          modal.close();
+        }, 900);
+      },
+    });
+  }
+
   dispose(): void {
+    // Rời văn phòng (sửa thẻ...) khi đang ngồi họp: vẫn ghi nhận thời gian đã họp.
+    this.endMeeting();
     window.clearTimeout(this.coffeeTimer);
     this.focus?.stop();
     this.modal?.close();
@@ -215,8 +265,8 @@ export class OfficeActivities {
       floorName: this.o.floorName,
       state: this.o.progress.checkIn(),
       now: () => clock.date(),
-      onSwipe: () => {
-        // Tiến độ (luật trong @dilam/shared) tự tính chuỗi; sự kiện chỉ báo "vừa quẹt thẻ".
+      onSwipe: async () => {
+        // Server tự tính chuỗi theo ngày của nó; sự kiện chỉ báo "vừa quẹt thẻ".
         const day = dayKey(clock.date());
         const before = this.o.progress.checkIn();
         this.o.bus.emit(
@@ -226,10 +276,11 @@ export class OfficeActivities {
             total: before.total,
           }),
         );
-        const status = this.o.progress.lastResult()?.checkIn ?? 'already';
+        const reply = await this.o.progress.act({ kind: 'checkin' });
+        if (!reply.ok) return null;
+        const status = reply.outcome?.checkIn ?? 'already';
         if (status === 'checked') this.o.play('ting');
-        const result = { status, state: this.o.progress.checkIn(), day };
-        return result;
+        return { status, state: reply.state.checkIn, day: reply.today };
       },
     });
   }
@@ -273,26 +324,6 @@ export class OfficeActivities {
     });
   }
 
-  private openVentWall(): void {
-    const modal = this.openPanel(STRINGS.vent.title);
-    mountVentWallPanel(modal.body, {
-      entries: loadVents(this.o.store),
-      onPost: (text, anonymous) => {
-        const now = clock.now();
-        const entries = addVent(loadVents(this.o.store), {
-          id: `${String(now)}-${Math.random().toString(36).slice(2, 7)}`,
-          text,
-          author: anonymous ? null : this.o.playerName,
-          at: now,
-        });
-        saveVents(this.o.store, entries);
-        // Sự kiện không chứa nội dung than thở, chỉ độ dài và lựa chọn ẩn danh.
-        this.o.bus.emit(makeEvent('vent', now, 0, { length: Array.from(text).length, anonymous }));
-        return entries;
-      },
-    });
-  }
-
   private brewCoffee(): void {
     if (this.coffee.phase === 'holding') {
       this.o.hud.showToast(STRINGS.coffee.busy);
@@ -301,6 +332,7 @@ export class OfficeActivities {
     if (this.coffee.phase === 'brewing') return;
     const now = clock.now();
     this.coffee = startBrew(this.coffee, now, BREW_MS);
+    void this.o.progress.act({ kind: 'coffee_brew' });
     this.o.hud.setCoffee('brewing');
     this.o.hud.showToast(STRINGS.coffee.brewing);
     this.o.play('coffee');

@@ -226,3 +226,134 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 
 - **Khi đang mở hộp thoại hoạt động**, cảnh 3D bị khoá điều khiển (không đi, không chạm vật, không nhận phím E). Esc, nút ×, hoặc bấm ra nền mờ để đóng.
 - **Lật task**: mỗi lượt chia 3 lá (việc nhỏ khác nhau), chỉ lật được 1 lá. Đánh dấu "Đã xong!" thì phát `task-flip` với `completed: true`. Đóng khi đã lật mà chưa xong thì phát `completed: false`.
+
+## Phase 3: cấp độ, chức danh, nhiệm vụ
+
+- **Cấp 1–500 tự tăng theo XP; 10 chức danh qua kỳ đánh giá 7 ngày + phỏng vấn.** Hai hệ thống tách nhau. Bảng cấp cũ (10 cấp) trong GAME_DESIGN được thay.
+- **Mở công ty cần cấp 150 và không còn thuộc công ty nào.** Đường cong tính để chơi đều 190 XP/ngày trong 5 ngày thì vừa 950 XP (cấp 150); tới cấp 500 mất khoảng 150 ngày.
+- **Việc sếp giao**: ngẫu nhiên theo hạt giống (ngày, mã người chơi, thứ tự) để server tái tạo được; tối đa 3 mỗi ngày; không giao việc đã không làm được trong ngày (quẻ đã xin, đã chấm công).
+- **Ngày lịch lùi lại (đổi múi giờ)** không mở "rổ" XP ngày mới, tránh nhận giới hạn hai lần.
+- **Phase 3 tính XP ở client** (`ProgressService`, lưu localStorage, mã lưu `DLO.<v>.<base64url>.<crc32>` để chuyển máy). Checksum chỉ chống chép sai, không phải bảo mật; Phase 4 chuyển cùng các hàm thuần lên server và không tin client.
+- **Công ty**: 1 công ty = 1 tầng = 1 server, tối đa 30 mỗi toà (Phase 4/6). Phase này chỉ có hằng số và `canOpenCompany`/`buildingHasRoom`; rời và mở công ty làm ở Phase 6.
+- **Tua ngày chỉ có ở `npm run dev`** (`clock.ts`, bảng dev); bản build không có.
+
+### Đổi hệ chức danh (sau Phase 3)
+
+- **Chức danh tự lên theo cấp** theo yêu cầu người chơi thử: 13 bậc, vài cấp một bậc, bậc cuối "Senior" ở cấp 150 = điều kiện cấp để mở công ty. Bỏ kỳ đánh giá 7 ngày và phỏng vấn (trước đây chức danh tụt xa sau cấp).
+- **Tiến độ phiên bản 3**: bỏ `title`, `review`, `personality`; thêm `coins`, `reputation`. Migrate v2 → v3 chuyển số lần giúp trong kỳ thành uy tín.
+- **Xu tính cùng XP** trong `applyEvent` (đưa sớm phần xu của Phase 5A để không phải đổi phiên bản dữ liệu lần nữa).
+
+## Phase 4A: server, tài khoản, lưu trữ
+
+- **Tài khoản ẩn danh**: token 32 byte (base64url) + mã khôi phục 80 bit dạng `DLO-XXXX-XXXX-XXXX-XXXX` (Crockford base32, bỏ ký tự dễ nhầm). Lưu băm SHA-256; cả hai đủ ngẫu nhiên nên không cần băm chậm. Khôi phục cấp token mới và vô hiệu token cũ.
+- **Token gia hạn trượt** (`TOKEN_TTL_DAYS`, mặc định 180 ngày), chỉ ghi "lần cuối thấy" mỗi giờ một lần để đỡ ghi DB.
+- **Tiến độ lưu nguyên `ProgressState` dạng JSON** (đọc qua `migrateProgress`) kèm các cột tách riêng (xp, level, coins, reputation, branch, department, streak) để xếp hạng và tra cứu.
+- **Không có bảng `reviews`**: kỳ đánh giá đã bỏ (chức danh tự lên theo cấp).
+- **Nhập mã lưu cục bộ** một lần, giới hạn XP ≤ 400/ngày tính từ `createdAt` của mã và cấp ≤ 150; chỉ khi tài khoản chưa chơi trên server (≤ 50 XP).
+- **Tên người chơi** qua bộ lọc từ tục, số điện thoại, đường dẫn, email (không chặn thương hiệu ở tên người). Bộ lọc nằm ở `packages/shared/src/filter.ts`, dùng chung cho tường than thở và tên công ty.
+- **Log không ghi IP, header hay query** (token WebSocket nằm ở query).
+
+## Phase 4B: phòng và đồng bộ
+
+- **Mã phiên `sid`** (số nhỏ trong phòng) thay id người chơi trong gói `states` để gói tin gọn; mã nhân viên công khai `NV-XXXXXX` (băm từ id) dùng để ẩn/chặn lâu dài.
+- **Vùng quan tâm 14 m**: văn phòng 26 × 18 m nên đa số thấy nhau; phòng lớn hơn (công ty Phase 6) hưởng lợi nhiều hơn.
+- **Ẩn/chặn người chơi chỉ ở phía mình** (lưu localStorage), không báo server, vì chỉ có biểu cảm và câu nhanh có sẵn (không có chat tự do).
+- **Kéo về khi sai vị trí** thay vì ngắt kết nối: giật mạng không bị phạt nặng.
+- **Phòng trống thì xoá**, phòng mới đánh số tiếp (`office-3`...), không tái dùng số.
+
+## Phase 4C: XP do server tính
+
+- **Ngày trong game đổi lúc 4 giờ sáng** theo múi giờ đã lưu của người chơi (chấm công, giới hạn XP ngày, việc sếp giao). Người chơi khuya không bị cắt ngang lúc nửa đêm; đây cũng là mốc "làm mới nhiệm vụ ngày lúc 4 giờ" của Phase 5A.
+- **Khoá chống gửi trùng** lưu ở bảng `processed_actions` (giữ 2 ngày) nên khởi động lại server vẫn chống trùng được.
+- **Trạng thái đang diễn ra** (phiên tập trung, họp, ly cà phê đang pha) chỉ giữ trong bộ nhớ server: khởi động lại server giữa chừng thì phiên đó không được tính (chấp nhận được, phiên ngắn).
+- **Kiểm tra khoảng cách** dùng vị trí server đang giữ (đã qua kiểm tra va chạm), ≤ 2,5 m tới chỗ đứng của vật.
+- **Tặng cà phê cho NPC**: NPC chạy ở client nên server không kiểm tra NPC đứng đâu, chỉ kiểm tra đã pha xong một ly.
+- **Mã lưu cục bộ** (Phase 3) tự nhập lên server ở lần đăng nhập đầu tiên rồi đánh dấu đã nhập; tab "Lưu trữ" thay bằng tab "Tài khoản" (mã khôi phục mới, vào tài khoản khác, xoá tài khoản).
+- **Công cụ dev chuyển lên server** (`--dev`): tua ngày và cộng XP chỉ đổi dữ liệu trên server cho đúng luồng thật.
+
+## Phase 5A: xu, cửa hàng, thú cưng, công quả
+
+- **Xu = 50% XP thực nhận (làm tròn xuống) + 20 xu mỗi việc sếp giao.** Một ngày chơi đủ: khoảng 155 xu. Món rẻ nhất 80 xu (mua được ngày đầu), món đắt nhất 3200 xu (khoảng 3 tuần).
+- **Sổ cái `coin_ledger`** ghi mọi biến động (`earn:<hoạt động>`, `buy:<món>`, `import`, `dev`) kèm số dư sau; cột `balance` có ràng buộc `CHECK (balance >= 0)`. Test kiểm tra tổng sổ cái = số xu.
+- **Mua hàng trong một transaction** đọc lại số dư bên trong transaction (Node chạy một luồng + SQLite transaction), nên nhiều yêu cầu cùng lúc không làm xu âm.
+- **Mọi món đều mua một lần** (không có món tiêu hao). Món hiếm có thể khoá theo chức danh.
+- **Áo trong cửa hàng là "màu áo"** phủ lên kiểu áo đang mặc, không thêm kiểu mới, để không phình số mesh nhân vật.
+- **Đồ bàn hiện trên bàn người chủ đang ngồi** (bàn không thuộc riêng ai); trang trí ghế hiện ở chỗ đang ngồi. Tối đa 3 đồ bàn.
+- **Thú cưng chỉ vẽ cho người được vẽ chi tiết** (gần nhất), đi theo sau lưng chủ; robot hút bụi chạy vòng quanh; xương rồng luôn quay về phía chủ.
+- **Công quả là mini-game 5-10 giây**: tưới cây (giữ nút, thả trong vạch xanh), lau bàn (chà qua lại, nút khi đang ngồi ở bàn), dọn pantry (bấm 5 cốc, ở tủ lạnh), gỡ kẹt máy in (35% lần dùng máy in bị kẹt, bấm nhanh 12 lần). Server không chấm mini-game, chỉ kiểm tra đứng gần đúng chỗ, giới hạn 6 lần/ngày và cùng một chỗ cách nhau 5 phút.
+- **Tưới cây xong mọc một khóm hoa** cạnh chậu, lưu ở server theo loại phòng (mọi phòng văn phòng dùng chung), tối đa 30, cây cũ nhất tự mất.
+- **Nhiệm vụ ngày** chính là "việc sếp giao" (3 việc ngẫu nhiên mỗi ngày), làm mới lúc 4 giờ sáng giờ địa phương.
+
+## Phase 5B: sự kiện, xếp hạng, tường chung, thẻ khoe
+
+- **Sự kiện phòng mỗi 5-10 phút**, chỉ ở phòng văn phòng chung có người online, không phạt ai. Thưởng đi qua đúng `applyEvent` (loại `room-event`, 8 XP, tối đa 8 lần/ngày, có xu và sổ cái).
+  - _Sếp đi ngang_: hiện 3 giây, server nhận thêm 0,8 giây bù trễ mạng.
+  - _Mất wifi_: cần 4 lần gõ mỗi người online (5-40), mỗi người gõ tối đa 12 lần để cả phòng cùng làm; đủ thì **cả phòng** được thưởng.
+  - _Hết cà phê_: máy pha tạm nghỉ (server từ chối pha), người đầu tiên đứng ở máy pha bấm "Đổ hạt" được thưởng.
+  - _Họp đột xuất_: lúc hết giờ, ai đang ở trong phòng họp được thưởng (không cần bấm).
+- **Xếp hạng** theo XP kiếm được trong tuần (từ thứ Hai) / tháng (từ ngày 1), giờ Việt Nam, top 20 + hạng của mình. Chỉ trả tên, chức danh, XP (không id). Ẩn mình bằng cờ `leaderboard_hidden`.
+- **Tường than thở chung** thay tường cục bộ: 140 ký tự, một bài mỗi ngày (ngày trong game), lọc từ tục, số điện thoại, đường dẫn, email, thương hiệu. Không trả về người đăng. 3 báo cáo (mỗi người một lần, không tự báo cáo bài mình) thì tự ẩn. Trang `/admin` chỉ tồn tại khi đặt `ADMIN_KEY` (≥ 24 ký tự), so khoá bằng `timingSafeEqual`, nội dung gán bằng `textContent`.
+- **Bản đồ toà nhà**: mỗi phòng văn phòng chung là một tầng (`office-1` = Tầng 7...). Chuyển tầng qua WebSocket (`switch_room`), giữ kết nối, không cần tải lại.
+- **Thẻ khoe** 1080×1350 vẽ bằng canvas: ảnh nhân vật chụp từ renderer nhỏ riêng, chức danh, số liệu hôm nay (phím gõ được tính, ly cà phê, cuộc họp ≥ 1 phút, lần né sếp), chuỗi chấm công. **Không có tên hay mã nhân viên.** Số liệu ngày lưu trong `daily.stats` (tùy chọn, dữ liệu cũ coi như 0, không cần đổi phiên bản).
+- **Lịch theo ngày** (theo ngày trong game của server): Tết (2 ngày trước tới mùng 3, bảng ngày Tết 2025-2030), ngày lương (ngày 5 và 20), thứ Hai, thứ Sáu, cuối tuần. Đổi nhịp và cao độ nhạc, độ sáng, đèn lồng ngày Tết, lời chào và câu NPC.
+
+## Phase 6: mở công ty và vào làm ở công ty người chơi khác
+
+- **Điều kiện mở**: cấp 150 (Senior), không thuộc công ty nào (rời Văn phòng Mây Hồng hoặc công ty đang làm), đủ vốn, chưa sở hữu công ty. Prompt gốc ghi "cấp 8" theo hệ 10 cấp cũ; nay tương ứng Senior.
+- **Người được nộp đơn**: chưa lên Senior (prompt gốc "cấp 1-7"). Senior thì tự mở công ty.
+- **Tên công ty** qua bộ lọc từ tục + danh sách thương hiệu thật, không trùng (so không dấu, không hoa thường), tối đa 32 ký tự. Không tải ảnh: chọn 1 trong 8 màu và 8 biểu tượng.
+- **Toà nhà**: mỗi toà tối đa 30 công ty, mỗi công ty một tầng; tầng trống đầu tiên được cấp lúc mở.
+- **Phòng công ty** là phòng riêng `company:<id>` (cùng bố cục văn phòng, thêm biển hiệu vẽ bằng canvas), chỉ chủ và thành viên vào được, sức chứa theo giai đoạn (6/10/20/30/40).
+- **Tính theo giờ thật nhưng gộp tối đa 24 giờ mỗi lần** (tính lại mỗi khi có người xem hoặc làm việc), offline lâu không bị phạt, quỹ không bao giờ âm.
+- **Sự kiện công ty** khoảng 1/3 số ngày, chọn theo hạt giống (công ty, ngày), 2 lựa chọn, không có kết cục thua.
+- **Quyền chủ**: duyệt/từ chối đơn, mã mời (dùng một lần, 3 ngày), giao việc (thêm vào "việc sếp giao" trong ngày của nhân viên, vẫn tối đa 3 việc/ngày nên không vượt luật), thăng chức trong công ty (vai trò), cho nghỉ, chặn. Chủ không cộng thẳng XP cho ai: thăng chức đi qua sự kiện `company-promotion` của luật (30 XP, tối đa 1 lần/ngày, chỉ khi đã vào ≥ 3 ngày và không nghi tài khoản phụ).
+- **Chống lạm dụng**: 5 đơn/ngày mỗi người, 10 mã mời/ngày mỗi công ty. IP được băm bằng HMAC với khoá bí mật lưu trong DB (`server_settings`), không lưu IP thật; trùng IP băm với chủ thì đánh dấu nghi tài khoản phụ (không nhận thưởng thăng chức).
+- **Offer**: chỉ từ công ty NPC tự đặt tên (`NPC_COMPANIES`), mỗi 3 ngày một lời mời cho người đang làm ở Mây Hồng / công ty NPC / công ty người chơi còn ở Garage hoặc Co-working. Nhận lời: lên ngay một cấp (luật `acceptOffer` trong shared), đổi công ty, giảm 10% uy tín.
+- **Bảng tin công ty** chỉ có thông báo hệ thống (khai trương, dự án xong, thành viên vào/rời/thăng chức, nâng cấp, IPO, sự kiện), không có chat tự do.
+
+## Phase 7: tối ưu, bảo mật, triển khai
+
+- **Server phục vụ luôn client** (`CLIENT_DIST`) để cùng nguồn: CSP chỉ cần `'self'`, không cần CORS. CORS chỉ mở cho nguồn trong `CORS_ORIGINS`.
+- **CSP** cho phép `style-src 'unsafe-inline'` vì dev server của Vite chèn style; bản build không có style nội tuyến trong HTML, còn thuộc tính style do JS đặt (CSSOM) không bị CSP chặn. Script không có ngoại lệ. Trang `/admin` (script nội tuyến nhỏ) có CSP riêng, chặn mọi nguồn ngoài.
+- **WebSocket**: chặn Origin lạ (403), tối đa `WS_PER_IP` kết nối/IP (429). Không có Origin (bot, công cụ) vẫn cần token.
+- **PWA**: biểu tượng là SVG nội tuyến (data URI) trong manifest, tuân thủ "không file ảnh". Service worker chỉ cache `/assets/*` (tên đã băm, bất biến), HTML/API luôn đi mạng.
+- **Phiên bản**: `BUILD_ID` gắn lúc build (client) và qua biến môi trường (server, `/api/meta`). Khác giao thức thì bắt buộc tải lại; chỉ khác bản build thì gợi ý.
+- **Thống kê ẩn danh** chỉ có bảng đếm (ngày, sự kiện); endpoint không cần đăng nhập, không ghi ai gửi; gửi với `credentials: 'omit'`.
+- **Sao lưu** dùng API backup trực tuyến của SQLite (không dừng server), bản sao chuyển về một tệp (journal DELETE) và kiểm tra toàn vẹn. Tải ra ngoài qua lệnh cấu hình (`BACKUP_UPLOAD_CMD`, chạy không qua shell).
+- **Điều khoản và quyền riêng tư** chỉ là bản nháp trong `docs/legal/` (không phục vụ trên trang) theo yêu cầu "không đưa nội dung pháp lý lên khi chưa có người có chuyên môn rà soát". Trong game có mục "Dữ liệu của bạn" mô tả đúng những gì được lưu.
+- **Docker chưa build được trong container phát triển** (Docker Hub giới hạn lượt tải, CDN bị chặn); CI có job build và khởi động thử image. Đường chạy không Docker đã kiểm chứng từ clone sạch.
+
+## Sau Phase 7: tài khoản, sảnh, bản đồ công ty
+
+- **Ba cách vào**: chơi khách (không cần gì), đăng nhập, đăng ký. Khách là tài khoản thật ở server đánh dấu `guest`, token trong `sessionStorage`: đóng tab hoặc đăng xuất là mất. Server dọn khách không thấy 6 giờ (đủ dài để tải lại trang, mất mạng). Đăng ký khi đang là khách thì giữ nguyên tiến độ.
+- **Mật khẩu** băm scrypt có muối (node:crypto, không thêm thư viện). Tên đăng nhập sai và mật khẩu sai trả cùng một lỗi; tên không tồn tại vẫn chạy scrypt để thời gian trả lời như nhau. Giới hạn đăng nhập theo IP và theo tên.
+- **Đăng nhập cấp token mới**, token cũ hết hiệu lực (mỗi tài khoản một phiên, giống mở tab mới).
+- **Tài khoản ẩn danh cũ** (mã khôi phục) vẫn dùng được; ở màn "Ở nhà" có chỗ đặt tên + mật khẩu.
+- **Nút "Đi về"** đưa ra màn "Ở nhà" (ngoài văn phòng, ngắt WebSocket): đi làm lại, công ty, bản đồ công ty, đổi nhân vật, lưu tài khoản, đăng xuất. **Nghỉ việc** cũng đưa ra màn này để mở công ty hoặc tìm việc khác. Đang nghỉ việc mà bấm "Đi làm" thì quay lại Mây Hồng.
+- **Tỉnh/thành**: 34 đơn vị (6 thành phố, 28 tỉnh). Bản đồ là sơ đồ SVG vẽ bằng code (chấm theo toạ độ gần đúng của trung tâm hành chính, dải đất nối các chấm), có hai quần đảo Hoàng Sa, Trường Sa; không dùng file bản đồ. Công ty cũ mặc định TP. Hồ Chí Minh.
+- **Khung tuyển dụng**: 5 vị trí Intern/Fresher/Junior/Middle/Senior, mỗi vị trí một khoảng cấp hoặc tắt; mặc định 1-11, 12-34, 35-64, 65-109, 110-149 (cấp 150 tự mở công ty). Vị trí của nhân viên tính lại theo cấp hiện tại (lên cấp là lên vị trí), không lưu riêng; vai trò trong công ty (thăng chức) vẫn do CEO quyết như trước.
+- **Phòng CEO** nằm trong bố cục chung (`ceoRoom` trong `packages/shared`), có ở mọi phòng (văn phòng chung và phòng công ty). Thẻ CEO = chủ của chính phòng công ty đang đứng; server tính lúc vào phòng và dùng bộ vật cản riêng (không có cánh cửa) khi kiểm tra vị trí, nên client sửa mã cũng không vào được. Người không có thẻ không được "nhảy" vào chỗ ngồi trong phòng. NPC luôn coi cửa là đóng. Ở văn phòng chung phòng CEO luôn khoá (chưa có CEO người chơi cho Mây Hồng).
+- Chậu cây ở góc cửa kính và một điểm đi dạo của NPC dời ra ngoài để nhường chỗ cho phòng CEO; vị trí "ngắm thành phố" dời sang trái cửa phòng.
+- **Đồng hồ treo tường**: giờ Việt Nam cố định UTC+7 (không có giờ mùa hè), tính từ `Date.now()` nên đúng cả khi máy người chơi đặt múi giờ khác.
+
+## Văn phòng mặt bằng v2 (20 × 13 m, tông đen xám)
+
+- **Toạ độ**: game x = X sơ đồ − 10, z = 6,5 − Z sơ đồ (cửa sổ phía bắc ở −Z, lối vào phía nam ở +Z như quy ước cũ). Các phòng phía nam kéo sát tường nam (sơ đồ ghi 0,5 m khoảng trống phía sau, ở game là góc chết nên bỏ).
+- **Dãy bàn**: theo góp ý, 4 dãy dọc theo trục Z (hướng sếp nhìn ra), bàn dài liền khối, người ngồi hai bên quay mặt vào nhau, 3 cặp mỗi dãy (24 chỗ). Lối đi giữa hai dãy 1,5 m để nhân vật (bán kính 0,28 m) đi và ngồi được. Va chạm vẫn tính theo từng chỗ (mỗi chỗ một hộp 0,75 × 1,5 m, liền nhau).
+- **Màu**: đen xám chủ đạo, đỏ chỉ cho decor. Dải LED viền trần màu trắng ấm. Tường dùng họa tiết vữa vẽ bằng canvas, UV tính theo toạ độ thế giới để liền mạch.
+- **Logo**: biển chữ neon trắng trên tường sảnh (chỗ đồng hồ cũ). Không dùng tên hay logo thương hiệu thật (AGENTS.md mục 7): văn phòng chung hiện "Mây Hồng", phòng công ty hiện tên công ty người chơi đặt.
+- **Tượng gấu** là gấu đỏ cách điệu dựng từ khối tròn, không có chữ hay logo của thương hiệu nào.
+- **Vách đặc giữa các phòng** tự mờ khi nhân vật đứng trong phòng phía nam hoặc camera ở sau vách, để không che tầm nhìn. "Xuyên thấu" làm mờ cả tường bao (độ đục 0,25).
+- **Đèn thật** (2 đèn rọi, đèn cây, đèn phòng sếp, đèn đỏ hắt tượng gấu) chỉ bật ở mức đồ họa vừa/cao; mức thấp dùng vệt sáng giả (mặt phẳng cộng màu) và bóng đèn tự sáng.
+- Bảng "lật task" và "tường than thở" chuyển lên tường tây cạnh dãy ngồi (2 bảng dán note). Ống quẻ KPI ở góc tây bắc.
+
+## Chỉ vào phòng nơi đang làm (2026-11-02)
+
+- Server quyết định phòng khi kết nối (kể cả kết nối lại): người có `employer` là công ty (chủ hoặc nhân viên) vào thẳng `company:<id>`; người làm ở Mây Hồng/NPC vào văn phòng chung.
+- Người thuộc một công ty gửi `switch_room` sang `office` bị từ chối (`forbidden`). Nút "Về văn phòng chung" trong bảng công ty đã bỏ; muốn về văn phòng chung thì phải nghỉ việc.
+
+## Chức danh theo nơi làm (2026-11-03)
+
+- Cấp (XP) là của người chơi, không reset khi đổi chỗ làm. Chỉ chức danh hiển thị đổi: tự mở công ty là CEO, làm cho công ty người chơi khác thì theo vị trí (khung cấp của công ty đó), ở văn phòng chung thì theo thang 13 chức danh.
+- Thang 13 chức danh vẫn được tính ngầm để mở khoá phòng ban, nhánh và đồ cửa hàng, tránh mất quyền lợi đã có khi đổi chỗ làm.
+- Server gửi `job` trong hồ sơ công khai (`'ceo' | Position | null`). Khi CEO đổi khung cấp, nhãn của nhân viên đang online cập nhật ở lần đổi hồ sơ kế tiếp (lên cấp, vào lại phòng).

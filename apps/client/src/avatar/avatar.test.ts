@@ -132,3 +132,16 @@ describe('tư thế', () => {
     expect(blendPose(a, b, 0.5).legLeftX).toBeCloseTo((a.legLeftX + b.legLeftX) / 2);
   });
 });
+
+describe('động tác biểu cảm', () => {
+  it('vẫy tay giơ tay phải lên; chúc mừng thì nhảy (đang ngồi thì không)', async () => {
+    const { applyEmote, computePose } = await import('./pose');
+    const base = computePose('stand', 0);
+    expect(applyEmote(base, 'wave', 0.3, false).armRightZ).toBeLessThan(-2);
+    const jump = applyEmote(base, 'cheer', 0.2, false);
+    expect(jump.rootY).toBeGreaterThan(base.rootY);
+    const seat = computePose('sit', 0);
+    expect(applyEmote(seat, 'cheer', 0.2, true).rootY).toBe(seat.rootY);
+    expect(applyEmote(base, 'unknown', 1, false)).toEqual(base);
+  });
+});

@@ -112,3 +112,86 @@ Ngồi ở bàn làm việc trong 10 phút với nhạc nền, tiếng điều h
 **Không rò bộ nhớ**: heap không tăng (12,12 → 12,07 MB), số nút DOM đứng yên, số giọng đang phát cao nhất là 16 rồi tự giải phóng. Số geometry và texture trên GPU giữ nguyên (37/8).
 
 Khi tab bị ẩn hoặc tắt âm thanh, `AudioContext` chuyển sang `suspended` và bộ lên lịch nhạc dừng. Kịch bản kiểm thử phải giả lập sự kiện `visibilitychange`, vì Chrome headless không đổi `document.hidden` khi chuyển tab.
+
+## Phase 4B: tải thử 100 bot trong một phòng
+
+Chạy: `npm run loadtest -w @dilam/server -- 100 20` (tạo 100 tài khoản vào SQLite tạm, chạy server thật ở tiến trình con, 100 bot WebSocket đi lại 10 lần/giây, mỗi giây ping một lần, 20% cơ hội vẫy tay).
+
+Máy đo: container Linux dùng chung (Node 22), server và bot chạy cùng máy.
+
+| Chỉ số                     | Kết quả                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| Số bot / phòng             | 100 / 1 phòng (`ROOM_CAPACITY=100`)                                             |
+| Băng thông xuống mỗi người | 11,6 KB/s (27,6 tin/giây, gồm 5 lần `states`/giây và vẫy tay của 99 người khác) |
+| Băng thông lên mỗi người   | 1,0 KB/s                                                                        |
+| Độ trễ ping/pong           | p50 1 ms, p95 10 ms, tối đa 24 ms                                               |
+| CPU server                 | 23,7% một nhân                                                                  |
+| Bộ nhớ server (RSS)        | 115 MB lúc rảnh → 155 MB khi có 100 người                                       |
+
+Ghi chú: phòng chung mặc định 40 người nên tải thật mỗi phòng nhẹ hơn khoảng 6 lần (số cặp người giảm theo bình phương). Phần `states` chỉ gửi người trong 14 m và chỉ khi đổi, nên người đứng yên không tốn băng thông.
+
+**Client**: người chơi khác vẽ chi tiết tối đa 6/12/20 người gần nhất (chất lượng thấp/vừa/cao); xa hơn vẽ khối trụ cùng màu áo bằng **một InstancedMesh** (1 draw call cho mọi người ở xa).
+
+## Phase 5A: 40 người cùng mặc đồ và dắt thú cưng
+
+Chạy: `GEAR=1 PORT=3000 npm run loadtest -w @dilam/server -- 39 60` (39 bot mặc áo, nón, phụ kiện, dắt thú cưng) rồi mở trình duyệt vào `?debug` làm người thứ 40 và đọc `__dilam.stats()`.
+
+Máy đo: container không có GPU, Chromium vẽ bằng SwiftShader (phần mềm), nên **fps và thời gian khung ở đây không đại diện cho máy thật**; chỉ số đáng tin là số draw call, tam giác và hình học.
+
+| Chất lượng                      | Vẽ chi tiết      | Draw call | Tam giác | Hình học trong bộ nhớ |
+| ------------------------------- | ---------------- | --------: | -------: | --------------------: |
+| Không ai khác (đối chứng, thấp) |                  |        27 |   18 094 |                    29 |
+| Thấp                            | 6 người gần nhất |        71 |   51 878 |                    71 |
+| Vừa (có bóng)                   | 12               |       196 |  155 606 |                   111 |
+| Cao (có bóng)                   | 20               |       242 |  186 296 |                   163 |
+
+- Mỗi nhân vật chi tiết là 6 mesh gộp (nón, phụ kiện, màu áo gộp vào mesh đầu/thân có sẵn nên **không thêm draw call**); thú cưng thêm 1 mesh. Người ở xa: 1 InstancedMesh chung.
+- Có bóng thì mỗi mesh vẽ thêm một lượt vào shadow map, nên mức vừa/cao tăng gấp đôi số draw call.
+- Đã sửa trong đợt đo: đọc khung canvas một lần mỗi khung hình (trước đó mỗi bong bóng gọi `getBoundingClientRect`), và chỉ hiện nhãn tên cho người gần (vẽ chi tiết) hoặc đang nói.
+- Mục tiêu điện thoại tầm trung (≤ 100 draw call): chế độ tự động bắt đầu ở mức thấp trên màn cảm ứng, đúng ngân sách.
+
+## Phase 7: trước/sau tối ưu
+
+Đo bằng `node scripts/perf-client.cjs <url> 3`: Chromium giả lập CPU chậm 4 lần khi tải, rồi chơi 3 phút lặp các thao tác hay gây rò rỉ (đi lại, mở/đóng cửa hàng, giao lưu, menu, hồ sơ; cứ 3 vòng thì "Sửa thẻ" và vào lại văn phòng để dựng lại toàn cảnh). Máy đo không có GPU (SwiftShader), mạng nội bộ.
+
+**Ngân sách** (mục tiêu điện thoại tầm trung, 30 fps):
+
+| Chỉ số                                         | Ngân sách                                            |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| Tải tới màn tạo nhân vật (CPU ×4, mạng nội bộ) | ≤ 3 giây                                             |
+| JS tải ban đầu                                 | ≤ 900 KB thô / ≤ 260 KB gzip                         |
+| Draw call ở chất lượng thấp, phòng đông        | ≤ 100                                                |
+| Bộ nhớ sau 30 phút                             | heap tăng ≤ 5 MB, số hình học/texture không tăng dần |
+
+| Chỉ số                                |            Trước |                                                                                                                                  Sau |
+| ------------------------------------- | ---------------: | -----------------------------------------------------------------------------------------------------------------------------------: |
+| Tải tới màn tạo nhân vật (CPU ×4)     |         1 648 ms |                                                                                                                             1 615 ms |
+| JS tải ban đầu                        | 862 KB (2 chunk) |                                                                   847 KB (11 chunk; three 550 KB và zod 92 KB tách riêng, cache lâu) |
+| JS màn ít dùng (tải lười)             |          gộp sẵn | cửa hàng 5 KB, công ty 11 KB, xếp hạng 1,6 KB, tường 1,8 KB, bản đồ 0,9 KB, thẻ khoe 3 KB, công cụ dev 0,8 KB (không có ở bản build) |
+| Draw call (một mình, chất lượng thấp) |               27 |                                                                                                                                   27 |
+| Sau 3 phút / 20 vòng: hình học        |          29 → 31 |                                                                                                                              29 → 31 |
+| Sau 3 phút / 20 vòng: texture         |            6 → 6 |                                                                                                                                6 → 6 |
+| Sau 3 phút / 20 vòng: heap JS         |   14,9 → 13,7 MB |                                                                                                                       13,0 → 13,6 MB |
+| Nút DOM                               |          83 → 83 |                                                                                                                              93 → 94 |
+
+Kết luận: không thấy rò rỉ (hình học dao động 29-36 theo NPC và nhân vật dựng lại, trở về 29-31). Phần lớn JS là three.js, cần ngay từ màn tạo nhân vật nên không tải lười được; lợi ích chính của việc tách chunk là cache: bản cập nhật chỉ đổi `main`/`strings`, three và zod giữ nguyên trong cache. Gzip ở reverse proxy giảm JS ban đầu còn khoảng 240 KB.
+
+**Chế độ máy yếu** (tự phát hiện khi ≤ 4 nhân CPU, ≤ 4 GB RAM hoặc bật tiết kiệm dữ liệu): bắt đầu ở mức thấp (không bóng, không bụi, pixel ratio 1, chỉ 5 người vẽ chi tiết), bộ điều tiết vẫn tự hạ thêm nếu fps < 30 kéo dài.
+
+**Sửa trong Phase 7**: thẻ khoe trả context WebGL ngay sau khi chụp (trước đây chờ trình duyệt thu hồi), tránh chạm giới hạn số context khi mở thẻ khoe nhiều lần.
+
+## Phòng CEO, đồng hồ, biển công ty
+
+Thêm 5 mesh tĩnh riêng: cánh cửa kính (2 mesh: kính + khung, để trượt), biển "Phòng CEO", đèn máy quẹt thẻ, đồng hồ (mặt + 3 kim gộp trong một nhóm). Vách kính, bàn CEO, ghế CEO gộp vào mesh tĩnh và InstancedMesh ghế có sẵn (không thêm draw call). Đo ở góc nhìn mặc định (SwiftShader, mức Tự động): 31 → 36 draw call khi thấy cả phòng CEO; vẫn dưới ngân sách 100.
+
+## Văn phòng mặt bằng v2 (20 × 13 m)
+
+Đo bằng SwiftShader (container không có GPU, fps không đại diện), mức Tự động (thấp, không bóng, không đèn thật):
+
+| Góc nhìn               | Draw call | Tam giác  |
+| ---------------------- | --------- | --------- |
+| Lối vào (mặc định)     | 43        | ~53 nghìn |
+| Nhìn từ trên (cả tầng) | 65        | ~53 nghìn |
+| Ngồi ở bàn             | 29–35     |           |
+
+Cách giữ số draw call thấp: bàn dài, giá sách (sách, hộp quà), decor, các phòng gộp vào một mesh tĩnh; đồ trên bàn, màn hình (3 loại), ghế, đèn thả, bóng đèn, vệt sáng, cây là InstancedMesh; tường bao, vách đặc, dải LED, kính, cửa sổ mỗi thứ một mesh. Nhãn khu là 5 sprite, chỉ hiện khi nhìn xa. Vẫn dưới ngân sách 100.

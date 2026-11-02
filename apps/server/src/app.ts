@@ -1,22 +1,53 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { LogLevel } from './config';
-import { attachWebSocketGateway, type GatewayOptions } from './ws/gateway';
+import type { ServerConfig } from './config';
+import { openDatabase } from './db/database';
+import { createSqliteRepositories, type Repositories } from './db/repositories';
+import { createAccountService, type AccountService } from './game/accounts';
+import { attachGameService, type GameService } from './game/gameService';
+import { registerApiRoutes, type AuthedHelpers, type Presence } from './http/routes';
+import { registerSecurity } from './http/security';
+import { registerStatic } from './http/static';
+import { attachWebSocketGateway, type Gateway, type GatewayOptions } from './ws/gateway';
 
 export interface AppOptions {
-  logLevel: LogLevel;
+  config: ServerConfig;
+  /** Dùng repository có sẵn (test); mặc định mở SQLite theo config.dbPath. */
+  repos?: Repositories;
+  now?: () => number;
   gateway?: GatewayOptions;
+  /** Ghi log ra luồng này (test kiểm tra log không lộ dữ liệu nhạy cảm). */
+  logStream?: NodeJS.WritableStream;
+}
+
+export interface AppContext {
+  config: ServerConfig;
+  repos: Repositories;
+  accounts: AccountService;
+  helpers: AuthedHelpers;
+  now: () => number;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    gateway: Gateway;
+    game: GameService;
+    repos: Repositories;
+  }
 }
 
 export function buildApp(options: AppOptions): FastifyInstance {
+  const { config } = options;
+  const now = options.now ?? Date.now;
   const app = Fastify({
     logger:
-      options.logLevel === 'silent'
+      config.logLevel === 'silent'
         ? false
         : {
-            level: options.logLevel,
+            level: config.logLevel,
+            ...(options.logStream ? { stream: options.logStream } : {}),
             // Bỏ hostname mặc định của pino (tên máy).
             base: { pid: process.pid },
-            // Không ghi IP, hostname, header hay query string: chỉ method và đường dẫn.
+            // Không ghi IP, hostname, header hay query string (token): chỉ method và đường dẫn.
             serializers: {
               req: (request: { method: string; url: string }) => ({
                 method: request.method,
@@ -24,12 +55,50 @@ export function buildApp(options: AppOptions): FastifyInstance {
               }),
             },
           },
-    bodyLimit: 16 * 1024,
+    bodyLimit: 64 * 1024,
+    trustProxy: config.trustProxy,
   });
 
-  app.get('/api/health', () => ({ ok: true }));
+  registerSecurity(app, config);
+  if (config.clientDist) registerStatic(app, config.clientDist);
 
-  attachWebSocketGateway(app, options.gateway);
+  let db: ReturnType<typeof openDatabase> | null = null;
+  let repos = options.repos;
+  if (!repos) {
+    db = openDatabase(config.dbPath);
+    repos = createSqliteRepositories(db);
+  }
+  const accounts = createAccountService(repos, { tokenTtlDays: config.tokenTtlDays, now });
+
+  let presence: Presence = { online: () => 0 };
+  const helpers = registerApiRoutes(app, {
+    config,
+    repos,
+    accounts,
+    now,
+    presence: { online: () => presence.online() },
+  });
+
+  const context: AppContext = { config, repos, accounts, helpers, now };
+  const gateway = attachWebSocketGateway(app, context, options.gateway);
+  presence = gateway;
+  app.decorate('repos', repos);
+  app.decorate('gateway', gateway);
+  app.decorate('game', attachGameService(app, context, gateway));
+
+  // Tài khoản khách: không thấy 6 giờ (đã đóng tab, token trong sessionStorage mất) thì xoá.
+  const GUEST_TTL_MS = 6 * 3_600_000;
+  const cleanGuests = (): void => {
+    accounts.cleanupGuests(now() - GUEST_TTL_MS, (id) => gateway.sessionOf(id) !== null);
+  };
+  const guestTimer = setInterval(cleanGuests, 10 * 60_000);
+  guestTimer.unref();
+
+  app.addHook('onClose', (_instance, done) => {
+    clearInterval(guestTimer);
+    db?.close();
+    done();
+  });
 
   return app;
 }

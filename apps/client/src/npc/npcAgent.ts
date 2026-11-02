@@ -8,7 +8,7 @@ import { STRINGS } from '../strings';
 import type { Aabb, Vec2 } from '../world/collision';
 import type { SeatRegistry } from '../world/interaction';
 import { headingOf, stepToward } from '../world/movement';
-import type { Interactable } from '../world/office/layout';
+import { seatLift, type Interactable } from '../world/office/layout';
 import { findPath } from '../world/pathfinding';
 import { activityDuration, nextActivity, type NpcActivity } from './schedule';
 
@@ -101,7 +101,8 @@ export class NpcAgent {
     } else {
       this.walk(dt);
     }
-    this.avatar.root.position.set(this.position.x, 0, this.position.z);
+    const seat = this.seatId ? this.world.interactables.get(this.seatId) : undefined;
+    this.avatar.root.position.set(this.position.x, seat ? seatLift(seat) : 0, this.position.z);
     this.avatar.root.rotation.y = this.facing;
     this.avatar.update(dt);
   }

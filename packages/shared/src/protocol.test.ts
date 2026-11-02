@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_NAME } from './constants';
-import { MAX_ECHO_TEXT_LENGTH, parseClientMessage, parseServerMessage } from './protocol';
+import { parseClientMessage, parseServerMessage, poseAt, poseIndex, QUICK_CHATS } from './protocol';
 
 describe('GAME_NAME', () => {
   it('là tên game tiếng Việt', () => {
@@ -9,58 +9,46 @@ describe('GAME_NAME', () => {
 });
 
 describe('parseClientMessage', () => {
-  it('nhận tin echo hợp lệ và cắt khoảng trắng thừa', () => {
-    expect(parseClientMessage(JSON.stringify({ type: 'echo', text: '  Chào sếp  ' }))).toEqual({
-      ok: true,
-      value: { type: 'echo', text: 'Chào sếp' },
-    });
-  });
-
-  it('nhận đúng độ dài tối đa', () => {
-    const text = 'a'.repeat(MAX_ECHO_TEXT_LENGTH);
-    expect(parseClientMessage(JSON.stringify({ type: 'echo', text })).ok).toBe(true);
+  it('nhận tin hợp lệ', () => {
+    const state = { type: 'state', x: 1.5, z: -2, facing: 3.1, pose: 'walk' };
+    expect(parseClientMessage(JSON.stringify(state))).toEqual({ ok: true, value: state });
+    expect(parseClientMessage('{"type":"emote","emote":"wave"}').ok).toBe(true);
+    expect(parseClientMessage('{"type":"quick_chat","index":0}').ok).toBe(true);
+    expect(
+      parseClientMessage(JSON.stringify({ type: 'quick_chat', index: QUICK_CHATS.length - 1 })).ok,
+    ).toBe(true);
+    expect(parseClientMessage('{"type":"ping","t":5}').ok).toBe(true);
   });
 
   it.each([
     ['không phải JSON', 'xin chào'],
     ['JSON không phải object', '42'],
     ['null', 'null'],
-    ['thiếu type', JSON.stringify({ text: 'hi' })],
+    ['thiếu type', JSON.stringify({ x: 1 })],
     ['type lạ', JSON.stringify({ type: 'xp', amount: 9999 })],
-    ['text rỗng', JSON.stringify({ type: 'echo', text: '   ' })],
-    ['text sai kiểu', JSON.stringify({ type: 'echo', text: 123 })],
-    ['text quá dài', JSON.stringify({ type: 'echo', text: 'a'.repeat(MAX_ECHO_TEXT_LENGTH + 1) })],
-    ['có trường thừa', JSON.stringify({ type: 'echo', text: 'hi', xp: 1000 })],
+    ['chat tự do', JSON.stringify({ type: 'quick_chat', text: 'xin chào' })],
+    ['câu nhanh ngoài danh sách', JSON.stringify({ type: 'quick_chat', index: 999 })],
+    ['emote lạ', JSON.stringify({ type: 'emote', emote: 'dance' })],
+    ['toạ độ NaN', '{"type":"state","x":null,"z":0,"facing":0,"pose":"walk"}'],
+    ['toạ độ quá xa', JSON.stringify({ type: 'state', x: 1e9, z: 0, facing: 0, pose: 'walk' })],
+    ['thừa trường', JSON.stringify({ type: 'state', x: 0, z: 0, facing: 0, pose: 'walk', xp: 5 })],
   ])('từ chối: %s', (_label, raw) => {
     expect(parseClientMessage(raw)).toEqual({ ok: false });
   });
 });
 
 describe('parseServerMessage', () => {
-  it('nhận tin echo của server', () => {
-    const raw = JSON.stringify({ type: 'echo', text: 'hi', serverTime: 1_700_000_000_000 });
-    expect(parseServerMessage(raw)).toEqual({
+  it('đọc tin có type, từ chối rác', () => {
+    expect(parseServerMessage('{"type":"player_leave","sid":3}')).toEqual({
       ok: true,
-      value: { type: 'echo', text: 'hi', serverTime: 1_700_000_000_000 },
+      value: { type: 'player_leave', sid: 3 },
     });
+    expect(parseServerMessage('rác')).toEqual({ ok: false });
+    expect(parseServerMessage('{"x":1}')).toEqual({ ok: false });
   });
 
-  it('nhận tin lỗi có mã hợp lệ', () => {
-    expect(parseServerMessage(JSON.stringify({ type: 'error', code: 'rate_limited' }))).toEqual({
-      ok: true,
-      value: { type: 'error', code: 'rate_limited' },
-    });
-  });
-
-  it.each([
-    ['mã lỗi lạ', JSON.stringify({ type: 'error', code: 'boom' })],
-    ['giờ server âm', JSON.stringify({ type: 'echo', text: 'hi', serverTime: -1 })],
-    [
-      'giờ server không phải số nguyên',
-      JSON.stringify({ type: 'echo', text: 'hi', serverTime: 1.5 }),
-    ],
-    ['JSON hỏng', '{"type":'],
-  ])('từ chối: %s', (_label, raw) => {
-    expect(parseServerMessage(raw)).toEqual({ ok: false });
+  it('tư thế <-> chỉ số', () => {
+    expect(poseAt(poseIndex('type'))).toBe('type');
+    expect(poseAt(99)).toBe('stand');
   });
 });

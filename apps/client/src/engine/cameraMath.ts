@@ -78,3 +78,38 @@ export function orbitOffset(state: OrbitState): { x: number; y: number; z: numbe
     z: Math.cos(state.yaw) * horizontal,
   };
 }
+
+export interface RoomBox {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  /** Độ cao trần. */
+  ceiling: number;
+}
+
+/** Camera luôn cách tường / trần / sàn ít nhất chừng này (mét). */
+export const ROOM_MARGIN = 0.25;
+const MIN_CAMERA_Y = 0.35;
+
+/**
+ * Giữ camera trong phòng kín: nếu vị trí `target + offset` ra ngoài tường, lên quá trần hay xuống
+ * dưới sàn thì rút ngắn `offset` (kéo camera lại gần điểm nhìn dọc đúng hướng nhìn).
+ * Trả về hệ số co 0..1 (1 = không cần co). `target` phải nằm trong phòng.
+ */
+export function confineToRoom(
+  target: { x: number; y: number; z: number },
+  offset: { x: number; y: number; z: number },
+  room: RoomBox,
+  margin = ROOM_MARGIN,
+): number {
+  let t = 1;
+  const limit = (from: number, delta: number, lo: number, hi: number): void => {
+    if (delta > 1e-9) t = Math.min(t, Math.max(0, (hi - from) / delta));
+    else if (delta < -1e-9) t = Math.min(t, Math.max(0, (lo - from) / delta));
+  };
+  limit(target.x, offset.x, room.minX + margin, room.maxX - margin);
+  limit(target.z, offset.z, room.minZ + margin, room.maxZ - margin);
+  limit(target.y, offset.y, MIN_CAMERA_Y, room.ceiling - margin);
+  return t;
+}

@@ -1,12 +1,12 @@
 // Xin quẻ KPI: mỗi ngày một quẻ, chọn theo ngày và mã người chơi nên cả ngày không đổi.
 import { z } from 'zod';
 import { KPI_FORTUNES, type KpiFortune } from '../../data/kpi-fortunes';
-import { hashString } from '../../npc/schedule';
+import { fortuneIndex as sharedFortuneIndex } from '@dilam/shared';
 import type { KeyValueStore } from '../../storage';
 import { isDayKey } from '../dayKey';
 
 export function fortuneIndex(day: string, playerId: string, count = KPI_FORTUNES.length): number {
-  return hashString(`kpi|${day}|${playerId}`) % count;
+  return sharedFortuneIndex(day, playerId, count);
 }
 
 export function fortuneFor(day: string, playerId: string): { id: number; fortune: KpiFortune } {

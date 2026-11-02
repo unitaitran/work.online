@@ -13,12 +13,18 @@ export interface OfficeHudOptions {
   notice: string | null;
   showStats: boolean;
   onEdit(): void;
+  /** Nút "Đi về": ra khỏi văn phòng về màn "Ở nhà". */
+  onGoHome(): void;
   onQualityChange(mode: QualityMode): void;
   onAudioChange(settings: AudioSettings): void;
   onInteract(): void;
   onFocusStart(): void;
   onDrinkCoffee(): void;
-  onOpenProfile(tab?: 'card' | 'review'): void;
+  onOpenProfile(): void;
+  onOpenSocial(): void;
+  onOpenShop(): void;
+  onOpenMore(): void;
+  onWipe(): void;
 }
 
 /** Thông tin tiến độ hiển thị trên HUD. */
@@ -29,7 +35,7 @@ export interface ProgressView {
   into: number;
   needed: number;
   isMax: boolean;
-  reviewDue: boolean;
+  coins: number;
 }
 
 export interface MissionView {
@@ -50,12 +56,17 @@ export interface OfficeHud {
   setHint(hint: InteractionHint | null): void;
   /** Hiện nút "Gõ phím tập trung" (khi đang ngồi ở bàn làm việc). */
   setFocusAvailable(available: boolean): void;
+  setWipeAvailable(available: boolean): void;
   /** Trạng thái ly cà phê: đang pha / đang cầm / không có. */
   setCoffee(phase: 'idle' | 'brewing' | 'holding'): void;
   setProgress(view: ProgressView): void;
   /** Chữ "+XP" bay lên cạnh thanh XP. */
   showXpGain(xp: number, capped: boolean): void;
   setMission(mission: MissionView | null): void;
+  /** Mũi tên ▲ cạnh thanh XP: đang ngồi máy / họp nên XP đang lên từ từ. */
+  setXpRising(rising: boolean): void;
+  /** Trạng thái kết nối (số người online, đang kết nối lại...). */
+  setNetStatus(text: string, tone: 'ok' | 'warn'): void;
   dispose(): void;
 }
 
@@ -72,6 +83,15 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   editButton.addEventListener('click', () => {
     options.onEdit();
+  });
+
+  const homeButton = el('button', {
+    className: 'button button-soft home-button',
+    text: STRINGS.lobby.goHome,
+    attrs: { type: 'button', title: STRINGS.lobby.goHomeHint },
+  });
+  homeButton.addEventListener('click', () => {
+    options.onGoHome();
   });
 
   const select = el('select', { className: 'quality-select', attrs: { id: 'quality-select' } });
@@ -121,6 +141,12 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     children: [xpFill, xpText],
   });
   const xpFloat = el('span', { className: 'xp-float', attrs: { 'aria-live': 'polite' } });
+  const xpRising = el('span', {
+    className: 'xp-rising',
+    text: '▲',
+    attrs: { title: STRINGS.progress.xpRising, 'aria-label': STRINGS.progress.xpRising },
+  });
+  xpRising.hidden = true;
   const badge = el('button', {
     className: 'office-badge',
     attrs: {
@@ -135,24 +161,17 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
         children: [
           el('span', { className: 'office-badge-name', text: options.name }),
           levelText,
-          xpBar,
+          el('span', { className: 'xp-row', children: [xpBar, xpRising] }),
         ],
       }),
       xpFloat,
     ],
   });
   badge.addEventListener('click', () => {
-    options.onOpenProfile('card');
+    options.onOpenProfile();
   });
-  const reviewButton = el('button', {
-    className: 'button button-primary review-due',
-    text: STRINGS.progress.reviewDue,
-    attrs: { type: 'button' },
-  });
-  reviewButton.hidden = true;
-  reviewButton.addEventListener('click', () => {
-    options.onOpenProfile('review');
-  });
+  // Số xu hiện có (điểm trong game).
+  const coinChip = el('span', { className: 'coin-chip', attrs: { 'aria-live': 'polite' } });
 
   // Thẻ việc sếp giao.
   const missionGoal = el('span', { className: 'mission-goal' });
@@ -213,6 +232,41 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   coffeeChip.hidden = true;
 
+  const socialButton = el('button', {
+    className: 'button button-soft social-button',
+    text: STRINGS.social.open,
+    attrs: { type: 'button' },
+  });
+  socialButton.addEventListener('click', () => {
+    options.onOpenSocial();
+  });
+  const netStatus = el('p', { className: 'net-status', attrs: { role: 'status' } });
+  const shopButton = el('button', {
+    className: 'button button-soft shop-button',
+    text: STRINGS.shop.open,
+    attrs: { type: 'button' },
+  });
+  shopButton.addEventListener('click', () => {
+    options.onOpenShop();
+  });
+  const moreButton = el('button', {
+    className: 'button button-soft more-button',
+    text: STRINGS.hub.open,
+    attrs: { type: 'button' },
+  });
+  moreButton.addEventListener('click', () => {
+    options.onOpenMore();
+  });
+  const wipeButton = el('button', {
+    className: 'button button-soft wipe-button',
+    text: STRINGS.chores.wipeButton,
+    attrs: { type: 'button' },
+  });
+  wipeButton.hidden = true;
+  wipeButton.addEventListener('click', () => {
+    options.onWipe();
+  });
+
   const eventsLink = el('a', {
     className: 'events-link',
     text: STRINGS.eventsPage.open,
@@ -223,7 +277,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   const bar = el('div', {
     className: 'office-bar',
     children: [
-      el('div', { className: 'office-badge-group', children: [badge, reviewButton] }),
+      el('div', { className: 'office-badge-group', children: [badge, coinChip] }),
       el('div', {
         className: 'office-actions',
         children: [
@@ -233,6 +287,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
             children: [el('span', { text: s.qualityLabel }), select],
           }),
           editButton,
+          homeButton,
         ],
       }),
     ],
@@ -244,7 +299,22 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   const layer = el('div', {
     className: 'office-hud',
-    children: [bar, missionCard, toast, stats, eventsLink, coffeeChip, focusButton, interact, hint],
+    children: [
+      bar,
+      missionCard,
+      toast,
+      stats,
+      eventsLink,
+      netStatus,
+      socialButton,
+      shopButton,
+      moreButton,
+      wipeButton,
+      coffeeChip,
+      focusButton,
+      interact,
+      hint,
+    ],
   });
   root.append(layer);
 
@@ -293,7 +363,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
         : STRINGS.progress.xpBar(view.into, view.needed);
       xpBar.setAttribute('aria-valuenow', String(Math.round(view.ratio * 100)));
       xpBar.setAttribute('aria-label', xpText.textContent);
-      reviewButton.hidden = !view.reviewDue;
+      coinChip.textContent = STRINGS.progress.coins(view.coins);
     },
     showXpGain(xp, capped) {
       xpFloat.textContent = STRINGS.progress.xpGain(xp);
@@ -307,6 +377,16 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       if (!mission) return;
       missionGoal.textContent = mission.goalText;
       missionCount.textContent = STRINGS.progress.mission.progress(mission.progress, mission.total);
+    },
+    setWipeAvailable(available) {
+      wipeButton.hidden = !available;
+    },
+    setXpRising(rising) {
+      xpRising.hidden = !rising;
+    },
+    setNetStatus(text, tone) {
+      netStatus.textContent = text;
+      netStatus.dataset.tone = tone;
     },
     setFocusAvailable(available) {
       focusButton.hidden = !available;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { applyDrag, applyZoom, CAMERA_LIMITS, SEATED_CAMERA_LIMITS } from './cameraMath';
+import {
+  applyDrag,
+  applyZoom,
+  CAMERA_LIMITS,
+  SEATED_CAMERA_LIMITS,
+  confineToRoom,
+  ROOM_MARGIN,
+} from './cameraMath';
 import { advanceFixedStep, FIXED_STEP, MAX_STEPS_PER_FRAME } from './loop';
 import { dampAngle, wrapAngle } from './mathUtils';
 import {
@@ -132,5 +139,49 @@ describe('chất lượng', () => {
     const dip = run(warm, 20, GOVERNOR_SETTINGS.sustainSeconds / 2);
     expect(dip.downgrades).toBe(0);
     expect(run(dip.state, 60, 10).downgrades).toBe(0);
+  });
+});
+
+describe('chế độ máy yếu', () => {
+  it('phát hiện theo số nhân, RAM, tiết kiệm dữ liệu', async () => {
+    const { detectLowPower, initialAutoLevel } = await import('./quality');
+    expect(detectLowPower({ hardwareConcurrency: 8, deviceMemory: 8 })).toBe(false);
+    expect(detectLowPower({ hardwareConcurrency: 4 })).toBe(true);
+    expect(detectLowPower({ deviceMemory: 2 })).toBe(true);
+    expect(detectLowPower({ saveData: true })).toBe(true);
+    expect(detectLowPower({})).toBe(false);
+    expect(initialAutoLevel(false, true)).toBe('low');
+    expect(initialAutoLevel(true)).toBe('medium');
+    expect(initialAutoLevel(false)).toBe('high');
+  });
+});
+
+describe('confineToRoom (phòng kín)', () => {
+  const room = { minX: -10, maxX: 10, minZ: -6, maxZ: 6, ceiling: 3 };
+
+  it('camera trong phòng thì giữ nguyên', () => {
+    expect(confineToRoom({ x: 0, y: 0.75, z: 0 }, { x: 2, y: 1.5, z: 3 }, room)).toBe(1);
+  });
+
+  it('lùi ra ngoài tường thì kéo camera vào sát tường (chừa khoảng cách)', () => {
+    const target = { x: 8, y: 0.75, z: 0 };
+    const offset = { x: 6, y: 1, z: 0 };
+    const t = confineToRoom(target, offset, room);
+    expect(target.x + offset.x * t).toBeCloseTo(10 - ROOM_MARGIN);
+  });
+
+  it('không cho camera lên quá trần hay xuống dưới sàn', () => {
+    const t = confineToRoom({ x: 0, y: 0.75, z: 0 }, { x: 0, y: 6, z: 1 }, room);
+    expect(0.75 + 6 * t).toBeCloseTo(3 - ROOM_MARGIN);
+    const down = confineToRoom({ x: 0, y: 0.75, z: 0 }, { x: 0, y: -2, z: 1 }, room);
+    expect(0.75 - 2 * down).toBeGreaterThanOrEqual(0.35 - 1e-9);
+  });
+
+  it('góc phòng: lấy giới hạn chặt nhất, không bao giờ âm', () => {
+    const target = { x: 9.5, y: 0.75, z: 5.5 };
+    const t = confineToRoom(target, { x: 4, y: 3, z: 4 }, room);
+    expect(t).toBeGreaterThanOrEqual(0);
+    expect(target.x + 4 * t).toBeLessThanOrEqual(10 - ROOM_MARGIN + 1e-9);
+    expect(target.z + 4 * t).toBeLessThanOrEqual(6 - ROOM_MARGIN + 1e-9);
   });
 });

@@ -4,7 +4,7 @@ import type { NpcSpec } from './npcAgent';
 import { seededRng } from './schedule';
 
 /** Bàn làm việc riêng của 3 đồng nghiệp (các bàn còn lại để người chơi ngồi). */
-const NPC_DESKS = ['desk-1', 'desk-4', 'desk-6'];
+const NPC_DESKS = ['desk-1', 'desk-8', 'desk-12'];
 
 /** 3 đồng nghiệp cố định, sinh từ hạt giống: tải lại trang vẫn là những người đó. */
 export function createNpcRoster(seed = 2026): NpcSpec[] {

@@ -2,7 +2,7 @@
 // Không tin số liệu trong sự kiện khi tự tính được (chuỗi chấm công, thời lượng...).
 import type { ActivityEvent } from './activityEvents';
 import { BALANCE } from './balance';
-import { levelFor, type Department } from './levels';
+import { levelFor, titleForLevel, type Department } from './levels';
 import {
   MISSION_TEMPLATES,
   pickMission,
@@ -10,7 +10,13 @@ import {
   startMission,
   type Mission,
 } from './missions';
-import { emptyDaily, type CheckInState, type LogEntry, type ProgressState } from './progress';
+import {
+  EMPTY_DAILY_STATS,
+  emptyDaily,
+  type CheckInState,
+  type LogEntry,
+  type ProgressState,
+} from './progress';
 import { daysBetween } from './time';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +66,7 @@ export type XpCategory =
   | 'chore'
   | 'fortune'
   | 'meeting'
+  | 'event'
   | 'mission';
 
 /** Phòng ban nào được ưu đãi loại hoạt động nào (x departmentBuff). */
@@ -91,8 +98,8 @@ export interface XpResult {
   xp: number;
   /** Dòng kinh công sở còn dư sau khi quy đổi. */
   linesCarry: number;
-  /** Các phần cộng lại (để ghi nhật ký / kiểm tra). */
-  parts: { category: XpCategory; xp: number }[];
+  /** Các phần cộng lại (để ghi nhật ký / kiểm tra). `minutes`: số phút ngồi được tính (giới hạn ngày). */
+  parts: { category: XpCategory; xp: number; minutes?: number }[];
 }
 
 /**
@@ -103,8 +110,14 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
   const parts: XpResult['parts'] = [];
   let linesCarry = ctx.linesCarry;
   const limits = BALANCE.perDayLimits;
-  const add = (category: XpCategory, xp: number): void => {
-    if (xp > 0) parts.push({ category, xp: buffed(xp, category, ctx.department) });
+  const add = (category: XpCategory, xp: number, minutes?: number): void => {
+    if (xp > 0) {
+      parts.push({
+        category,
+        xp: buffed(xp, category, ctx.department),
+        ...(minutes !== undefined ? { minutes } : {}),
+      });
+    }
   };
 
   switch (event.type) {
@@ -119,14 +132,12 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       break;
     }
     case 'focus-typing': {
+      // XP theo phút đã nhỏ giọt trong lúc ngồi (work-tick); hết phiên trọn vẹn thì thêm thưởng.
       const { plannedMs, completed, lines } = event.detail;
       const minutes = Math.round(plannedMs / 60_000);
-      const actualMs = Math.min(event.durationMs, plannedMs);
-      const sessionXp =
-        completed && actualMs >= plannedMs
-          ? (BALANCE.focus.completed[minutes] ?? 0)
-          : Math.floor(actualMs / 60_000) * BALANCE.focus.partialPerMinute;
-      add('focus', sessionXp);
+      if (completed && event.durationMs >= plannedMs) {
+        add('focus', BALANCE.focus.completed[minutes] ?? 0);
+      }
       // Dòng kinh công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
       linesCarry += Math.max(0, Math.floor(lines));
       const chunks = Math.floor(linesCarry / BALANCE.lines.per);
@@ -147,14 +158,24 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
     case 'kpi-fortune':
       if (!event.detail.repeat && !ctx.fortuneClaimed) add('fortune', BALANCE.fortune);
       break;
-    case 'meeting': {
-      const used = ctx.countToday('meetingMinutes');
+    case 'company-promotion':
+      if (ctx.countToday('companyPromotion') < limits.companyPromotion) {
+        add('event', BALANCE.companyPromotion);
+      }
+      break;
+    case 'room-event':
+      if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
+      break;
+    case 'work-tick': {
+      // Mỗi phút trọn đang ngồi máy / họp (server đo), trong giới hạn phút mỗi ngày.
+      const meeting = event.detail.kind === 'meeting';
+      const used = ctx.countToday(meeting ? 'meetingMinutes' : 'deskMinutes');
+      const limit = meeting ? limits.meetingMinutes : limits.deskMinutes;
       const minutes = Math.min(
-        Math.floor(event.durationMs / 60_000),
-        BALANCE.meeting.maxMinutesPerSession,
-        Math.max(0, limits.meetingMinutes - used),
+        Math.max(0, Math.floor(event.detail.minutes)),
+        Math.max(0, limit - used),
       );
-      add('meeting', minutes * BALANCE.meeting.perMinute);
+      add(meeting ? 'meeting' : 'focus', minutes * BALANCE.work[event.detail.kind], minutes);
       break;
     }
     default:
@@ -193,9 +214,6 @@ export function rollDay(state: ProgressState, today: string): ProgressState {
   if (next.daily.day === null || daysBetween(next.daily.day, today) > 0) {
     next = { ...next, daily: emptyDaily(today) };
   }
-  if (next.review.periodStart === null) {
-    next = { ...next, review: { ...next.review, periodStart: today } };
-  }
   return next;
 }
 
@@ -217,6 +235,11 @@ export interface ApplyResult {
   base: number;
   levelBefore: number;
   levelAfter: number;
+  /** Chức danh trước và sau (tự lên theo cấp). */
+  titleBefore: number;
+  titleAfter: number;
+  /** Xu nhận được. */
+  coins: number;
   checkIn: CheckInStatus | null;
   completedMission: Mission | null;
 }
@@ -232,9 +255,9 @@ export function applyEvent(
 ): ApplyResult {
   let state = rollDay(input, ctx.today);
   const levelBefore = levelFor(state.xp);
+  const titleBefore = titleForLevel(levelBefore);
   let checkInStatus: CheckInStatus | null = null;
   let counts = state.daily.counts;
-  let review = state.review;
 
   // Chấm công: tự tính lại từ trạng thái, không tin streak trong sự kiện.
   if (event.type === 'checkin') {
@@ -247,14 +270,14 @@ export function applyEvent(
         base: 0,
         levelBefore,
         levelAfter: levelBefore,
+        titleBefore,
+        titleAfter: titleBefore,
+        coins: 0,
         checkIn: 'already',
         completedMission: null,
       };
     }
     state = { ...state, checkIn: result.state };
-    if (!review.checkInDays.includes(ctx.today)) {
-      review = { ...review, checkInDays: [...review.checkInDays, ctx.today] };
-    }
   }
 
   const xp = xpFor(event, {
@@ -265,27 +288,28 @@ export function applyEvent(
     linesCarry: state.linesCarry,
   });
 
-  // Đếm số lần đã tính (chỉ khi thật sự được XP) và chỉ số cho kỳ đánh giá.
+  // Đếm số lần đã tính (chỉ khi thật sự được XP).
   let fortuneClaimed = state.daily.fortuneClaimed;
   for (const part of xp.parts) {
     if (part.category === 'task') counts = bump(counts, 'taskDone');
     if (part.category === 'coffeeGift') counts = bump(counts, 'coffeeGift');
     if (part.category === 'chore') counts = bump(counts, 'chore');
     if (part.category === 'fortune') fortuneClaimed = true;
-    // Họp không có ưu đãi phòng ban nên XP / perMinute = số phút đã tính.
-    if (part.category === 'meeting') {
-      counts = bump(counts, 'meetingMinutes', Math.round(part.xp / BALANCE.meeting.perMinute));
+    if (part.category === 'event') {
+      counts = bump(counts, event.type === 'company-promotion' ? 'companyPromotion' : 'roomEvent');
+    }
+    if (part.minutes !== undefined) {
+      counts = bump(
+        counts,
+        part.category === 'meeting' ? 'meetingMinutes' : 'deskMinutes',
+        part.minutes,
+      );
     }
   }
-  if (event.type === 'focus-typing') {
-    review = {
-      ...review,
-      focusMs: review.focusMs + Math.min(event.durationMs, event.detail.plannedMs),
-    };
-  }
-  if (xp.parts.some((part) => part.category === 'coffeeGift' || part.category === 'chore')) {
-    review = { ...review, helps: review.helps + 1 };
-  }
+  // Uy tín: mỗi lần giúp đồng nghiệp được tính.
+  const helped = xp.parts.some(
+    (part) => part.category === 'coffeeGift' || part.category === 'chore',
+  );
 
   // Việc sếp giao.
   let missionXp = 0;
@@ -311,11 +335,23 @@ export function applyEvent(
     log.push({ at: ctx.now, source: 'mission', xp: granted - grantedEvent, base: missionXp });
   }
 
+  // Xu: một phần XP thực nhận + thưởng việc sếp giao.
+  const coins =
+    Math.floor(granted * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
+
+  // Số liệu trong ngày cho thẻ khoe thành tích.
+  const stats = { ...(state.daily.stats ?? EMPTY_DAILY_STATS) };
+  if (event.type === 'focus-typing') stats.keys += event.detail.scoredKeys;
+  if (event.type === 'coffee-gift' || event.type === 'coffee-drink') stats.coffees += 1;
+  if (event.type === 'meeting' && event.durationMs >= 60_000) stats.meetings += 1;
+  if (event.type === 'room-event' && event.detail.kind === 'boss_walk') stats.dodged += 1;
+
   state = {
     ...state,
     xp: state.xp + granted,
+    coins: state.coins + coins,
+    reputation: state.reputation + (helped ? BALANCE.reputationPerHelp : 0),
     linesCarry: xp.linesCarry,
-    review,
     daily: {
       ...state.daily,
       earned: state.daily.earned + granted,
@@ -323,6 +359,7 @@ export function applyEvent(
       fortuneClaimed,
       missions,
       nextMissionAt,
+      stats,
     },
     log: log.slice(-BALANCE.log.maxEntries),
   };
@@ -333,6 +370,9 @@ export function applyEvent(
     base,
     levelBefore,
     levelAfter: levelFor(state.xp),
+    titleBefore,
+    titleAfter: titleForLevel(levelFor(state.xp)),
+    coins,
     checkIn: checkInStatus,
     completedMission,
   };

@@ -21,6 +21,7 @@ import {
   applyDrag,
   applyZoom,
   CAMERA_LIMITS,
+  confineToRoom,
   orbitOffset,
   SEATED_CAMERA_LIMITS,
   type OrbitState,
@@ -38,6 +39,17 @@ import { NpcAgent, type NpcSpec } from '../npc/npcAgent';
 import { seededRng } from '../npc/schedule';
 import { STRINGS } from '../strings';
 import { BubbleLayer } from '../ui/bubbles';
+import { RemotePlayers } from './remotePlayers';
+import { RoomPlants } from './roomPlants';
+import { buildLanterns } from './lanterns';
+import { CompanySign, type SignInfo } from './companySign';
+import { WallClock } from './wallClock';
+import { ZoneLabels } from './zoneLabels';
+import type { BufferGeometry, Group } from 'three';
+import type { DayMood } from '@dilam/shared';
+import { Companions } from '../avatar/companions';
+import { gearFromEquipped } from '../avatar/gear';
+import type { PoseName } from '../avatar/pose';
 import type { InteractionHint } from '../ui/officeHud';
 import { moveWithCollisions, type Aabb, type Vec2 } from '../world/collision';
 import { DustMotes } from '../world/dust';
@@ -46,10 +58,13 @@ import { createLighting, type Lighting } from '../world/lighting';
 import { combineInputs, headingOf, inputToWorld, stepToward } from '../world/movement';
 import { buildOffice, type BuiltOffice } from '../world/office/buildOffice';
 import {
+  insideCeoRoom,
   officeInteractables,
   officeObstacles,
   type Interactable,
   type OfficeLayout,
+  seatLift,
+  seatLiftNear,
 } from '../world/office/layout';
 import { PERIOD_LIGHTING, type DayPeriod } from '../world/office/period';
 import { findPath } from '../world/pathfinding';
@@ -62,8 +77,20 @@ const TURN_SPEED = 14;
 const CAMERA_FOLLOW = 9;
 const CAMERA_BLEND = 5;
 const LOOK_HEIGHT = 0.75;
+const DEFAULT_ORBIT: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+/** Góc camera lúc mới vào phòng; yaw tính lệch so với hướng nhân vật lúc xuất hiện. */
+const ENTRY_ORBIT: OrbitState = { yaw: 0.42, pitch: 0.42, distance: 5.6 };
+/** Giới hạn camera khi nhìn từ trên. */
+const TOP_CAMERA_LIMITS = {
+  ...CAMERA_LIMITS,
+  minPitch: 0.6,
+  maxPitch: 1.5,
+  minDistance: 8,
+  maxDistance: 26,
+};
 const MARKER_SECONDS = 1.2;
 const BUBBLE_HEIGHT = 1.42;
+const SELF_BUBBLE = 'self';
 const BUBBLE_MAX_DISTANCE = 16;
 const BUBBLE_TOP_MARGIN = 120;
 const PLAYER_ID = 'player';
@@ -81,6 +108,8 @@ export interface OfficeSceneOptions {
   layout: OfficeLayout;
   period: DayPeriod;
   npcs: readonly NpcSpec[];
+  /** Tên người chơi (bong bóng lời nói trên đầu chính mình). */
+  playerName?: string;
   onHint(hint: InteractionHint | null): void;
   onEvent(event: OfficeEvent): void;
   onSound(name: SoundName): void;
@@ -95,7 +124,9 @@ export class OfficeScene implements SceneController {
   readonly camera = new PerspectiveCamera(50, 1, 0.1, 80);
   private readonly material: MeshLambertMaterial = createVertexColorMaterial();
   private readonly office: BuiltOffice;
-  private readonly avatar: AvatarModel;
+  private avatar: AvatarModel;
+  private companions: Companions | null = null;
+  private shadows = false;
   private readonly lighting: Lighting;
   private readonly dust: DustMotes;
   private readonly blob: Mesh;
@@ -106,12 +137,19 @@ export class OfficeScene implements SceneController {
   private readonly bubbles: BubbleLayer;
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
+  /** Vật cản của người chơi (đổi khi có / mất thẻ CEO; sửa tại chỗ để mọi nơi giữ tham chiếu). */
   private readonly obstacles: Aabb[];
+  private ceoAccess = false;
+  private readonly layout: OfficeLayout;
   private readonly bounds: Aabb;
   private readonly items: Interactable[];
   private readonly pickBoxes: { item: Interactable; box: Box3 }[];
   private readonly seats = new SeatRegistry();
   private readonly npcs: NpcAgent[];
+  /** Người chơi khác trong phòng (Phase 4B). */
+  readonly remotes: RemotePlayers;
+  /** Hoa người chơi đã tưới (Phase 5A). */
+  readonly plants: RoomPlants;
   private readonly canvas: HTMLElement;
   private readonly options: OfficeSceneOptions;
 
@@ -128,7 +166,7 @@ export class OfficeScene implements SceneController {
   private inputLocked = false;
   /** Đang chơi "gõ phím tập trung": tiếng gõ do người chơi bấm, không tự sinh. */
   private manualTyping = false;
-  private orbit: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
+  private orbit: OrbitState = { ...DEFAULT_ORBIT };
   private orbitGoal: OrbitState = { ...this.orbit };
   private freeOrbit: OrbitState = { ...this.orbit };
   private readonly lookTarget = new Vector3();
@@ -145,14 +183,20 @@ export class OfficeScene implements SceneController {
     this.options = options;
     this.canvas = options.canvas;
     const { layout } = options;
+    this.layout = layout;
     this.bounds = layout.bounds;
     this.obstacles = officeObstacles(layout);
     this.items = officeInteractables(layout);
     this.position = { ...layout.spawn };
     this.previous = { ...layout.spawn };
     this.facing = layout.spawnFacing;
+    // Mới vào: camera đứng phía trong phòng nhìn lại cửa vào (thấy nhân vật, cửa, máy chấm công),
+    // thấp dưới trần để không bị ép sát vào tường sau lưng.
+    this.orbit = { ...ENTRY_ORBIT, yaw: layout.spawnFacing + ENTRY_ORBIT.yaw };
+    this.orbitGoal = { ...this.orbit };
+    this.freeOrbit = { ...this.orbit };
 
-    this.scene.fog = new Fog(0xfdf3e7, 22, 50);
+    this.scene.fog = new Fog(0x0e0e12, 24, 55);
     this.lighting = createLighting(this.scene, 9, { x: 4, y: 9, z: -5 });
     this.office = buildOffice(layout, this.material, options.period);
     this.scene.add(this.office.group);
@@ -184,7 +228,8 @@ export class OfficeScene implements SceneController {
     const itemMap = new Map(this.items.map((item) => [item.id, item]));
     const coffee = itemMap.get('coffee');
     const world = {
-      obstacles: this.obstacles,
+      // NPC không có thẻ CEO: luôn thấy cửa phòng CEO đóng.
+      obstacles: officeObstacles(layout),
       bounds: this.bounds,
       interactables: itemMap,
       seats: this.seats,
@@ -204,6 +249,22 @@ export class OfficeScene implements SceneController {
       this.bubbles.ensure(spec.id, spec.name);
       return npc;
     });
+
+    this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
+    // Người chơi khác đang ngồi: nâng lên theo độ cao chỗ ngồi gần nhất (sofa cao hơn ghế).
+    this.remotes.setSeatLift((x, z) => seatLiftNear(this.items, x, z));
+    this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
+    this.plants = new RoomPlants(this.material);
+    // Đồng hồ lớn trên tường bắc, bên phải dãy cửa sổ (logo công ty ở tường sảnh).
+    const lastWindow = layout.windows.spans.at(-1)?.maxX ?? 4.5;
+    const rightShelf = layout.shelves.reduce((m, b) => Math.max(m, b.maxX), lastWindow);
+    this.clock.group.position.set(rightShelf + 0.9, 2.05, layout.bounds.minZ + 0.04);
+    this.clock.group.rotation.y = 0;
+    this.scene.add(this.clock.group);
+    this.zoneLabels = new ZoneLabels(layout);
+    this.setCompanySign(null);
+    this.scene.add(this.zoneLabels.group);
+    this.scene.add(this.plants.group);
 
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
     this.joystick = new VirtualJoystick(options.hudLayer, STRINGS.office.joystick);
@@ -232,6 +293,112 @@ export class OfficeScene implements SceneController {
     this.lighting.applyPeriod(lighting);
     this.scene.background = new Color(lighting.background);
     this.scene.fog?.color.setHex(lighting.background);
+  }
+
+  private moodGroup: Group | null = null;
+  private sign: CompanySign | null = null;
+  private readonly clock = new WallClock();
+  private readonly zoneLabels: ZoneLabels;
+  /** 'top': nhìn toàn tầng từ trên cao, tâm là giữa văn phòng. */
+  private viewMode: 'follow' | 'top' = 'follow';
+  private autoRotate = false;
+
+  // ---------- Góc nhìn (nút "Góc nhìn" trên HUD) ----------
+
+  setXray(on: boolean): void {
+    this.office.setXray(on);
+  }
+
+  setAutoRotate(on: boolean): void {
+    this.autoRotate = on;
+  }
+
+  setZoneLabels(on: boolean): void {
+    this.labelsOn = on;
+  }
+
+  private labelsOn = true;
+
+  /** Nhìn từ trên: cả tầng 20 × 13 m trong khung hình, lối vào ở dưới. */
+  setTopView(on: boolean): void {
+    this.viewMode = on ? 'top' : 'follow';
+    this.orbitGoal = on ? { yaw: 0, pitch: 1.42, distance: 19 } : { ...DEFAULT_ORBIT };
+  }
+
+  isTopView(): boolean {
+    return this.viewMode === 'top';
+  }
+
+  /** Đặt lại góc nhìn: theo nhân vật, tắt tự xoay. */
+  resetView(): void {
+    this.viewMode = 'follow';
+    this.autoRotate = false;
+    this.orbitGoal = this.seated
+      ? { yaw: this.seated.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 }
+      : { ...DEFAULT_ORBIT };
+  }
+
+  /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
+  /** Có thẻ vào phòng CEO (chủ công ty, trong phòng công ty của mình) hay không. */
+  setCeoAccess(on: boolean): void {
+    if (on === this.ceoAccess) return;
+    this.ceoAccess = on;
+    this.obstacles.splice(0, this.obstacles.length, ...officeObstacles(this.layout, { ceo: on }));
+    this.office.setCeoDoorOpen(on);
+    // Mất thẻ khi đang ở trong phòng (chuyển phòng): đưa ra trước cửa.
+    if (!on && insideCeoRoom(this.layout, this.position)) {
+      const door = this.items.find((item) => item.kind === 'ceodoor');
+      if (door) this.correctPosition(door.approach.x, door.approach.z);
+    }
+  }
+
+  hasCeoAccess(): boolean {
+    return this.ceoAccess;
+  }
+
+  /** Logo trên tường sảnh: phòng công ty hiện tên công ty, văn phòng chung hiện Mây Hồng. */
+  setCompanySign(info: SignInfo | null): void {
+    this.sign?.dispose();
+    this.sign = new CompanySign(
+      this.options.layout,
+      info ?? {
+        name: STRINGS.sign.defaultName,
+        subtitle: STRINGS.sign.defaultTagline,
+        color: 0x9a9aa3,
+        glyph: '',
+      },
+    );
+    this.scene.add(this.sign.group);
+  }
+
+  /**
+   * Không khí trong ngày (lịch): Tết treo đèn lồng đỏ, ngày lương ánh vàng ấm,
+   * thứ Hai hơi trầm, thứ Sáu sáng sủa.
+   */
+  setMood(mood: DayMood): void {
+    const tint: Record<DayMood, number> = {
+      tet: 1.08,
+      payday: 1.1,
+      monday: 0.88,
+      friday: 1.06,
+      weekend: 1,
+      normal: 1,
+    };
+    this.lighting.hemi.intensity *= tint[mood];
+    if (mood === 'payday') this.lighting.hemi.color.offsetHSL(0.02, 0.1, 0);
+    if (this.moodGroup) {
+      this.moodGroup.removeFromParent();
+      // Chỉ giải phóng hình học; vật liệu dùng chung với cả văn phòng.
+      this.moodGroup.traverse((object) => {
+        if (object instanceof Mesh) (object.geometry as BufferGeometry).dispose();
+      });
+      this.moodGroup = null;
+    }
+    if (mood === 'tet') {
+      const group = buildLanterns(this.options.layout, this.material);
+      this.scene.add(group);
+      this.moodGroup = group;
+    }
   }
 
   /** Nút "Chạm để dùng" / "Đứng dậy" hoặc phím E. */
@@ -282,6 +449,46 @@ export class OfficeScene implements SceneController {
 
   getPlayerPosition(): Vec2 {
     return { ...this.position };
+  }
+
+  /** Đổi đồ đang mặc / thú cưng (từ cửa hàng): dựng lại nhân vật. */
+  setGear(appearance: Appearance, equipped: readonly string[]): void {
+    const pose = this.avatar.pose;
+    this.avatar.dispose();
+    this.avatar = new AvatarModel(appearance, this.material, gearFromEquipped(equipped));
+    this.avatar.setPose(pose);
+    this.avatar.setShadows(this.shadows);
+    this.scene.add(this.avatar.root);
+    this.companions?.dispose();
+    const companions = new Companions(equipped, this.material);
+    if (companions.isEmpty) {
+      companions.dispose();
+      this.companions = null;
+    } else {
+      this.companions = companions;
+      this.scene.add(companions.group);
+    }
+  }
+
+  private selfSpeech: { text: string; seconds: number } | null = null;
+
+  /** Mình nói câu nhanh / biểu cảm: bong bóng trên đầu và (nếu có) làm động tác. */
+  playerSay(text: string, emote?: string): void {
+    this.selfSpeech = { text, seconds: 4 };
+    if (emote) this.avatar.playEmote(emote);
+  }
+
+  /** Vị trí, hướng, tư thế hiện tại để gửi lên server. */
+  getPlayerState(): { x: number; z: number; facing: number; pose: PoseName } {
+    return { x: this.position.x, z: this.position.z, facing: this.facing, pose: this.avatar.pose };
+  }
+
+  /** Server báo vị trí không hợp lệ: kéo nhân vật về chỗ server chấp nhận. */
+  correctPosition(x: number, z: number): void {
+    if (this.seated) this.standUp();
+    this.cancelPath();
+    this.position = { x, z };
+    this.previous = { x, z };
   }
 
   getOrbit(): OrbitState {
@@ -336,32 +543,51 @@ export class OfficeScene implements SceneController {
   frameUpdate(frameSeconds: number, alpha: number): void {
     const x = lerp(this.previous.x, this.position.x, alpha);
     const z = lerp(this.previous.z, this.position.z, alpha);
-    this.avatar.root.position.set(x, 0, z);
+    this.avatar.root.position.set(x, this.seated ? seatLift(this.seated) : 0, z);
     this.avatar.root.rotation.y = this.facing;
     this.blob.position.set(x, 0.006, z);
     this.blob.visible = this.blobAllowed && !this.seated;
     this.lighting.follow(x, z);
 
     // Camera: ngồi thì nhìn gần qua vai về phía bàn, đứng thì theo sau như cũ.
+    if (this.autoRotate)
+      this.orbitGoal = { ...this.orbitGoal, yaw: this.orbitGoal.yaw + frameSeconds * 0.3 };
     this.orbit = {
       yaw: dampAngle(this.orbit.yaw, this.orbitGoal.yaw, CAMERA_BLEND, frameSeconds),
       pitch: damp(this.orbit.pitch, this.orbitGoal.pitch, CAMERA_BLEND, frameSeconds),
       distance: damp(this.orbit.distance, this.orbitGoal.distance, CAMERA_BLEND, frameSeconds),
     };
     const seat = this.seated;
-    const focusX = seat ? x - Math.sin(seat.facing + Math.PI) * 0.35 : x;
-    const focusZ = seat ? z - Math.cos(seat.facing + Math.PI) * 0.35 : z;
-    const focusY = seat ? 0.5 : LOOK_HEIGHT;
+    const top = this.viewMode === 'top';
+    const center = this.layout.bounds;
+    const focusX = top
+      ? (center.minX + center.maxX) / 2
+      : seat
+        ? x - Math.sin(seat.facing + Math.PI) * 0.35
+        : x;
+    const focusZ = top
+      ? (center.minZ + center.maxZ) / 2 + 0.6
+      : seat
+        ? z - Math.cos(seat.facing + Math.PI) * 0.35
+        : z;
+    const focusY = top ? 0 : seat ? 0.5 : LOOK_HEIGHT;
     this.lookTarget.set(
       damp(this.lookTarget.x, focusX, CAMERA_FOLLOW, frameSeconds),
       damp(this.lookTarget.y, focusY, CAMERA_FOLLOW, frameSeconds),
       damp(this.lookTarget.z, focusZ, CAMERA_FOLLOW, frameSeconds),
     );
     const offset = orbitOffset(this.orbit);
+    // Phòng kín: camera không ra ngoài tường hay lên quá trần (trừ chế độ nhìn từ trên).
+    const shrink = top
+      ? 1
+      : confineToRoom(this.lookTarget, offset, {
+          ...this.layout.bounds,
+          ceiling: this.layout.wallHeight,
+        });
     this.camera.position.set(
-      this.lookTarget.x + offset.x,
-      this.lookTarget.y + offset.y,
-      this.lookTarget.z + offset.z,
+      this.lookTarget.x + offset.x * shrink,
+      this.lookTarget.y + offset.y * shrink,
+      this.lookTarget.z + offset.z * shrink,
     );
     this.camera.lookAt(this.lookTarget);
 
@@ -373,9 +599,20 @@ export class OfficeScene implements SceneController {
       this.marker.visible = this.markerSeconds > 0;
     }
 
+    // Tên khu chỉ hiện khi nhìn xa (từ trên, hoặc lùi camera), gần thì đỡ che.
+    this.zoneLabels.setVisible(this.labelsOn && (top || this.orbit.distance > 9.5));
+    // Vách đặc giữa các phòng tự mờ khi nhân vật ở trong phòng phía nam hoặc camera ở sau vách.
+    const rooms = this.layout.lounge.bounds.minZ;
+    this.office.setPartitionsFaded(
+      !top &&
+        (z > rooms - 0.2 || (this.camera.position.z > rooms - 0.5 && this.camera.position.y < 6)),
+    );
     this.office.update(frameSeconds);
     this.dust.update(frameSeconds);
-    this.updateBubbles();
+    this.clock.update(Date.now());
+    this.updateBubbles(frameSeconds);
+    this.remotes.update(frameSeconds, { x, z }, (px, py, pz) => this.bubbleScreen(px, py, pz));
+    this.companions?.update(frameSeconds, { x, z, facing: this.facing, pose: this.avatar.pose });
     this.updateHint();
   }
 
@@ -383,8 +620,12 @@ export class OfficeScene implements SceneController {
 
   applyQuality(preset: QualityPreset): void {
     this.lighting.applyQuality(preset);
+    // Đèn rọi, đèn cây thật chỉ bật ở mức vừa/cao; mức thấp còn vệt sáng giả.
+    this.office.setRealLights(preset.shadows);
     this.avatar.setShadows(preset.shadows);
+    this.shadows = preset.shadows;
     for (const npc of this.npcs) npc.avatar.setShadows(preset.shadows);
+    this.remotes.setQuality(preset.detailedAvatars, preset.shadows);
     this.blobAllowed = !preset.shadows;
     this.dust.setCount(preset.particles);
   }
@@ -400,6 +641,12 @@ export class OfficeScene implements SceneController {
     this.keyboard.dispose();
     this.joystick.dispose();
     this.pointer.dispose();
+    this.remotes.dispose();
+    this.plants.dispose();
+    this.sign?.dispose();
+    this.clock.dispose();
+    this.zoneLabels.dispose();
+    this.companions?.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();
     this.avatar.dispose();
@@ -522,6 +769,7 @@ export class OfficeScene implements SceneController {
   }
 
   private cameraLimits(): typeof CAMERA_LIMITS {
+    if (this.viewMode === 'top') return TOP_CAMERA_LIMITS;
     return this.seated ? SEATED_CAMERA_LIMITS : CAMERA_LIMITS;
   }
 
@@ -623,22 +871,40 @@ export class OfficeScene implements SceneController {
     );
   }
 
-  private updateBubbles(): void {
+  /** Điểm 3D -> toạ độ màn hình cho bong bóng; null nếu quá xa hoặc ngoài khung nhìn. */
+  private bubbleScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    const far =
+      Math.hypot(x - this.camera.position.x, z - this.camera.position.z) > BUBBLE_MAX_DISTANCE;
+    const screen = far ? null : this.projectPoint(x, y, z);
+    const rect = this.frameRect ?? this.canvas.getBoundingClientRect();
+    const visible =
+      screen !== null &&
+      screen.x > rect.left - 40 &&
+      screen.x < rect.right + 40 &&
+      // Không cho bong bóng chui vào vùng thanh trên cùng của HUD.
+      screen.y > rect.top + BUBBLE_TOP_MARGIN &&
+      screen.y < rect.bottom + 40;
+    return visible ? screen : null;
+  }
+
+  /** Khung canvas đọc một lần mỗi khung hình (đọc lại cho từng bong bóng gây tính layout thừa). */
+  private frameRect: DOMRect | null = null;
+
+  private updateBubbles(frameSeconds = 0): void {
+    this.frameRect = this.canvas.getBoundingClientRect();
+    if (this.selfSpeech) {
+      this.selfSpeech.seconds -= frameSeconds;
+      if (this.selfSpeech.seconds <= 0) this.selfSpeech = null;
+    }
+    const me = this.avatar.root.position;
+    this.bubbles.update(
+      SELF_BUBBLE,
+      this.selfSpeech ? this.bubbleScreen(me.x, BUBBLE_HEIGHT, me.z) : null,
+      this.selfSpeech?.text ?? '',
+    );
     for (const npc of this.npcs) {
       const p = npc.getPosition();
-      const far =
-        Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) >
-        BUBBLE_MAX_DISTANCE;
-      const screen = far ? null : this.projectPoint(p.x, BUBBLE_HEIGHT, p.z);
-      const rect = this.canvas.getBoundingClientRect();
-      const visible =
-        screen !== null &&
-        screen.x > rect.left - 40 &&
-        screen.x < rect.right + 40 &&
-        // Không cho bong bóng chui vào vùng thanh trên cùng của HUD.
-        screen.y > rect.top + BUBBLE_TOP_MARGIN &&
-        screen.y < rect.bottom + 40;
-      this.bubbles.update(npc.spec.id, visible ? screen : null, npc.status());
+      this.bubbles.update(npc.spec.id, this.bubbleScreen(p.x, BUBBLE_HEIGHT, p.z), npc.status());
     }
   }
 }

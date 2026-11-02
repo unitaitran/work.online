@@ -30,12 +30,17 @@ export class BubbleLayer {
     const bubble = this.bubbles.get(id);
     if (!bubble) return;
     if (!screen) {
-      bubble.element.hidden = true;
+      if (!bubble.element.hidden) bubble.element.hidden = true;
       return;
     }
     bubble.element.hidden = false;
     if (bubble.text.textContent !== status) bubble.text.textContent = status;
     bubble.element.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -100%)`;
+  }
+
+  remove(id: string): void {
+    this.bubbles.get(id)?.element.remove();
+    this.bubbles.delete(id);
   }
 
   dispose(): void {

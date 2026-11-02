@@ -4,7 +4,8 @@
 // - Mỗi "giọng" (nốt, tiếng động) tự ngắt kết nối khi kết thúc để không rò bộ nhớ.
 import { generateSong, midiToHz, STEPS_PER_BAR, type Song } from './synth';
 
-export type SoundName = 'keyboard' | 'ting' | 'printer' | 'coffee' | 'levelup' | 'fanfare';
+export type SoundName =
+  'keyboard' | 'ting' | 'printer' | 'coffee' | 'levelup' | 'fanfare' | 'alert';
 
 export interface AudioSettings {
   enabled: boolean;
@@ -47,6 +48,15 @@ export class AudioEngine {
     this.settings = { ...settings };
     this.song = generateSong(melodySeed);
     document.addEventListener('visibilitychange', this.onVisibility);
+  }
+
+  /** Không khí trong ngày (lịch): thứ Hai chậm, thứ Sáu nhanh, ngày lương/Tết cao giọng. */
+  private moodTempo = 1;
+  private moodTranspose = 0;
+
+  setMood(mood: 'tet' | 'payday' | 'monday' | 'friday' | 'weekend' | 'normal'): void {
+    this.moodTempo = mood === 'monday' ? 0.85 : mood === 'friday' || mood === 'tet' ? 1.12 : 1;
+    this.moodTranspose = mood === 'payday' ? 2 : mood === 'tet' ? 5 : mood === 'monday' ? -2 : 0;
   }
 
   getSettings(): AudioSettings {
@@ -115,6 +125,9 @@ export class AudioEngine {
       case 'fanfare':
         this.fanfare(t);
         break;
+      case 'alert':
+        this.alert(t);
+        break;
     }
   }
 
@@ -176,7 +189,7 @@ export class AudioEngine {
     if (ctx?.state !== 'running') return;
     // Lỡ nhịp quá lâu (máy giật): bắt nhịp lại thay vì phát dồn.
     if (this.nextStepTime < ctx.currentTime - 0.2) this.nextStepTime = ctx.currentTime + 0.05;
-    const stepSeconds = 60 / this.song.bpm / 2;
+    const stepSeconds = 60 / (this.song.bpm * this.moodTempo) / 2;
     while (this.nextStepTime < ctx.currentTime + LOOKAHEAD_SECONDS) {
       const totalSteps = this.song.melody.length;
       const i = this.step % totalSteps;
@@ -190,7 +203,7 @@ export class AudioEngine {
       if (inBar % 2 === 1) this.hat(t, inBar === 3 || inBar === 7 ? 0.05 : 0.03);
       const note = this.song.melody[i];
       if (note !== null && note !== undefined)
-        this.pluck(midiToHz(note + 12), t, stepSeconds * 1.8);
+        this.pluck(midiToHz(note + 12 + this.moodTranspose), t, stepSeconds * 1.8);
 
       this.step += 1;
       this.nextStepTime += stepSeconds;
@@ -377,6 +390,14 @@ export class AudioEngine {
         this.tone(bus, 'triangle', midiToHz(note), t + at, 0.05, 0.05, 1.1, 1500);
     }
     this.noiseBurst(bus, t + 1.2, 0.6, 0.06, 'highpass', 6000);
+  }
+
+  /** Sự kiện phòng: hai tiếng "bíp" vui (không gắt). */
+  private alert(t: number): void {
+    const bus = this.sfxBus;
+    if (!bus) return;
+    this.tone(bus, 'square', midiToHz(81), t, 0.05, 0.005, 0.12, 2400);
+    this.tone(bus, 'square', midiToHz(84), t + 0.16, 0.05, 0.005, 0.16, 2400);
   }
 
   private pluck(frequency: number, t: number, length: number): void {
