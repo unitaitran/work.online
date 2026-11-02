@@ -57,7 +57,7 @@ import {
   createScreenTextures,
   drawCityscape,
 } from './officeTextures';
-import type { DayPeriod } from './period';
+import { PERIOD_LIGHTING, type DayPeriod } from './period';
 
 // ---------- Bảng màu đen xám (đỏ chỉ cho decor) ----------
 /** Tường vữa xám: màu đỉnh nhân với họa tiết vữa (createPlasterTexture). */
@@ -1620,6 +1620,7 @@ export function buildOffice(
     new PlaneGeometry(width, depth),
     new MeshPhongMaterial({ map: floorTexture, shininess: 60, specular: new Color(0x3a3a40) }),
   );
+  const floorMaterial = floor.material;
   floor.rotation.x = -Math.PI / 2;
   floor.position.set((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
   floor.receiveShadow = true;
@@ -1959,12 +1960,21 @@ export function buildOffice(
   let doorOpen = false;
   let doorOffset = 0;
   const codeTexture = screenTextures[0];
+  // Ban ngày làm sáng sàn và tường (nhân màu vật liệu); ban đêm giữ tông đen gốc.
+  const applyDaylight = (p: DayPeriod): void => {
+    const boost = PERIOD_LIGHTING[p].surfaceBoost;
+    floorMaterial.color.setScalar(boost);
+    wallMaterial.color.setScalar(boost * 0.85);
+    partitionMaterial.color.setScalar(boost * 0.85);
+  };
+  applyDaylight(period);
   let currentPeriod = period;
   return {
     group,
     setPeriod(next) {
       if (next === currentPeriod) return;
       currentPeriod = next;
+      applyDaylight(next);
       drawCityscape(cityTexture.image, next);
       cityTexture.needsUpdate = true;
     },
