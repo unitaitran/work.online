@@ -7,7 +7,7 @@ import { loadConfig, loadDotEnvIfPresent } from './config';
 loadDotEnvIfPresent(fileURLToPath(new URL('../../../.env', import.meta.url)));
 
 const config = loadConfig(process.env);
-const app = buildApp({ logLevel: config.logLevel });
+const app = buildApp({ config });
 
 let shuttingDown = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {

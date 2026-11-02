@@ -8,6 +8,8 @@ import {
   type ServerMessage,
 } from '@dilam/shared';
 import type { FastifyInstance } from 'fastify';
+import type { AppContext } from '../app';
+import type { Presence } from '../http/routes';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { createTokenBucket, type TokenBucketOptions } from './rateLimit';
 
@@ -25,8 +27,9 @@ export interface GatewayOptions {
  */
 export function attachWebSocketGateway(
   app: FastifyInstance,
+  _ctx: AppContext,
   options: GatewayOptions = {},
-): WebSocketServer {
+): Presence {
   const now = options.now ?? Date.now;
   const rateLimit = options.rateLimit ?? DEFAULT_WS_RATE_LIMIT;
 
@@ -94,7 +97,7 @@ export function attachWebSocketGateway(
     });
   });
 
-  return wss;
+  return { online: () => wss.clients.size };
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {

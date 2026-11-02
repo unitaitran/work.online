@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp } from './app';
+import { testConfig } from './config';
 import type { GatewayOptions } from './ws/gateway';
 
 const FIXED_NOW = 1_762_070_400_000;
@@ -21,7 +22,7 @@ afterEach(async () => {
 });
 
 async function startServer(gateway: GatewayOptions = {}): Promise<string> {
-  app = buildApp({ logLevel: 'silent', gateway: { now: () => FIXED_NOW, ...gateway } });
+  app = buildApp({ config: testConfig(), gateway: { now: () => FIXED_NOW, ...gateway } });
   await app.listen({ port: 0, host: '127.0.0.1' });
   const { port } = app.server.address() as AddressInfo;
   return `ws://127.0.0.1:${String(port)}`;
@@ -58,7 +59,7 @@ function waitForClose(ws: WebSocket): Promise<number> {
 
 describe('GET /api/health', () => {
   it('trả về { ok: true }', async () => {
-    app = buildApp({ logLevel: 'silent' });
+    app = buildApp({ config: testConfig() });
     const response = await app.inject({ method: 'GET', url: '/api/health' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ok: true });

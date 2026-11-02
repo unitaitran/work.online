@@ -242,3 +242,13 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Chức danh tự lên theo cấp** theo yêu cầu người chơi thử: 13 bậc, vài cấp một bậc, bậc cuối "Senior" ở cấp 150 = điều kiện cấp để mở công ty. Bỏ kỳ đánh giá 7 ngày và phỏng vấn (trước đây chức danh tụt xa sau cấp).
 - **Tiến độ phiên bản 3**: bỏ `title`, `review`, `personality`; thêm `coins`, `reputation`. Migrate v2 → v3 chuyển số lần giúp trong kỳ thành uy tín.
 - **Xu tính cùng XP** trong `applyEvent` (đưa sớm phần xu của Phase 5A để không phải đổi phiên bản dữ liệu lần nữa).
+
+## Phase 4A: server, tài khoản, lưu trữ
+
+- **Tài khoản ẩn danh**: token 32 byte (base64url) + mã khôi phục 80 bit dạng `DLO-XXXX-XXXX-XXXX-XXXX` (Crockford base32, bỏ ký tự dễ nhầm). Lưu băm SHA-256; cả hai đủ ngẫu nhiên nên không cần băm chậm. Khôi phục cấp token mới và vô hiệu token cũ.
+- **Token gia hạn trượt** (`TOKEN_TTL_DAYS`, mặc định 180 ngày), chỉ ghi "lần cuối thấy" mỗi giờ một lần để đỡ ghi DB.
+- **Tiến độ lưu nguyên `ProgressState` dạng JSON** (đọc qua `migrateProgress`) kèm các cột tách riêng (xp, level, coins, reputation, branch, department, streak) để xếp hạng và tra cứu.
+- **Không có bảng `reviews`**: kỳ đánh giá đã bỏ (chức danh tự lên theo cấp).
+- **Nhập mã lưu cục bộ** một lần, giới hạn XP ≤ 400/ngày tính từ `createdAt` của mã và cấp ≤ 150; chỉ khi tài khoản chưa chơi trên server (≤ 50 XP).
+- **Tên người chơi** qua bộ lọc từ tục, số điện thoại, đường dẫn, email (không chặn thương hiệu ở tên người). Bộ lọc nằm ở `packages/shared/src/filter.ts`, dùng chung cho tường than thở và tên công ty.
+- **Log không ghi IP, header hay query** (token WebSocket nằm ở query).
