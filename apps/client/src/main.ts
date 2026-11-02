@@ -357,6 +357,7 @@ function start(): void {
       layout: OFFICE_FLOOR,
       period: currentPeriod(),
       npcs: createNpcRoster(),
+      playerName: profile.name,
       onHint: (hint) => {
         hud?.setHint(hint);
       },
@@ -367,6 +368,8 @@ function start(): void {
       canGiftCoffee: () => activities?.canGiftCoffee() ?? false,
       onSeatChange: (item) => {
         activities?.onSeatChange(item);
+        // Ngồi máy hoặc ghế họp: XP nhỏ giọt mỗi phút (server tính), hiện mũi tên ▲.
+        hud?.setXpRising(item?.kind === 'desk' || item?.kind === 'meeting');
       },
     });
     office = scene;
@@ -545,7 +548,11 @@ function start(): void {
           scene.remotes.applyStates(message.s);
           break;
         case 'emote':
-          scene.remotes.say(message.sid, STRINGS.social.emoteNames[message.emote] ?? '');
+          scene.remotes.say(
+            message.sid,
+            STRINGS.social.emoteNames[message.emote] ?? '',
+            message.emote,
+          );
           break;
         case 'quick_chat':
           scene.remotes.say(message.sid, QUICK_CHATS[message.index] ?? '');
@@ -932,12 +939,12 @@ function start(): void {
         players: () => scene.remotes.list(),
         onEmote: (emote) => {
           room.send({ type: 'emote', emote });
-          officeHudView.showToast(STRINGS.social.emoteNames[emote] ?? '');
+          scene.playerSay(STRINGS.social.emoteNames[emote] ?? '', emote);
           modal.close();
         },
         onQuickChat: (index) => {
           room.send({ type: 'quick_chat', index });
-          officeHudView.showToast(QUICK_CHATS[index] ?? '');
+          scene.playerSay(QUICK_CHATS[index] ?? '');
           modal.close();
         },
         onToggleHidden: (code, hide) => {

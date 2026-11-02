@@ -61,6 +61,8 @@ export interface OfficeHud {
   /** Chữ "+XP" bay lên cạnh thanh XP. */
   showXpGain(xp: number, capped: boolean): void;
   setMission(mission: MissionView | null): void;
+  /** Mũi tên ▲ cạnh thanh XP: đang ngồi máy / họp nên XP đang lên từ từ. */
+  setXpRising(rising: boolean): void;
   /** Trạng thái kết nối (số người online, đang kết nối lại...). */
   setNetStatus(text: string, tone: 'ok' | 'warn'): void;
   dispose(): void;
@@ -128,6 +130,12 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     children: [xpFill, xpText],
   });
   const xpFloat = el('span', { className: 'xp-float', attrs: { 'aria-live': 'polite' } });
+  const xpRising = el('span', {
+    className: 'xp-rising',
+    text: '▲',
+    attrs: { title: STRINGS.progress.xpRising, 'aria-label': STRINGS.progress.xpRising },
+  });
+  xpRising.hidden = true;
   const badge = el('button', {
     className: 'office-badge',
     attrs: {
@@ -142,7 +150,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
         children: [
           el('span', { className: 'office-badge-name', text: options.name }),
           levelText,
-          xpBar,
+          el('span', { className: 'xp-row', children: [xpBar, xpRising] }),
         ],
       }),
       xpFloat,
@@ -360,6 +368,9 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     },
     setWipeAvailable(available) {
       wipeButton.hidden = !available;
+    },
+    setXpRising(rising) {
+      xpRising.hidden = !rising;
     },
     setNetStatus(text, tone) {
       netStatus.textContent = text;

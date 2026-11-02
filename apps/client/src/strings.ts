@@ -298,6 +298,7 @@ export const STRINGS = {
     levelLabel: (level: number, title: string) => `Cấp ${String(level)} · ${title}`,
     xpBar: (into: number, needed: number) => `${String(into)}/${String(needed)} XP`,
     xpMax: 'Cấp tối đa',
+    xpRising: 'Đang làm việc: XP tăng dần mỗi phút',
     coins: (coins: number) => `${String(coins)} xu`,
     xpGain: (xp: number) => `+${String(xp)} XP`,
     xpCapped: 'Đã quá giới hạn hôm nay, chỉ nhận 25% XP.',

@@ -51,6 +51,8 @@ const focus = (minutes: number, completed: boolean, lines = 0, actualMs?: number
     lines,
     completed,
   });
+const tick = (kind: 'desk' | 'focus' | 'meeting', minutes: number): ActivityEvent =>
+  makeEvent('work-tick', T0, minutes * 60_000, { kind, minutes });
 const checkin = (at = T0): ActivityEvent =>
   makeEvent('checkin', at, 0, { day: DAY, streak: 99, total: 99 });
 const gift = (): ActivityEvent => makeEvent('coffee-gift', T0, 0, { npcId: 'npc-0' });
@@ -152,22 +154,25 @@ describe('xpFor', () => {
     expect(xpFor(checkin(), ctx({ streak: 30 })).xp).toBe(55);
   });
 
-  it('gõ phím tập trung: trọn phiên 1/3/5 phút = 10/35/70; dừng sớm 5 XP mỗi phút trọn', () => {
-    expect(xpFor(focus(1, true), ctx()).xp).toBe(10);
-    expect(xpFor(focus(3, true), ctx()).xp).toBe(35);
-    expect(xpFor(focus(5, true), ctx()).xp).toBe(70);
-    expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(10);
-    // Độ dài phiên không có trong bảng: tính theo phút trọn.
-    expect(xpFor(focus(2, true), ctx()).xp).toBe(10);
-    // Báo "xong" nhưng thời gian không đủ: không tin, tính như dừng sớm.
-    expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(5);
+  it('hết phiên tập trung trọn vẹn: thưởng 3/10/20; dừng sớm hoặc báo xong mà thiếu giờ thì không', () => {
+    expect(xpFor(focus(1, true), ctx()).xp).toBe(3);
+    expect(xpFor(focus(3, true), ctx()).xp).toBe(10);
+    expect(xpFor(focus(5, true), ctx()).xp).toBe(20);
+    expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(0);
+    expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(0);
   });
 
-  it('mỗi 50 dòng kinh công sở = 10 XP, phần dư cộng dồn', () => {
+  it('XP nhỏ giọt mỗi phút: ngồi máy 2, phiên tập trung 4, họp 2', () => {
+    expect(xpFor(tick('desk', 1), ctx()).xp).toBe(2);
+    expect(xpFor(tick('focus', 3), ctx()).xp).toBe(12);
+    expect(xpFor(tick('meeting', 5), ctx()).xp).toBe(10);
+  });
+
+  it('mỗi 50 dòng kinh công sở = 5 XP, phần dư cộng dồn', () => {
     const a = xpFor(focus(1, true, 70), ctx());
-    expect(a.xp).toBe(10 + 10);
+    expect(a.xp).toBe(3 + 5);
     expect(a.linesCarry).toBe(20);
-    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(20);
+    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(8);
   });
 
   it('task, cà phê, công quả, quẻ, họp', () => {
@@ -184,8 +189,8 @@ describe('xpFor', () => {
         ctx({ fortuneClaimed: true }),
       ).xp,
     ).toBe(0);
-    expect(xpFor(meeting(3), ctx()).xp).toBe(12);
-    expect(xpFor(meeting(60), ctx()).xp).toBe(BALANCE.meeting.maxMinutesPerSession * 4);
+    // Kết thúc buổi họp không cho thêm XP (đã nhỏ giọt theo phút).
+    expect(xpFor(meeting(3), ctx()).xp).toBe(0);
     expect(xpFor(makeEvent('vent', T0, 0, { length: 5, anonymous: true }), ctx()).xp).toBe(0);
   });
 
@@ -193,17 +198,21 @@ describe('xpFor', () => {
     expect(xpFor(gift(), ctx({ countToday: (k) => (k === 'coffeeGift' ? 5 : 0) })).xp).toBe(0);
     expect(xpFor(chore(), ctx({ countToday: (k) => (k === 'chore' ? 6 : 0) })).xp).toBe(0);
     expect(
-      xpFor(meeting(10), ctx({ countToday: (k) => (k === 'meetingMinutes' ? 28 : 0) })).xp,
+      xpFor(tick('meeting', 10), ctx({ countToday: (k) => (k === 'meetingMinutes' ? 56 : 0) })).xp,
     ).toBe(8);
+    expect(
+      xpFor(tick('desk', 5), ctx({ countToday: (k) => (k === 'deskMinutes' ? 180 : 0) })).xp,
+    ).toBe(0);
   });
 
   it('phòng ban: x1.3 đúng loại hoạt động', () => {
-    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(91);
-    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(70);
+    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(26);
+    expect(xpFor(tick('focus', 10), ctx({ department: 'dev' })).xp).toBe(52);
+    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(20);
     expect(xpFor(gift(), ctx({ department: 'sales' })).xp).toBe(10);
     expect(xpFor(gift(), ctx({ department: 'hr' })).xp).toBe(10);
     expect(xpFor(chore(), ctx({ department: 'hr' })).xp).toBe(16);
-    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(10 + 13);
+    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(3 + 7);
     // Kế toán: chỉ phần thưởng chuỗi.
     expect(xpFor(checkin(), ctx({ department: 'accounting', streak: 7 })).xp).toBe(20 + 46);
   });
@@ -221,13 +230,13 @@ describe('giới hạn mềm mỗi ngày', () => {
 
   it('applyEvent cộng dồn đúng giới hạn trong ngày, sang ngày mới thì mở lại', () => {
     let s = createProgress(T0);
-    s = applyAll(s, [focus(5, true), focus(5, true)]); // 140
-    s = applyAll(s, [focus(5, true)]); // +50 đủ, +20 → 5
-    expect(s.daily.earned).toBe(140 + 50 + 5);
-    expect(s.xp).toBe(195);
-    const next = applyEvent(s, focus(5, true), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
-    expect(next.granted).toBe(70);
-    expect(next.state.daily.earned).toBe(70);
+    s = applyAll(s, [tick('focus', 35)]); // 140
+    s = applyAll(s, [tick('focus', 25)]); // +50 đủ, +50 vượt → 12
+    expect(s.daily.earned).toBe(140 + 50 + 12);
+    expect(s.daily.counts.deskMinutes).toBe(60);
+    const next = applyEvent(s, tick('focus', 10), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
+    expect(next.granted).toBe(40);
+    expect(next.state.daily.earned).toBe(40);
   });
 
   it('đổi sang múi giờ chậm hơn (ngày lịch lùi lại): không mở rổ ngày mới', () => {

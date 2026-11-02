@@ -180,6 +180,46 @@ export function attachGameService(
     return true;
   });
 
+  // XP nhỏ giọt: mỗi 15 giây xem ai đang ngồi máy / ngồi họp (server tự xác định từ vị trí + tư thế).
+  const deskSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'desk' && i.seat);
+  const meetingSeats = officeInteractables(OFFICE_FLOOR).filter(
+    (i) => i.kind === 'meeting' && i.seat,
+  );
+  const near = (p: { x: number; z: number }, seats: typeof deskSeats): boolean =>
+    seats.some((i) => i.seat && Math.hypot(i.seat.x - p.x, i.seat.z - p.z) <= 0.6);
+  const seatOf = (session: Session): 'desk' | 'meeting' | null => {
+    const pose = session.room.poseOf(session.userId);
+    const p = session.room.positionOf(session.userId);
+    if (!p || (pose !== 'type' && pose !== 'sit')) return null;
+    if (near(p, deskSeats)) return 'desk';
+    if (near(p, meetingSeats)) return 'meeting';
+    return null;
+  };
+  const WORK_TICK_MS = 15_000;
+  const workTimer = setInterval(() => {
+    for (const session of gateway.sessions()) {
+      const result = engine.accrueWork(contextFor(session.userId), seatOf(session), WORK_TICK_MS);
+      if (!result) continue;
+      session.send({
+        type: 'progress',
+        state: result.state,
+        today: result.today,
+        outcome: result.outcome,
+      });
+      if (result.outcome.granted > 0 && session.room.kind.startsWith('company:')) {
+        company.contribute(
+          session.userId,
+          session.room.kind.slice('company:'.length),
+          result.outcome.granted,
+        );
+      }
+      if (result.outcome.titleAfter !== result.outcome.titleBefore) {
+        session.room.updateProfile(session.userId, publicProfile(ctx.repos, session.userId));
+      }
+    }
+  }, WORK_TICK_MS);
+  workTimer.unref();
+
   const missionTimer = setInterval(() => {
     for (const session of gateway.sessions()) {
       const ticked = engine.tickMissions(contextFor(session.userId));
@@ -195,6 +235,7 @@ export function attachGameService(
   pruneTimer.unref();
   app.addHook('onClose', (_instance, done) => {
     clearInterval(missionTimer);
+    clearInterval(workTimer);
     clearInterval(eventTimer);
     clearInterval(pruneTimer);
     done();

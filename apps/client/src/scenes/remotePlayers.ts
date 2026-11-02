@@ -56,6 +56,8 @@ interface Remote {
   avatar: AvatarModel | null;
   companions: Companions | null;
   speech: { text: string; seconds: number } | null;
+  /** Động tác đang làm (để dựng lại nếu mô hình chi tiết vừa được tạo). */
+  emote?: string | undefined;
 }
 
 export interface RemoteListEntry {
@@ -156,9 +158,15 @@ export class RemotePlayers {
     }
   }
 
-  say(sid: number, text: string): void {
+  /** Câu nói / biểu cảm của người khác: bong bóng trên đầu và động tác (nếu đang vẽ chi tiết). */
+  say(sid: number, text: string, emote?: string): void {
     const player = this.players.get(sid);
-    if (player) player.speech = { text, seconds: SPEECH_SECONDS };
+    if (!player) return;
+    player.speech = { text, seconds: SPEECH_SECONDS };
+    if (emote) {
+      player.emote = emote;
+      player.avatar?.playEmote(emote);
+    }
   }
 
   list(): RemoteListEntry[] {
@@ -190,7 +198,10 @@ export class RemotePlayers {
       this.interpolate(player, renderAt, dt);
       if (player.speech) {
         player.speech.seconds -= dt;
-        if (player.speech.seconds <= 0) player.speech = null;
+        if (player.speech.seconds <= 0) {
+          player.speech = null;
+          player.emote = undefined;
+        }
       }
       if (this.hiddenCodes.has(player.profile.code)) {
         this.hide(player);
@@ -214,6 +225,7 @@ export class RemotePlayers {
           );
           player.avatar.setShadows(this.shadows);
           this.scene.add(player.avatar.root);
+          if (player.speech && player.emote) player.avatar.playEmote(player.emote);
           const companions = new Companions(player.profile.equipped, this.material);
           if (!companions.isEmpty) {
             this.scene.add(companions.group);

@@ -7,10 +7,18 @@ export const BALANCE = {
   overCapRate: 0.25,
 
   checkIn: { base: 20, perStreakDay: 5, streakCap: 7 },
-  /** Phiên gõ phím tập trung: trọn phiên theo số phút; dừng sớm thì mỗi phút trọn được `partialPerMinute`. */
-  focus: { completed: { 1: 10, 3: 35, 5: 70 } as Record<number, number>, partialPerMinute: 5 },
+  /**
+   * Phiên gõ phím tập trung: XP đã nhỏ giọt mỗi phút trong lúc ngồi (xem `work`); hết phiên trọn
+   * vẹn thì thêm thưởng `completed` theo số phút.
+   */
+  focus: { completed: { 1: 3, 3: 10, 5: 20 } as Record<number, number> },
+  /**
+   * XP nhỏ giọt mỗi phút trọn khi đang ngồi máy (`desk`), đang phiên tập trung (`focus`)
+   * hoặc ngồi phòng họp (`meeting`). Treo máy vẫn tăng từ từ, có giới hạn phút mỗi ngày.
+   */
+  work: { desk: 2, focus: 4, meeting: 2 },
   /** Mỗi `per` dòng kinh công sở (cộng dồn qua các phiên) được `xp`. */
-  lines: { per: 50, xp: 10 },
+  lines: { per: 50, xp: 5 },
   taskDone: 15,
   coffeeGift: 8,
   /** Công quả: tưới cây, lau bàn... */
@@ -22,15 +30,15 @@ export const BALANCE = {
   /** Tham gia thành công một sự kiện phòng. */
   roomEvent: 8,
   /** Hoàn thành một việc sếp giao. */
-  mission: 40,
-  /** Ngồi họp ở phòng họp: XP mỗi phút trọn, tối đa mỗi lần ngồi. */
-  meeting: { perMinute: 4, maxMinutesPerSession: 15 },
+  mission: 25,
   /** Số lần mỗi ngày còn được tính XP (chống bấm lặp). */
   perDayLimits: {
     coffeeGift: 5,
     chore: 6,
     taskDone: 5,
-    meetingMinutes: 30,
+    /** Phút ngồi máy được tính XP mỗi ngày (cả trong và ngoài phiên tập trung). */
+    deskMinutes: 180,
+    meetingMinutes: 60,
     roomEvent: 8,
     companyPromotion: 1,
   },
@@ -46,11 +54,11 @@ export const BALANCE = {
   levels: {
     max: 500,
     /** Chơi đều đúng mức giới hạn mỗi ngày thì sau `daysToCompany` ngày tới cấp mở công ty. */
-    daysToCompany: 5,
+    daysToCompany: 40,
     /** ... và sau `daysToMax` ngày tới cấp tối đa. */
-    daysToMax: 150,
+    daysToMax: 400,
     /** Độ cong đoạn đầu (cấp 1 → mở công ty): > 1 thì đầu nhanh, càng về sau càng chậm. */
-    earlyExponent: 1.25,
+    earlyExponent: 1.3,
     /** Đoạn sau: pha trộn tuyến tính (giữ độ dốc liền mạch) và luỹ thừa. */
     lateLinearShare: 0.1,
     lateExponent: 1.6,

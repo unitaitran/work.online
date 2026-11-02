@@ -112,3 +112,88 @@ export function blendPose(a: PoseState, b: PoseState, k: number): PoseState {
 export function isSeated(pose: PoseName): boolean {
   return pose === 'sit' || pose === 'type';
 }
+
+// ---------------------------------------------------------------------------
+// Động tác biểu cảm (phủ lên tư thế đang có, khoảng 2,5 giây)
+// ---------------------------------------------------------------------------
+
+export const EMOTE_SECONDS = 2.6;
+
+/**
+ * Phủ động tác biểu cảm lên tư thế `base` tại thời điểm `t` (giây từ lúc bắt đầu).
+ * Đang ngồi thì không nhảy, chân giữ nguyên.
+ */
+export function applyEmote(base: PoseState, emote: string, t: number, seated: boolean): PoseState {
+  const p = { ...base };
+  const s = Math.sin;
+  switch (emote) {
+    case 'wave':
+      // Giơ tay phải lên cao và vẫy.
+      p.armRightZ = -2.5;
+      p.armRightX = s(t * 11) * 0.35;
+      p.headRoll = 0.08;
+      break;
+    case 'clap':
+      // Hai tay ra trước, vỗ vào nhau.
+      p.armLeftX = -1.3;
+      p.armRightX = -1.3;
+      p.armLeftZ = -0.05 - Math.abs(s(t * 13)) * 0.3;
+      p.armRightZ = 0.05 + Math.abs(s(t * 13)) * 0.3;
+      break;
+    case 'laugh':
+      // Ngửa đầu, rung người.
+      p.headPitch = -0.3 + s(t * 14) * 0.05;
+      p.bodyPitch = -0.08;
+      p.armLeftX = -0.7;
+      p.armRightX = -0.7;
+      p.armLeftZ = -0.2;
+      p.armRightZ = 0.2;
+      p.rootY = base.rootY + (seated ? 0 : Math.abs(s(t * 14)) * 0.02);
+      break;
+    case 'heart':
+      // Hai tay vòng lên đầu thành hình trái tim.
+      p.armLeftZ = 2.65;
+      p.armRightZ = -2.65;
+      p.armLeftX = -0.25;
+      p.armRightX = -0.25;
+      p.headRoll = s(t * 3) * 0.12;
+      break;
+    case 'think':
+      // Tay chống cằm, nghiêng đầu.
+      p.armRightX = -2.2;
+      p.armRightZ = 0.45;
+      p.headRoll = 0.18;
+      p.headPitch = 0.08 + s(t * 2) * 0.03;
+      break;
+    case 'sleepy':
+      // Gục gù buồn ngủ.
+      p.headPitch = 0.35 + s(t * 2.4) * 0.12;
+      p.headRoll = 0.15;
+      p.bodyPitch = base.bodyPitch + 0.08;
+      p.armLeftX = 0.05;
+      p.armRightX = 0.05;
+      break;
+    case 'coffee':
+      // Nâng ly lên nhấp một ngụm.
+      p.armRightX = -2.3 + Math.max(0, s(t * 2.5)) * 0.25;
+      p.armRightZ = 0.35;
+      p.headPitch = -0.12 * Math.max(0, s(t * 2.5));
+      break;
+    case 'cheer':
+      // Hai tay giơ cao, nhảy lên (đang ngồi thì chỉ giơ tay).
+      p.armLeftZ = 2.8;
+      p.armRightZ = -2.8;
+      p.armLeftX = s(t * 9) * 0.2;
+      p.armRightX = -s(t * 9) * 0.2;
+      if (!seated) {
+        const hop = Math.max(0, s(t * 7));
+        p.rootY = base.rootY + hop * 0.14;
+        p.legLeftX = -hop * 0.3;
+        p.legRightX = -hop * 0.3;
+      }
+      break;
+    default:
+      break;
+  }
+  return p;
+}

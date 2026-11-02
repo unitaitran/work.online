@@ -33,6 +33,7 @@ export function actionForEvent(event: ActivityEvent): Action | null {
     case 'coffee-brew':
     case 'room-event':
     case 'company-promotion':
+    case 'work-tick':
       return null;
   }
 }

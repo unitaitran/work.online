@@ -26,6 +26,8 @@ export interface ActivityEventDetails {
   'room-event': { kind: string };
   /** Chủ công ty xét thăng chức (giới hạn một lần mỗi ngày). */
   'company-promotion': { role: number };
+  /** Một phút trọn đang ngồi máy / trong phiên tập trung / ngồi họp (server đo). */
+  'work-tick': { kind: 'desk' | 'focus' | 'meeting'; minutes: number };
 }
 
 export type ActivityEventType = keyof ActivityEventDetails;
@@ -44,6 +46,7 @@ export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
   'print',
   'room-event',
   'company-promotion',
+  'work-tick',
 ];
 
 export type ActivityEvent = {

@@ -2402,3 +2402,39 @@ button.office-badge:focus-visible {
   transform: translate(-50%, -50%);
   box-shadow: 0 0 0 100vmax rgb(59 50 65 / 55%);
 }
+
+/* ---------- XP đang lên (ngồi máy / họp) ---------- */
+
+.xp-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.xp-rising {
+  margin-top: 4px;
+  color: #2f9e6b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  animation: xp-rising 1.2s ease-in-out infinite;
+}
+
+@keyframes xp-rising {
+  0%,
+  100% {
+    transform: translateY(1px);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-rising {
+    animation: none;
+  }
+}

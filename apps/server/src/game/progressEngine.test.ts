@@ -88,17 +88,18 @@ describe('ProgressEngine', () => {
     clock += 125_000; // 2 phút 5 giây
     const r = act({ kind: 'focus_end', presses: 9999, scoredKeys: 9999, lines: 9999 });
     // Báo 9999 dòng nhưng 125 giây chỉ gõ được tối đa ~1062 phím: XP dòng bị chặn theo đó.
+    // Dừng sớm không có thưởng hết phiên (XP theo phút đã nhỏ giọt trong lúc ngồi).
     expect(r).toMatchObject({ ok: true });
     if (!r.ok || !r.outcome) throw new Error('no outcome');
-    expect(r.outcome.base).toBe(2 * 5 + Math.floor(Math.floor(125 * 8.5) / 50) * 10);
+    expect(r.outcome.base).toBe(Math.floor(Math.floor(125 * 8.5) / 50) * 5);
   });
 
-  it('phiên tập trung trọn vẹn: 70 XP cho 5 phút', () => {
+  it('phiên tập trung trọn vẹn: thưởng 20 XP cho 5 phút', () => {
     position = at('desk-0');
     act({ kind: 'focus_start', minutes: 5 });
     clock += 5 * 60_000 - 500;
     const r = act({ kind: 'focus_end', presses: 100, scoredKeys: 40, lines: 40 });
-    expect(r).toMatchObject({ ok: true, outcome: { granted: 70 } });
+    expect(r).toMatchObject({ ok: true, outcome: { granted: 20 } });
   });
 
   it('tặng cà phê cần pha xong trước (server đo thời gian pha)', () => {
@@ -126,11 +127,30 @@ describe('ProgressEngine', () => {
     });
   });
 
-  it('họp: server đo thời gian giữa bắt đầu và kết thúc', () => {
+  it('họp: server đo thời gian (cho việc sếp giao), XP nhỏ giọt theo phút ngồi', () => {
     position = at('meeting-0');
     act({ kind: 'meeting_start', seatId: 'meeting-0' });
     clock += 3 * 60_000 + 10_000;
-    expect(act({ kind: 'meeting_end' })).toMatchObject({ ok: true, outcome: { granted: 12 } });
+    expect(act({ kind: 'meeting_end' })).toMatchObject({ ok: true, outcome: { granted: 0 } });
+    // 3 phút ngồi họp: 2 XP mỗi phút.
+    let xp = 0;
+    for (let i = 0; i < 12; i += 1)
+      xp += engine.accrueWork(player, 'meeting', 15_000)?.outcome.granted ?? 0;
+    expect(xp).toBe(6);
+  });
+
+  it('treo máy ở bàn: 2 XP mỗi phút, đang phiên tập trung 4 XP; đứng dậy thì bỏ phần lẻ', () => {
+    position = at('desk-0');
+    expect(engine.accrueWork(player, 'desk', 45_000)).toBeNull();
+    expect(engine.accrueWork(player, 'desk', 15_000)?.outcome.granted).toBe(2);
+    act({ kind: 'focus_start', minutes: 5 });
+    expect(engine.accrueWork(player, 'desk', 60_000)?.outcome.granted).toBe(4);
+    engine.accrueWork(player, 'desk', 50_000);
+    engine.accrueWork(player, null, 15_000);
+    expect(engine.accrueWork(player, 'desk', 15_000)).toBeNull();
+    // Giới hạn 180 phút ngồi máy mỗi ngày.
+    engine.accrueWork(player, 'desk', 200 * 60_000);
+    expect(engine.state(player.userId).daily.counts.deskMinutes).toBe(180);
   });
 
   it('đổi ngày (lúc 4 giờ sáng giờ địa phương): chuỗi tăng, giới hạn ngày mở lại', () => {
@@ -179,14 +199,17 @@ describe('ProgressEngine', () => {
   });
 
   it('chơi trọn một vòng từ cấp 1 lên chức danh 2 qua server', () => {
-    const r = act({ kind: 'checkin' });
-    expect(r).toMatchObject({ ok: true, outcome: { titleBefore: 1, titleAfter: 2 } });
+    expect(act({ kind: 'checkin' })).toMatchObject({ ok: true, outcome: { titleAfter: 1 } });
     position = at('desk-0');
+    // Ngồi máy 30 phút: +60 XP, đủ cấp 5 (chức danh 2).
+    const r = engine.accrueWork(player, 'desk', 30 * 60_000);
+    expect(r?.outcome).toMatchObject({ titleBefore: 1, titleAfter: 2 });
     act({ kind: 'focus_start', minutes: 1 });
     clock += 60_000;
     act({ kind: 'focus_end', presses: 50, scoredKeys: 30, lines: 30 });
     expect(repos.activity.recent(player.userId, 10).map((e) => e.kind)).toEqual([
       'focus-typing',
+      'work-tick',
       'checkin',
     ]);
   });

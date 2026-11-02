@@ -50,3 +50,11 @@ Mục tiêu "khoảng 2 tháng từ lúc mở công ty đến IPO" đạt ở nh
 - NPC: thực tập sinh 1,2 điểm/giờ (lương 0,4 xu/giờ), nhân viên 2,2 (0,8), cao cấp 3,4 (1,3). Chỉ làm và nhận lương khi có dự án. Quỹ không đủ thì chỉ làm phần được trả.
 - Dự án độ khó d: cần 160·d^1,35 điểm, thưởng 150·d^1,5 xu và 3d uy tín.
 - IPO: thưởng cho chủ 5% quỹ, huy hiệu vĩnh viễn, công ty về Garage với quỹ 800 xu.
+
+## Cân bằng lại (sau Phase 7, theo yêu cầu chơi thử)
+
+- **Level cần nhiều XP hơn**: chơi đều đủ 190 XP/ngày thì cấp 150 (Senior, mở công ty) sau **40 ngày** (trước là 5), cấp 500 sau khoảng 400 ngày. Ví dụ: cấp 5 cần 69 XP, cấp 12 cần ~257, cấp 35 ~1 110, cấp 70 ~2 800, cấp 150 = 7 600.
+- **XP nhỏ giọt khi ngồi** (server đo mỗi 15 giây, tính theo phút trọn): ngồi máy 2 XP/phút, đang phiên gõ phím tập trung 4 XP/phút, ngồi họp 2 XP/phút. Tối đa 180 phút ngồi máy và 60 phút họp được tính mỗi ngày. Treo máy vẫn tăng từ từ, nhưng giới hạn mềm 190 XP/ngày vẫn áp dụng.
+- **Thưởng hết phiên tập trung** trọn vẹn: 1/3/5 phút = 3/10/20 XP (thêm vào phần đã nhỏ giọt). Dừng sớm thì không có thưởng hết phiên.
+- **Việc sếp giao** 25 XP (trước 40), **kinh công sở** 5 XP mỗi 50 dòng (trước 10).
+- Người đang ngồi (máy, ghế họp) không bị hỏi "Bạn còn ở đó không?" nên treo máy được.

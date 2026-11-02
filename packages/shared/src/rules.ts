@@ -98,8 +98,8 @@ export interface XpResult {
   xp: number;
   /** Dòng kinh công sở còn dư sau khi quy đổi. */
   linesCarry: number;
-  /** Các phần cộng lại (để ghi nhật ký / kiểm tra). */
-  parts: { category: XpCategory; xp: number }[];
+  /** Các phần cộng lại (để ghi nhật ký / kiểm tra). `minutes`: số phút ngồi được tính (giới hạn ngày). */
+  parts: { category: XpCategory; xp: number; minutes?: number }[];
 }
 
 /**
@@ -110,8 +110,14 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
   const parts: XpResult['parts'] = [];
   let linesCarry = ctx.linesCarry;
   const limits = BALANCE.perDayLimits;
-  const add = (category: XpCategory, xp: number): void => {
-    if (xp > 0) parts.push({ category, xp: buffed(xp, category, ctx.department) });
+  const add = (category: XpCategory, xp: number, minutes?: number): void => {
+    if (xp > 0) {
+      parts.push({
+        category,
+        xp: buffed(xp, category, ctx.department),
+        ...(minutes !== undefined ? { minutes } : {}),
+      });
+    }
   };
 
   switch (event.type) {
@@ -126,16 +132,12 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       break;
     }
     case 'focus-typing': {
+      // XP theo phút đã nhỏ giọt trong lúc ngồi (work-tick); hết phiên trọn vẹn thì thêm thưởng.
       const { plannedMs, completed, lines } = event.detail;
       const minutes = Math.round(plannedMs / 60_000);
-      const actualMs = Math.min(event.durationMs, plannedMs);
-      // Độ dài phiên lạ (không có trong bảng) thì tính theo phút trọn như dừng sớm.
-      const partialXp = Math.floor(actualMs / 60_000) * BALANCE.focus.partialPerMinute;
-      const sessionXp =
-        completed && actualMs >= plannedMs
-          ? (BALANCE.focus.completed[minutes] ?? partialXp)
-          : partialXp;
-      add('focus', sessionXp);
+      if (completed && event.durationMs >= plannedMs) {
+        add('focus', BALANCE.focus.completed[minutes] ?? 0);
+      }
       // Dòng kinh công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
       linesCarry += Math.max(0, Math.floor(lines));
       const chunks = Math.floor(linesCarry / BALANCE.lines.per);
@@ -164,14 +166,16 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
     case 'room-event':
       if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
       break;
-    case 'meeting': {
-      const used = ctx.countToday('meetingMinutes');
+    case 'work-tick': {
+      // Mỗi phút trọn đang ngồi máy / họp (server đo), trong giới hạn phút mỗi ngày.
+      const meeting = event.detail.kind === 'meeting';
+      const used = ctx.countToday(meeting ? 'meetingMinutes' : 'deskMinutes');
+      const limit = meeting ? limits.meetingMinutes : limits.deskMinutes;
       const minutes = Math.min(
-        Math.floor(event.durationMs / 60_000),
-        BALANCE.meeting.maxMinutesPerSession,
-        Math.max(0, limits.meetingMinutes - used),
+        Math.max(0, Math.floor(event.detail.minutes)),
+        Math.max(0, limit - used),
       );
-      add('meeting', minutes * BALANCE.meeting.perMinute);
+      add(meeting ? 'meeting' : 'focus', minutes * BALANCE.work[event.detail.kind], minutes);
       break;
     }
     default:
@@ -294,9 +298,12 @@ export function applyEvent(
     if (part.category === 'event') {
       counts = bump(counts, event.type === 'company-promotion' ? 'companyPromotion' : 'roomEvent');
     }
-    // Họp không có ưu đãi phòng ban nên XP / perMinute = số phút đã tính.
-    if (part.category === 'meeting') {
-      counts = bump(counts, 'meetingMinutes', Math.round(part.xp / BALANCE.meeting.perMinute));
+    if (part.minutes !== undefined) {
+      counts = bump(
+        counts,
+        part.category === 'meeting' ? 'meetingMinutes' : 'deskMinutes',
+        part.minutes,
+      );
     }
   }
   // Uy tín: mỗi lần giúp đồng nghiệp được tính.

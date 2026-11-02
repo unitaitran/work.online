@@ -73,6 +73,7 @@ const CAMERA_BLEND = 5;
 const LOOK_HEIGHT = 0.75;
 const MARKER_SECONDS = 1.2;
 const BUBBLE_HEIGHT = 1.42;
+const SELF_BUBBLE = 'self';
 const BUBBLE_MAX_DISTANCE = 16;
 const BUBBLE_TOP_MARGIN = 120;
 const PLAYER_ID = 'player';
@@ -90,6 +91,8 @@ export interface OfficeSceneOptions {
   layout: OfficeLayout;
   period: DayPeriod;
   npcs: readonly NpcSpec[];
+  /** Tên người chơi (bong bóng lời nói trên đầu chính mình). */
+  playerName?: string;
   onHint(hint: InteractionHint | null): void;
   onEvent(event: OfficeEvent): void;
   onSound(name: SoundName): void;
@@ -221,6 +224,7 @@ export class OfficeScene implements SceneController {
     });
 
     this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
+    this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
     this.plants = new RoomPlants(this.material);
     this.scene.add(this.plants.group);
 
@@ -364,6 +368,14 @@ export class OfficeScene implements SceneController {
     }
   }
 
+  private selfSpeech: { text: string; seconds: number } | null = null;
+
+  /** Mình nói câu nhanh / biểu cảm: bong bóng trên đầu và (nếu có) làm động tác. */
+  playerSay(text: string, emote?: string): void {
+    this.selfSpeech = { text, seconds: 4 };
+    if (emote) this.avatar.playEmote(emote);
+  }
+
   /** Vị trí, hướng, tư thế hiện tại để gửi lên server. */
   getPlayerState(): { x: number; z: number; facing: number; pose: PoseName } {
     return { x: this.position.x, z: this.position.z, facing: this.facing, pose: this.avatar.pose };
@@ -468,7 +480,7 @@ export class OfficeScene implements SceneController {
 
     this.office.update(frameSeconds);
     this.dust.update(frameSeconds);
-    this.updateBubbles();
+    this.updateBubbles(frameSeconds);
     this.remotes.update(frameSeconds, { x, z }, (px, py, pz) => this.bubbleScreen(px, py, pz));
     this.companions?.update(frameSeconds, { x, z, facing: this.facing, pose: this.avatar.pose });
     this.updateHint();
@@ -743,8 +755,18 @@ export class OfficeScene implements SceneController {
   /** Khung canvas đọc một lần mỗi khung hình (đọc lại cho từng bong bóng gây tính layout thừa). */
   private frameRect: DOMRect | null = null;
 
-  private updateBubbles(): void {
+  private updateBubbles(frameSeconds = 0): void {
     this.frameRect = this.canvas.getBoundingClientRect();
+    if (this.selfSpeech) {
+      this.selfSpeech.seconds -= frameSeconds;
+      if (this.selfSpeech.seconds <= 0) this.selfSpeech = null;
+    }
+    const me = this.avatar.root.position;
+    this.bubbles.update(
+      SELF_BUBBLE,
+      this.selfSpeech ? this.bubbleScreen(me.x, BUBBLE_HEIGHT, me.z) : null,
+      this.selfSpeech?.text ?? '',
+    );
     for (const npc of this.npcs) {
       const p = npc.getPosition();
       this.bubbles.update(npc.spec.id, this.bubbleScreen(p.x, BUBBLE_HEIGHT, p.z), npc.status());

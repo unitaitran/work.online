@@ -22,7 +22,15 @@ import {
   HEAD_ACCESSORIES,
   headAccessoryPieces,
 } from './equipmentPieces';
-import { blendPose, computePose, type PoseName, type PoseState } from './pose';
+import {
+  applyEmote,
+  blendPose,
+  computePose,
+  EMOTE_SECONDS,
+  isSeated,
+  type PoseName,
+  type PoseState,
+} from './pose';
 
 /** Đồ đang mặc (từ cửa hàng): màu áo, nón, phụ kiện. */
 export interface AvatarGear {
@@ -324,6 +332,13 @@ export class AvatarModel {
     return this.poseName;
   }
 
+  private emote: { name: string; time: number } | null = null;
+
+  /** Làm một động tác biểu cảm (vẫy tay, vỗ tay...) khoảng 2,5 giây. */
+  playEmote(name: string): void {
+    this.emote = { name, time: 0 };
+  }
+
   setPose(pose: PoseName): void {
     if (pose === this.poseName) return;
     this.poseName = pose;
@@ -339,7 +354,12 @@ export class AvatarModel {
   /** Tiến động tác và trộn mượt sang tư thế đích. */
   update(dt: number): void {
     this.poseTime += dt;
-    const target = computePose(this.poseName, this.poseTime);
+    let target = computePose(this.poseName, this.poseTime);
+    if (this.emote) {
+      this.emote.time += dt;
+      if (this.emote.time >= EMOTE_SECONDS) this.emote = null;
+      else target = applyEmote(target, this.emote.name, this.emote.time, isSeated(this.poseName));
+    }
     const k = 1 - Math.exp(-12 * dt);
     this.current = blendPose(this.current, target, k);
     this.applyPose(this.current);

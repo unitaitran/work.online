@@ -66,6 +66,8 @@ interface LiveState {
   focus: { minutes: number; startedAt: number } | null;
   meeting: { seatId: string; startedAt: number } | null;
   coffeeBrewAt: number | null;
+  /** Thời gian ngồi máy / họp đã tích luỹ chưa đủ một phút (ms). */
+  workMs: number;
   lastAt: Map<ActionKind, number>;
   chores: Map<string, number>;
 }
@@ -123,6 +125,7 @@ export class ProgressEngine {
         focus: null,
         meeting: null,
         coffeeBrewAt: null,
+        workMs: 0,
         lastAt: new Map(),
         chores: new Map(),
       };
@@ -283,6 +286,33 @@ export class ProgressEngine {
     live.lastAt.set(action.kind, now);
     if (!event) return { ok: true, state, outcome: null, today };
     return { ok: true, ...this.applyAndSave(userId, state, event, today, now, fortune), today };
+  }
+
+  /**
+   * Cộng dồn thời gian đang ngồi máy (`desk`, hoặc `focus` nếu đang phiên tập trung) hoặc ngồi họp.
+   * Đủ mỗi phút trọn thì áp sự kiện work-tick qua luật XP (có giới hạn phút mỗi ngày).
+   * Không ngồi thì xoá phần lẻ.
+   */
+  accrueWork(
+    player: PlayerContext,
+    seat: 'desk' | 'meeting' | null,
+    ms: number,
+  ): { state: ProgressState; outcome: ActionOutcome; today: string } | null {
+    const live = this.liveOf(player.userId);
+    if (!seat) {
+      live.workMs = 0;
+      return null;
+    }
+    live.workMs += ms;
+    const minutes = Math.floor(live.workMs / 60_000);
+    if (minutes < 1) return null;
+    live.workMs -= minutes * 60_000;
+    const kind = seat === 'meeting' ? 'meeting' : live.focus ? 'focus' : 'desk';
+    const now = this.now(player.userId);
+    const today = this.today(player.userId, player.timeZone);
+    const event = makeEvent('work-tick', now, minutes * 60_000, { kind, minutes });
+    const result = this.applyAndSave(player.userId, this.state(player.userId), event, today, now);
+    return { ...result, today };
   }
 
   /** Áp một sự kiện do server tạo (thăng chức trong công ty...) qua đúng luật XP. */

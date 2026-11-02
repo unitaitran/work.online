@@ -241,6 +241,11 @@ export class Room {
     this.broadcast(message, null);
   }
 
+  /** Tư thế hiện tại (ngồi máy, ngồi ghế...) theo server. */
+  poseOf(userId: string): Pose | null {
+    return this.members.get(userId)?.pose ?? null;
+  }
+
   /** Vị trí hiện tại theo server (null nếu không ở phòng). */
   positionOf(userId: string): { x: number; z: number } | null {
     const member = this.members.get(userId);
@@ -279,7 +284,9 @@ export class Room {
         this.remove(m.userId, 'idle');
         continue;
       }
-      if (m.idleDeadline === null && now - m.activeAt >= IDLE_CHECK_MS) {
+      // Đang ngồi (máy, ghế họp) thì được treo máy, không hỏi "còn ở đó không".
+      const seated = m.pose === 'sit' || m.pose === 'type';
+      if (m.idleDeadline === null && !seated && now - m.activeAt >= IDLE_CHECK_MS) {
         m.idleDeadline = now + IDLE_GRACE_MS;
         m.conn.send({ type: 'idle_check', deadline: m.idleDeadline });
       }
