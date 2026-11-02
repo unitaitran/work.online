@@ -11,7 +11,7 @@ git clone <repo> dilam-online && cd dilam-online
 cp .env.example .env
 ```
 
-Sửa `.env` tối thiểu: `DOMAIN` (tên miền), `ADMIN_KEY` (chuỗi ngẫu nhiên ≥ 24 ký tự, ví dụ `openssl rand -hex 24`), `BUILD_ID` (ví dụ `git rev-parse --short HEAD`). Không bật `DEV_TOOLS` (server từ chối khởi động nếu `NODE_ENV=production` mà bật).
+Sửa `.env` tối thiểu: `DOMAIN` (tên miền), `ADMIN_KEY` (chuỗi ngẫu nhiên ≥ 24 ký tự, ví dụ `openssl rand -hex 24`), `BUILD_ID` (ví dụ `git rev-parse --short HEAD`). Không bật `DEV_TOOLS` (server từ chối khởi động nếu `NODE_ENV=production` mà bật). Muốn riêng tài khoản của mình có "Công cụ dev" (tua ngày, cộng XP/xu) thì đặt `DEV_USERS=<tên đăng nhập>` (nhiều tên cách nhau dấu phẩy); người khác không thấy bảng này và gọi API dev nhận 404.
 
 ```bash
 docker compose up -d --build

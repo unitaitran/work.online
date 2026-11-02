@@ -1,3 +1,4 @@
+import { normalizeUsername } from '@dilam/shared';
 import { z } from 'zod';
 
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
@@ -27,6 +28,11 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   /** Bật API dev (tua ngày, cộng XP). CHỈ dùng khi phát triển. */
   DEV_TOOLS: boolish.default(false),
+  /**
+   * Tên đăng nhập được dùng công cụ dev (tua ngày, cộng XP/xu), phân tách bằng dấu phẩy.
+   * Dùng được cả ở môi trường thật; chỉ các tài khoản này thấy và gọi được API dev.
+   */
+  DEV_USERS: z.string().max(2000).optional(),
   /** Mã bản build (ví dụ git sha), client so để báo có bản mới. */
   BUILD_ID: z.string().max(80).optional(),
   /** Thư mục bản build client để server phục vụ cùng nguồn (bỏ trống = không phục vụ). */
@@ -47,6 +53,8 @@ export interface ServerConfig {
   trustProxy: boolean;
   corsOrigins: string[];
   devTools: boolean;
+  /** Tên đăng nhập (đã chuẩn hoá) được dùng công cụ dev. */
+  devUsers: string[];
   buildId: string | null;
   clientDist: string | null;
   wsPerIp: number;
@@ -76,10 +84,28 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
       .map((origin) => origin.trim())
       .filter(Boolean),
     devTools: d.DEV_TOOLS,
+    devUsers: (d.DEV_USERS ?? '')
+      .split(',')
+      .map((name) => normalizeUsername(name))
+      .filter(Boolean),
     buildId: d.BUILD_ID ?? null,
     clientDist: d.CLIENT_DIST ?? null,
     wsPerIp: d.WS_PER_IP,
   };
+}
+
+/** Tài khoản được dùng công cụ dev: server bật DEV_TOOLS, hoặc tài khoản thật có tên trong DEV_USERS. */
+export function devToolsAllowed(
+  config: Pick<ServerConfig, 'devTools' | 'devUsers'>,
+  account: { guest: boolean; username: string | null } | null,
+): boolean {
+  if (config.devTools) return true;
+  return (
+    account !== null &&
+    !account.guest &&
+    account.username !== null &&
+    config.devUsers.includes(account.username)
+  );
 }
 
 /** Cấu hình mặc định cho test (DB trong bộ nhớ, không log). */

@@ -12,8 +12,9 @@ import {
   type PlantView,
 } from '@dilam/shared';
 import { z } from 'zod';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../app';
+import { devToolsAllowed } from '../config';
 import { playerCodeOf } from '../auth/secrets';
 import { publicProfile } from '../rooms/profile';
 import type { Gateway, Session } from '../ws/gateway';
@@ -23,7 +24,7 @@ import { RoomEventDirector } from './roomEvents';
 import { registerSocialRoutes, roomInfo } from './socialRoutes';
 import { CompanyService } from '../company/companyService';
 import { registerCompanyRoutes } from '../company/companyRoutes';
-import type { RoomPlant } from '../db/repositories';
+import type { RoomPlant, UserRecord } from '../db/repositories';
 import { sendError } from '../http/routes';
 
 const MISSION_TICK_MS = 3000;
@@ -340,10 +341,10 @@ export function attachGameService(
     },
   );
 
-  if (ctx.config.devTools) {
+  if (ctx.config.devTools || ctx.config.devUsers.length > 0) {
     registerDevRoutes(app, ctx, engine, push);
     app.post('/api/dev/room-event', (request, reply) => {
-      const user = ctx.helpers.requireUser(request, reply);
+      const user = requireDevUser(ctx, request, reply);
       if (!user) return reply;
       const body = ctx.helpers.parse(devEventSchema, request.body, reply);
       if (!body) return reply;
@@ -365,7 +366,25 @@ const devGrantSchema = z.strictObject({
   coins: z.number().int().min(0).max(10_000_000).optional(),
 });
 
-/** API chỉ dùng khi phát triển: tua ngày, cộng XP/xu. KHÔNG bật ở môi trường thật. */
+/** Được dùng công cụ dev: bật DEV_TOOLS (chỉ khi phát triển) hoặc tên đăng nhập nằm trong DEV_USERS. */
+function canUseDevTools(ctx: AppContext, userId: string): boolean {
+  return devToolsAllowed(ctx.config, ctx.repos.users.account(userId));
+}
+
+/** Như requireUser, nhưng người không có quyền dev nhận 404 (không lộ là có API này). */
+function requireDevUser(
+  ctx: AppContext,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): UserRecord | null {
+  const user = ctx.helpers.requireUser(request, reply);
+  if (!user) return null;
+  if (canUseDevTools(ctx, user.id)) return user;
+  void sendError(reply, 404, 'not_found');
+  return null;
+}
+
+/** API công cụ dev: tua ngày, cộng XP/xu. Chỉ cho người có quyền dev (xem canUseDevTools). */
 function registerDevRoutes(
   app: FastifyInstance,
   ctx: AppContext,
@@ -373,7 +392,7 @@ function registerDevRoutes(
   push: (userId: string) => void,
 ): void {
   app.post('/api/dev/shift-day', (request, reply) => {
-    const user = ctx.helpers.requireUser(request, reply);
+    const user = requireDevUser(ctx, request, reply);
     if (!user) return reply;
     const body = ctx.helpers.parse(devShiftSchema, request.body, reply);
     if (!body) return reply;
@@ -382,7 +401,7 @@ function registerDevRoutes(
     return reply.send({ ok: true, today: engine.today(user.id, user.timeZone) });
   });
   app.post('/api/dev/grant', (request, reply) => {
-    const user = ctx.helpers.requireUser(request, reply);
+    const user = requireDevUser(ctx, request, reply);
     if (!user) return reply;
     const body = ctx.helpers.parse(devGrantSchema, request.body, reply);
     if (!body) return reply;

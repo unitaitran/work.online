@@ -357,3 +357,8 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Cấp (XP) là của người chơi, không reset khi đổi chỗ làm. Chỉ chức danh hiển thị đổi: tự mở công ty là CEO, làm cho công ty người chơi khác thì theo vị trí (khung cấp của công ty đó), ở văn phòng chung thì theo thang 13 chức danh.
 - Thang 13 chức danh vẫn được tính ngầm để mở khoá phòng ban, nhánh và đồ cửa hàng, tránh mất quyền lợi đã có khi đổi chỗ làm.
 - Server gửi `job` trong hồ sơ công khai (`'ceo' | Position | null`). Khi CEO đổi khung cấp, nhãn của nhân viên đang online cập nhật ở lần đổi hồ sơ kế tiếp (lên cấp, vào lại phòng).
+
+## Công cụ dev cho riêng tài khoản quản trị (2026-11-03)
+- `DEV_USERS` (danh sách tên đăng nhập) cho phép đúng các tài khoản này dùng công cụ dev ở môi trường thật; `DEV_TOOLS` (mở cho mọi người) vẫn bị cấm khi `NODE_ENV=production`.
+- Server là nơi kiểm tra quyền: API `/api/dev/*` trả 404 với người khác (không lộ là có API). Client chỉ tải bảng công cụ dev khi `/api/me` trả `devTools: true`.
+- Không áp dụng cho tài khoản khách. XP/xu cộng bằng công cụ dev vẫn tính vào bảng xếp hạng, nên chỉ dùng để thử.

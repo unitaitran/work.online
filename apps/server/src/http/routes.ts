@@ -32,7 +32,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 import { playerCodeOf } from '../auth/secrets';
-import type { ServerConfig } from '../config';
+import { devToolsAllowed, type ServerConfig } from '../config';
 import type { Repositories, UserRecord } from '../db/repositories';
 import type { AccountService } from '../game/accounts';
 import { isFresh, validateImport } from '../game/importProgress';
@@ -134,6 +134,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
       imported: progress.imported,
       username: account?.username ?? null,
       guest: account?.guest ?? false,
+      devTools: devToolsAllowed(config, account),
     };
   };
 

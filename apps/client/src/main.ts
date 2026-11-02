@@ -1241,9 +1241,10 @@ function start(): void {
     // Lỡ đóng màn chọn phòng ban / nhánh: lần vào văn phòng sau hỏi lại.
     if (progress.needsDepartment() || progress.needsBranch()) askChoices(promotionDeps);
 
-    // Công cụ dev chỉ có khi chạy dev (bản build không tải module này).
+    // Công cụ dev: khi chạy dev, hoặc tài khoản được server cho phép (DEV_USERS).
+    // Người khác không tải module này; server cũng chặn API dev với họ.
     let devPanel: { dispose(): void } | null = null;
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || session.me.devTools) {
       void lazy.dev().then(({ mountDevPanel }) => {
         devPanel = mountDevPanel(hudRoot, {
           call: async (path, body) => (await api.request('POST', path, body)).ok,

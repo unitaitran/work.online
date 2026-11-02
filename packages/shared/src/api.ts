@@ -120,6 +120,8 @@ export interface MeResponse {
   username: string | null;
   /** Tài khoản khách: đăng xuất là xoá hết. */
   guest: boolean;
+  /** Được dùng "Công cụ dev" (tài khoản nằm trong DEV_USERS của server, hoặc server chạy dev). */
+  devTools: boolean;
 }
 
 export interface CapacityResponse {
