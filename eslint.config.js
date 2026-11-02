@@ -7,7 +7,8 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**'],
+    // scripts/*.cjs: công cụ đo chạy bằng Node thuần (CommonJS, cần Playwright cài riêng).
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', 'scripts/*.cjs'],
   },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

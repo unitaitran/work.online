@@ -2,6 +2,7 @@
 // (khoá trong biến môi trường), bản đồ toà nhà.
 import { timingSafeEqual } from 'node:crypto';
 import {
+  analyticsRequestSchema,
   checkText,
   dayKey,
   leaderboardQuerySchema,
@@ -22,6 +23,8 @@ import type { AppContext } from '../app';
 import { sendError } from '../http/routes';
 import type { Gateway } from '../ws/gateway';
 import { ADMIN_PAGE } from './adminPage';
+import { KeyedLimiter } from '../http/keyedLimiter';
+import { ADMIN_CSP } from '../http/security';
 
 /** Xếp hạng tính theo giờ Việt Nam (tuần bắt đầu thứ Hai 0 giờ). */
 const BOARD_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -175,7 +178,11 @@ export function registerSocialRoutes(
 
   app.get('/admin', (_request, reply) => {
     if (!adminKey) return sendError(reply, 404, 'not_found');
-    return reply.type('text/html; charset=utf-8').send(ADMIN_PAGE);
+    return reply
+      .header('content-security-policy', ADMIN_CSP)
+      .header('cache-control', 'no-store')
+      .type('text/html; charset=utf-8')
+      .send(ADMIN_PAGE);
   });
   app.get('/api/admin/wall', (request, reply) => {
     if (!requireAdmin(request, reply)) return reply;
@@ -198,6 +205,22 @@ export function registerSocialRoutes(
     if (!requireAdmin(request, reply)) return reply;
     repos.wall.setHidden(Number(request.params.id), false);
     return reply.code(204).send();
+  });
+
+  // ---------- Thống kê ẩn danh ----------
+  const analyticsLimiter = new KeyedLimiter({ capacity: 20, refillPerSecond: 0.2 }, ctx.now);
+  app.post('/api/analytics', (request, reply) => {
+    // Không cần đăng nhập, không ghi ai gửi: chỉ cộng một vào ô (ngày, sự kiện).
+    if (!analyticsLimiter.consume(request.ip)) return reply.code(204).send();
+    const body = analyticsRequestSchema.safeParse(request.body);
+    if (!body.success) return sendError(reply, 400, 'bad_request');
+    repos.analytics.bump(dayKey(new Date(ctx.now()), BOARD_TIME_ZONE), body.data.event);
+    return reply.code(204).send();
+  });
+  app.get('/api/admin/analytics', (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply;
+    const since = dayKey(new Date(ctx.now() - 30 * 86_400_000), BOARD_TIME_ZONE);
+    return reply.send({ rows: repos.analytics.report(since) });
   });
 
   // ---------- Bản đồ toà nhà ----------

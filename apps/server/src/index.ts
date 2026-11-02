@@ -21,6 +21,10 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   await app.close();
   process.exit(0);
 }
+// Thiếu biến bắt buộc khi chạy thật thì dừng ngay với thông báo rõ.
+if (process.env.NODE_ENV === 'production' && config.devTools) {
+  throw new Error('DEV_TOOLS must not be enabled in production');
+}
 process.once('SIGINT', (signal) => void shutdown(signal));
 process.once('SIGTERM', (signal) => void shutdown(signal));
 

@@ -1,0 +1,59 @@
+# Môi trường chạy thử: app + Caddy (HTTPS tự động, wss, nén) + sao lưu hằng ngày.
+#   cp .env.example .env   (sửa DOMAIN, ADMIN_KEY...)
+#   docker compose up -d --build
+services:
+  app:
+    build:
+      context: .
+      args:
+        BUILD_ID: ${BUILD_ID:-local}
+    image: dilam-online:${BUILD_ID:-local}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Các giá trị này luôn đúng trong container, không phụ thuộc .env.
+      HOST: 0.0.0.0
+      PORT: 3000
+      DB_PATH: /data/dilam.sqlite
+      BACKUP_DIR: /backups
+      CLIENT_DIST: /app/client
+      TRUST_PROXY: 1
+    volumes:
+      - data:/data
+      - ./backups:/backups
+    expose:
+      - '3000'
+    stop_grace_period: 15s
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  # Sao lưu SQLite mỗi 24 giờ vào ./backups (gắn ổ mạng / đồng bộ ra ngoài máy chủ).
+  backup:
+    image: dilam-online:${BUILD_ID:-local}
+    restart: unless-stopped
+    depends_on:
+      - app
+    env_file: .env
+    environment:
+      DB_PATH: /data/dilam.sqlite
+      BACKUP_DIR: /backups
+    volumes:
+      - data:/data
+      - ./backups:/backups
+    entrypoint: ['/bin/sh', '-c', 'while true; do node server/backup.js; sleep 86400; done']
+
+volumes:
+  data:
+  caddy-data:

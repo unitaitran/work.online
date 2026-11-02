@@ -1,0 +1,20 @@
+# Caddy: HTTPS tự động, WebSocket (wss) tự chuyển tiếp, nén tĩnh.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# Server đọc IP thật từ X-Forwarded-For khi TRUST_PROXY=1.
+		header_up X-Forwarded-For {remote_host}
+	}
+	log {
+		# Không ghi query string (token WebSocket nằm trong query).
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					delete token
+				}
+				request>headers>Authorization delete
+			}
+		}
+	}
+}

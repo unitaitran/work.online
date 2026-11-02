@@ -15,6 +15,7 @@ import { publicProfile } from '../rooms/profile';
 import type { Connection, Room } from '../rooms/room';
 import { RoomManager } from '../rooms/roomManager';
 import { createTokenBucket, type TokenBucketOptions } from './rateLimit';
+import { websocketOriginAllowed } from '../http/security';
 
 /** 10 vị trí/giây + biểu cảm, câu nhanh, ping: cho dồn 40, hồi 20/giây. */
 export const DEFAULT_WS_RATE_LIMIT: TokenBucketOptions = { capacity: 40, refillPerSecond: 20 };
@@ -80,6 +81,7 @@ export function attachWebSocketGateway(
   if (!options.manualTick) rooms.start();
   const handlers: MessageHandler[] = [];
   const sessions = new Map<string, Session>();
+  const perIp = new Map<string, number>();
   const joinListeners: SessionListener[] = [];
   let access: RoomAccess = { canEnter: () => false, capacity: () => 0 };
   const endListeners: SessionListener[] = [];
@@ -96,6 +98,19 @@ export function attachWebSocketGateway(
       socket.destroy();
       return;
     }
+    // Trình duyệt ở nguồn lạ không được mở kết nối thay người chơi.
+    if (!websocketOriginAllowed(request, ctx.config)) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+      return;
+    }
+    // Giới hạn số kết nối đồng thời từ một IP.
+    const ip = clientIp(request, ctx.config.trustProxy);
+    if ((perIp.get(ip) ?? 0) >= ctx.config.wsPerIp) {
+      socket.end(
+        'HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+      );
+      return;
+    }
     const token = url.searchParams.get('token') ?? '';
     const user = ctx.accounts.authenticate(token);
     if (!user) {
@@ -103,6 +118,12 @@ export function attachWebSocketGateway(
       return;
     }
     wss.handleUpgrade(request, socket, head, (ws) => {
+      perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
+      ws.once('close', () => {
+        const left = (perIp.get(ip) ?? 1) - 1;
+        if (left <= 0) perIp.delete(ip);
+        else perIp.set(ip, left);
+      });
       onConnection(ws, user.id);
     });
   };
@@ -251,13 +272,32 @@ export function attachWebSocketGateway(
     }
   }
 
+  // Tắt êm: báo mọi người "bảo trì" và đóng 1001, chờ tối đa 1 giây cho khung đóng gửi đi,
+  // rồi mới cắt hẳn các kết nối còn lại.
   app.addHook('preClose', (done) => {
     app.server.off('upgrade', onUpgrade);
     rooms.stop('shutdown');
-    for (const client of wss.clients) client.terminate();
-    wss.close(() => {
-      done();
-    });
+    const finish = (): void => {
+      for (const client of wss.clients) client.terminate();
+      wss.close(() => {
+        done();
+      });
+    };
+    if (wss.clients.size === 0) {
+      finish();
+      return;
+    }
+    const timer = setTimeout(finish, 1000);
+    let open = wss.clients.size;
+    for (const client of wss.clients) {
+      client.once('close', () => {
+        open -= 1;
+        if (open === 0) {
+          clearTimeout(timer);
+          finish();
+        }
+      });
+    }
   });
 
   return {
@@ -294,6 +334,13 @@ function rawDataToString(data: RawData): string {
   if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
   if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
   return data.toString('utf8');
+}
+
+/** IP người kết nối (sau reverse proxy thì lấy từ X-Forwarded-For khi đã bật TRUST_PROXY). */
+function clientIp(request: IncomingMessage, trustProxy: boolean): string {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (trustProxy && typeof forwarded === 'string') return forwarded.split(',')[0]?.trim() ?? '';
+  return request.socket.remoteAddress ?? '';
 }
 
 function parseUrl(url: string | undefined): URL | null {

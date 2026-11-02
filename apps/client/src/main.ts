@@ -9,6 +9,7 @@ import {
   titleFor,
   titleName,
   dayMood,
+  PROTOCOL_VERSION,
   COMPANY_COLORS,
   type BuildingResponse,
   type CompanyPublic,
@@ -25,13 +26,15 @@ import { AudioEngine, type SoundName } from './audio/audioEngine';
 import { DEFAULT_APPEARANCE, type Profile } from './avatar/appearance';
 import { randomVietnameseName } from './avatar/names';
 import { Engine } from './engine/engine';
-import { initialAutoLevel } from './engine/quality';
+import { detectLowPower, initialAutoLevel } from './engine/quality';
+import { analyticsEnabled, setAnalyticsEnabled, track } from './net/analytics';
 import { ApiClient } from './net/api';
 import { RoomClient, type ActionReply } from './net/roomClient';
 import { recoverAccount, saveToken, signIn, type SignInResult } from './net/session';
 import { actionForEvent } from './progress/eventActions';
 import { markLocalSaveImported, pendingLocalSave } from './progress/localSave';
 import { ServerProgress } from './progress/serverProgress';
+import { compareVersion, registerServiceWorker } from './version';
 import { CreatorScene } from './scenes/creatorScene';
 import { createNpcRoster } from './npc/roster';
 import { OfficeScene, type OfficeEvent } from './scenes/officeScene';
@@ -50,18 +53,23 @@ import { STRINGS } from './strings';
 import { mountCreatorPanel } from './ui/creatorPanel';
 import { el } from './ui/dom';
 import { showCoachMarks } from './ui/coachMarks';
-import { mountDevPanel } from './ui/devPanel';
 import { openModal } from './ui/modal';
+import type { CallResult } from './ui/companyPanel';
+
+// Các màn ít dùng được tải lười (chia nhỏ JS, tải ban đầu nhẹ hơn).
+const lazy = {
+  shop: () => import('./ui/shopPanel'),
+  company: () => import('./ui/companyPanel'),
+  wall: () => import('./ui/wallPanel'),
+  leaderboard: () => import('./ui/leaderboardPanel'),
+  building: () => import('./ui/buildingPanel'),
+  brag: () => import('./ui/bragCard'),
+  dev: () => import('./ui/devPanel'),
+};
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
 import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
-import { drawBragCard, shareOrDownload } from './ui/bragCard';
-import { mountBuildingPanel } from './ui/buildingPanel';
-import { mountCompanyPanel, type CallResult } from './ui/companyPanel';
-import { mountLeaderboardPanel } from './ui/leaderboardPanel';
 import { mountRoomEventBanner } from './ui/roomEventBanner';
-import { mountShopPanel } from './ui/shopPanel';
-import { mountWallPanel } from './ui/wallPanel';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
@@ -77,6 +85,14 @@ const canvas = requireElement('#scene', HTMLCanvasElement);
 const hudRoot = requireElement('#hud', HTMLElement);
 const debug = new URLSearchParams(window.location.search).has('debug');
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+/** Chế độ máy yếu tự phát hiện: bắt đầu ở chất lượng thấp (ít bóng, ít nhân vật chi tiết, ít hiệu ứng). */
+const lowPower = detectLowPower({
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  ...('deviceMemory' in navigator ? { deviceMemory: Number(navigator.deviceMemory) } : {}),
+  ...('connection' in navigator
+    ? { saveData: Boolean((navigator.connection as { saveData?: boolean } | undefined)?.saveData) }
+    : {}),
+});
 
 const params = new URLSearchParams(window.location.search);
 /** ?time=morning|afternoon|night: ép buổi trong ngày (để thử, chụp ảnh). */
@@ -117,7 +133,46 @@ async function bootSession(): Promise<Extract<SignInResult, { ok: true }>> {
   }
 }
 
+registerServiceWorker();
+
+/** Báo có bản mới (bắt buộc tải lại nếu giao thức đã đổi). */
+let updateShown = false;
+function showUpdate(required: boolean): void {
+  if (updateShown) return;
+  updateShown = true;
+  const reload = el('button', {
+    className: 'button button-primary',
+    text: STRINGS.update.reload,
+    attrs: { type: 'button' },
+  });
+  reload.addEventListener('click', () => {
+    window.location.reload();
+  });
+  hudRoot.append(
+    el('div', {
+      className: required ? 'update-banner is-required' : 'update-banner',
+      attrs: { role: 'alert' },
+      children: [
+        el('span', { text: required ? STRINGS.update.required : STRINGS.update.available }),
+        reload,
+      ],
+    }),
+  );
+}
+async function checkVersion(): Promise<void> {
+  const meta = await api.request<{ protocolVersion: number; buildId?: string | null }>(
+    'GET',
+    '/api/meta',
+  );
+  if (!meta.ok) return;
+  const status = compareVersion(meta.value);
+  if (status !== 'ok') showUpdate(status === 'required');
+}
+void checkVersion();
+window.setInterval(() => void checkVersion(), 10 * 60_000);
+
 const session = await bootSession();
+track(store, 'session_start');
 const playerId = session.me.playerCode;
 // Tiến độ do server tính (Phase 4C); client chỉ hiển thị.
 const progress = new ServerProgress(session.me.progress);
@@ -209,7 +264,7 @@ function start(): void {
   try {
     engine = new Engine(canvas, {
       mode: loadQualityMode(store),
-      autoStartLevel: initialAutoLevel(coarsePointer),
+      autoStartLevel: initialAutoLevel(coarsePointer, lowPower),
       onAutoDowngrade: (level) => {
         officeHud?.showToast(STRINGS.office.qualityLowered(STRINGS.office.qualityModes[level]));
       },
@@ -452,6 +507,7 @@ function start(): void {
       }
     });
     refreshProgress();
+    track(store, 'office_enter');
     toastReject = (text) => {
       if (text) officeHudView.showToast(text);
     };
@@ -466,6 +522,7 @@ function start(): void {
     const onRoomMessage = (message: ServerMessage): void => {
       switch (message.type) {
         case 'welcome':
+          if (message.protocol !== PROTOCOL_VERSION) showUpdate(true);
           serverOffset = message.serverTime - Date.now();
           roomKind = message.room.replace(/-\d+$/, '');
           updateSign();
@@ -622,19 +679,22 @@ function start(): void {
         : { ok: false, error: result.reason ?? result.error };
     };
     const openShop = (): void => {
+      track(store, 'shop_open');
       let panel: { dispose(): void } | null = null;
       const modal = officeActivities.openPanel(STRINGS.shop.title, () => panel?.dispose());
       modal.body.closest('.modal')?.classList.add('modal-wide');
-      panel = mountShopPanel(modal.body, {
-        appearance: profile.appearance,
-        xp: progress.state.xp,
-        load: async () => {
-          const result = await api.request<InventoryResponse>('GET', '/api/shop/inventory');
-          return result.ok ? result.value : null;
-        },
-        buy: (itemId) => shopCall('/api/shop/buy', { itemId }),
-        equip: (itemId, equip) => shopCall('/api/shop/equip', { itemId, equip }),
-        onInventory: applyInventory,
+      void lazy.shop().then(({ mountShopPanel }) => {
+        panel = mountShopPanel(modal.body, {
+          appearance: profile.appearance,
+          xp: progress.state.xp,
+          load: async () => {
+            const result = await api.request<InventoryResponse>('GET', '/api/shop/inventory');
+            return result.ok ? result.value : null;
+          },
+          buy: (itemId) => shopCall('/api/shop/buy', { itemId }),
+          equip: (itemId, equip) => shopCall('/api/shop/equip', { itemId, equip }),
+          onInventory: applyInventory,
+        });
       });
     };
 
@@ -660,26 +720,29 @@ function start(): void {
         });
     };
     const openCompany = (): void => {
+      track(store, 'company_open');
       const modal = officeActivities.openPanel(STRINGS.company.title);
       modal.body.closest('.modal')?.classList.add('modal-wide');
-      mountCompanyPanel(modal.body, {
-        get: async <T>(path: string) => {
-          const r = await api.request<T>('GET', path);
-          return r.ok ? r.value : null;
-        },
-        post: async <T>(path: string, body?: unknown): Promise<CallResult<T>> => {
-          const r = await api.request<T>('POST', path, body ?? {});
-          return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason ?? r.error };
-        },
-        enterRoom: (companyId) => {
-          room.send({ type: 'switch_room', roomId: `company:${companyId}` });
-          modal.close();
-        },
-        backToOffice: () => {
-          room.send({ type: 'switch_room', roomId: 'office' });
-          modal.close();
-        },
-        currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
+      void lazy.company().then(({ mountCompanyPanel }) => {
+        mountCompanyPanel(modal.body, {
+          get: async <T>(path: string) => {
+            const r = await api.request<T>('GET', path);
+            return r.ok ? r.value : null;
+          },
+          post: async <T>(path: string, body?: unknown): Promise<CallResult<T>> => {
+            const r = await api.request<T>('POST', path, body ?? {});
+            return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason ?? r.error };
+          },
+          enterRoom: (companyId) => {
+            room.send({ type: 'switch_room', roomId: `company:${companyId}` });
+            modal.close();
+          },
+          backToOffice: () => {
+            room.send({ type: 'switch_room', roomId: 'office' });
+            modal.close();
+          },
+          currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
+        });
       });
     };
 
@@ -706,56 +769,65 @@ function start(): void {
 
     // ---------- Xếp hạng, tường chung, bản đồ toà nhà, thẻ khoe (Phase 5B) ----------
     const openWall = (): void => {
+      track(store, 'wall_open');
       const modal = officeActivities.openPanel(STRINGS.wall.title);
-      mountWallPanel(modal.body, {
-        list: async () => {
-          const r = await api.request<{ posts: WallPost[] }>('GET', '/api/wall');
-          return r.ok ? r.value.posts : null;
-        },
-        post: async (text) => {
-          const r = await api.request<{ posts: WallPost[] }>('POST', '/api/wall', { text });
-          return r.ok
-            ? { ok: true, posts: r.value.posts }
-            : { ok: false, reason: r.reason ?? r.error };
-        },
-        report: async (id) => {
-          const r = await api.request<{ posts: WallPost[] }>(
-            'POST',
-            `/api/wall/${String(id)}/report`,
-          );
-          return r.ok ? r.value.posts : null;
-        },
+      void lazy.wall().then(({ mountWallPanel }) => {
+        mountWallPanel(modal.body, {
+          list: async () => {
+            const r = await api.request<{ posts: WallPost[] }>('GET', '/api/wall');
+            return r.ok ? r.value.posts : null;
+          },
+          post: async (text) => {
+            const r = await api.request<{ posts: WallPost[] }>('POST', '/api/wall', { text });
+            return r.ok
+              ? { ok: true, posts: r.value.posts }
+              : { ok: false, reason: r.reason ?? r.error };
+          },
+          report: async (id) => {
+            const r = await api.request<{ posts: WallPost[] }>(
+              'POST',
+              `/api/wall/${String(id)}/report`,
+            );
+            return r.ok ? r.value.posts : null;
+          },
+        });
       });
     };
     const openLeaderboard = (): void => {
+      track(store, 'leaderboard_open');
       const modal = officeActivities.openPanel(STRINGS.board.title);
-      mountLeaderboardPanel(modal.body, {
-        load: async (period, department) => {
-          const r = await api.request<LeaderboardResponse>(
-            'GET',
-            `/api/leaderboard?period=${period}&department=${department}`,
-          );
-          return r.ok ? r.value : null;
-        },
-        setHidden: async (hidden) =>
-          (await api.request('PUT', '/api/me/privacy', { hideFromLeaderboard: hidden })).ok,
+      void lazy.leaderboard().then(({ mountLeaderboardPanel }) => {
+        mountLeaderboardPanel(modal.body, {
+          load: async (period, department) => {
+            const r = await api.request<LeaderboardResponse>(
+              'GET',
+              `/api/leaderboard?period=${period}&department=${department}`,
+            );
+            return r.ok ? r.value : null;
+          },
+          setHidden: async (hidden) =>
+            (await api.request('PUT', '/api/me/privacy', { hideFromLeaderboard: hidden })).ok,
+        });
       });
     };
     const openBuilding = (): void => {
       const modal = officeActivities.openPanel(STRINGS.building.title);
-      mountBuildingPanel(modal.body, {
-        load: async () => {
-          const r = await api.request<BuildingResponse>('GET', '/api/building');
-          return r.ok ? r.value : null;
-        },
-        go: (roomId) => {
-          room.send({ type: 'switch_room', roomId });
-          modal.close();
-        },
-        label: (info) => (info.kind === 'office' ? STRINGS.building.office : info.name),
+      void lazy.building().then(({ mountBuildingPanel }) => {
+        mountBuildingPanel(modal.body, {
+          load: async () => {
+            const r = await api.request<BuildingResponse>('GET', '/api/building');
+            return r.ok ? r.value : null;
+          },
+          go: (roomId) => {
+            room.send({ type: 'switch_room', roomId });
+            modal.close();
+          },
+          label: (info) => (info.kind === 'office' ? STRINGS.building.office : info.name),
+        });
       });
     };
     const openBrag = (): void => {
+      track(store, 'brag_open');
       const modal = officeActivities.openPanel(STRINGS.brag.title);
       const img = el('img', { className: 'brag-preview', attrs: { alt: STRINGS.brag.title } });
       const share = el('button', {
@@ -773,28 +845,30 @@ function start(): void {
         el('div', { className: 'activity-actions', children: [download, share] }),
       );
       const state = progress.state;
-      void drawBragCard({
-        appearance: profile.appearance,
-        equipped,
-        level: progress.level,
-        title: titleName(progress.title, state.branch),
-        streak: state.checkIn.streak,
-        stats: state.daily.day === progress.today ? state.daily.stats : undefined,
-        day: progress.today ?? '',
-      }).then((canvas) => {
-        img.src = canvas.toDataURL('image/png');
-        const name = `di-lam-online-${progress.today ?? 'hom-nay'}.png`;
-        share.addEventListener('click', () => {
-          void shareOrDownload(canvas, name);
-        });
-        download.addEventListener('click', () => {
-          const a = document.createElement('a');
-          a.href = img.src;
-          a.download = name;
-          a.click();
-        });
-        Object.assign(window, { __lastBrag: canvas });
-      });
+      void lazy.brag().then(({ drawBragCard, shareOrDownload }) =>
+        drawBragCard({
+          appearance: profile.appearance,
+          equipped,
+          level: progress.level,
+          title: titleName(progress.title, state.branch),
+          streak: state.checkIn.streak,
+          stats: state.daily.day === progress.today ? state.daily.stats : undefined,
+          day: progress.today ?? '',
+        }).then((canvas) => {
+          img.src = canvas.toDataURL('image/png');
+          const name = `di-lam-online-${progress.today ?? 'hom-nay'}.png`;
+          share.addEventListener('click', () => {
+            void shareOrDownload(canvas, name);
+          });
+          download.addEventListener('click', () => {
+            const a = document.createElement('a');
+            a.href = img.src;
+            a.download = name;
+            a.click();
+          });
+          Object.assign(window, { __lastBrag: canvas });
+        }),
+      );
     };
     const openHub = (): void => {
       const modal = officeActivities.openPanel(STRINGS.hub.title);
@@ -895,6 +969,10 @@ function start(): void {
             const result = await api.request<{ recoveryCode: string }>('POST', '/api/me/recovery');
             return result.ok ? result.value.recoveryCode : null;
           },
+          analyticsEnabled: () => analyticsEnabled(store, navigator.doNotTrack),
+          setAnalytics: (enabled) => {
+            setAnalyticsEnabled(store, enabled);
+          },
           deleteAccount: async () => {
             const result = await api.deleteAccount();
             if (!result.ok) return false;
@@ -908,15 +986,19 @@ function start(): void {
     // Lỡ đóng màn chọn phòng ban / nhánh: lần vào văn phòng sau hỏi lại.
     if (progress.needsDepartment() || progress.needsBranch()) askChoices(promotionDeps);
 
-    const devPanel = import.meta.env.DEV
-      ? mountDevPanel(hudRoot, {
+    // Công cụ dev chỉ có khi chạy dev (bản build không tải module này).
+    let devPanel: { dispose(): void } | null = null;
+    if (import.meta.env.DEV) {
+      void lazy.dev().then(({ mountDevPanel }) => {
+        devPanel = mountDevPanel(hudRoot, {
           call: async (path, body) => (await api.request('POST', path, body)).ok,
           today: () => progress.today,
           toast: (text) => {
             officeHudView.showToast(text);
           },
-        })
-      : null;
+        });
+      });
+    }
 
     // Tài khoản mới: hiện mã khôi phục MỘT lần.
     if (session.recoveryCode) {

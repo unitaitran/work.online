@@ -5,6 +5,8 @@ import { createSqliteRepositories, type Repositories } from './db/repositories';
 import { createAccountService, type AccountService } from './game/accounts';
 import { attachGameService, type GameService } from './game/gameService';
 import { registerApiRoutes, type AuthedHelpers, type Presence } from './http/routes';
+import { registerSecurity } from './http/security';
+import { registerStatic } from './http/static';
 import { attachWebSocketGateway, type Gateway, type GatewayOptions } from './ws/gateway';
 
 export interface AppOptions {
@@ -13,6 +15,8 @@ export interface AppOptions {
   repos?: Repositories;
   now?: () => number;
   gateway?: GatewayOptions;
+  /** Ghi log ra luồng này (test kiểm tra log không lộ dữ liệu nhạy cảm). */
+  logStream?: NodeJS.WritableStream;
 }
 
 export interface AppContext {
@@ -40,6 +44,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
         ? false
         : {
             level: config.logLevel,
+            ...(options.logStream ? { stream: options.logStream } : {}),
             // Bỏ hostname mặc định của pino (tên máy).
             base: { pid: process.pid },
             // Không ghi IP, hostname, header hay query string (token): chỉ method và đường dẫn.
@@ -53,6 +58,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
     bodyLimit: 64 * 1024,
     trustProxy: config.trustProxy,
   });
+
+  registerSecurity(app, config);
+  if (config.clientDist) registerStatic(app, config.clientDist);
 
   let db: ReturnType<typeof openDatabase> | null = null;
   let repos = options.repos;

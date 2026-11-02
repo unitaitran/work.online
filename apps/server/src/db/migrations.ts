@@ -199,4 +199,16 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX job_offers_user ON job_offers(user_id, at);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      -- Thống kê ẩn danh: chỉ đếm theo ngày và loại sự kiện, KHÔNG có người chơi hay IP.
+      CREATE TABLE analytics_daily (
+        day TEXT NOT NULL,
+        event TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, event)
+      );
+    `,
+  },
 ];

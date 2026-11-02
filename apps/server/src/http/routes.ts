@@ -152,7 +152,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
     companyUnlockLevel: BALANCE.company.unlockLevel,
     protocolVersion: PROTOCOL_VERSION,
   };
-  app.get('/api/meta', () => meta);
+  app.get('/api/meta', () => ({ ...meta, buildId: config.buildId }));
 
   // ---------- Tài khoản ----------
 

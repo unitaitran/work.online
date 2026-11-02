@@ -5,6 +5,7 @@ import {
   IDLE_GRACE_MS,
   INTEREST_RADIUS,
   poseIndex,
+  PROTOCOL_VERSION,
   RESERVE_MS,
   round2,
   type Emote,
@@ -134,7 +135,7 @@ export class Room {
     const others = [...this.members.values()].filter((m) => m !== member && m.conn);
     conn.send({
       type: 'welcome',
-      protocol: 1,
+      protocol: PROTOCOL_VERSION,
       room: this.id,
       you: snapshot(member),
       players: others.map(snapshot),

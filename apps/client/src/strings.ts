@@ -397,6 +397,11 @@ export const STRINGS = {
       failed: 'Server chưa bật công cụ dev (chạy npm run dev).',
     },
   },
+  update: {
+    available: 'Có phiên bản mới của văn phòng. Tải lại để cập nhật nhé!',
+    required: 'Trò chơi vừa được cập nhật. Tải lại trang để tiếp tục.',
+    reload: 'Tải lại',
+  },
   net: {
     connecting: 'Đang vào văn phòng…',
     online: (n: number) => (n > 0 ? `${String(n)} đồng nghiệp đang online` : 'Đang online'),
@@ -453,6 +458,14 @@ export const STRINGS = {
     deleteConfirm: 'Gõ XOA để xác nhận',
     delete: 'Xoá tài khoản',
     deleted: 'Đã xoá tài khoản. Tải lại trang để bắt đầu mới.',
+    privacyTitle: 'Dữ liệu của bạn',
+    privacy: [
+      'Không có email, số điện thoại hay thông tin cá nhân nào được thu.',
+      'Server lưu: mã băm của token và mã khôi phục, tên hiển thị và ngoại hình nhân vật, tiến độ (XP, xu, uy tín, chuỗi chấm công), đồ đã mua, nhật ký hoạt động để tính điểm, bài trên tường than thở (ẩn danh với người khác), công ty và đơn xin việc.',
+      'Để chống tài khoản phụ, server giữ một mã băm của địa chỉ IP (không lưu IP thật).',
+      'Bạn xoá được toàn bộ tài khoản và dữ liệu ở cuối trang này.',
+    ] as readonly string[],
+    analytics: 'Gửi thống kê ẩn danh (chỉ đếm số lượt mở từng màn, không có tên hay mã của bạn)',
   },
   social: {
     open: 'Giao lưu',

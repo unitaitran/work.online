@@ -134,3 +134,17 @@ describe('chất lượng', () => {
     expect(run(dip.state, 60, 10).downgrades).toBe(0);
   });
 });
+
+describe('chế độ máy yếu', () => {
+  it('phát hiện theo số nhân, RAM, tiết kiệm dữ liệu', async () => {
+    const { detectLowPower, initialAutoLevel } = await import('./quality');
+    expect(detectLowPower({ hardwareConcurrency: 8, deviceMemory: 8 })).toBe(false);
+    expect(detectLowPower({ hardwareConcurrency: 4 })).toBe(true);
+    expect(detectLowPower({ deviceMemory: 2 })).toBe(true);
+    expect(detectLowPower({ saveData: true })).toBe(true);
+    expect(detectLowPower({})).toBe(false);
+    expect(initialAutoLevel(false, true)).toBe('low');
+    expect(initialAutoLevel(true)).toBe('medium');
+    expect(initialAutoLevel(false)).toBe('high');
+  });
+});

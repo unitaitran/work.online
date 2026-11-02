@@ -16,7 +16,7 @@ export interface QualityPreset {
 }
 
 export const QUALITY_PRESETS: Readonly<Record<QualityLevel, QualityPreset>> = {
-  low: { pixelRatioCap: 1, shadows: false, shadowMapSize: 512, particles: 0, detailedAvatars: 6 },
+  low: { pixelRatioCap: 1, shadows: false, shadowMapSize: 512, particles: 0, detailedAvatars: 5 },
   medium: {
     pixelRatioCap: 1.5,
     shadows: true,
@@ -43,7 +43,27 @@ export function lowerQuality(level: QualityLevel): QualityLevel | null {
 }
 
 /** Mức khởi đầu cho chế độ tự động: màn cảm ứng (thường là điện thoại) bắt đầu ở mức vừa. */
-export function initialAutoLevel(coarsePointer: boolean): QualityLevel {
+/** Thông tin máy dùng để đoán máy yếu (các trường có thể thiếu tuỳ trình duyệt). */
+export interface DeviceHints {
+  hardwareConcurrency?: number;
+  /** GB, chỉ Chromium có. */
+  deviceMemory?: number;
+  /** Người dùng bật tiết kiệm dữ liệu. */
+  saveData?: boolean;
+}
+
+/** Máy yếu: ≤ 4 nhân CPU, ≤ 4 GB RAM, hoặc bật tiết kiệm dữ liệu. */
+export function detectLowPower(hints: DeviceHints): boolean {
+  return (
+    (hints.hardwareConcurrency !== undefined && hints.hardwareConcurrency <= 4) ||
+    (hints.deviceMemory !== undefined && hints.deviceMemory <= 4) ||
+    hints.saveData === true
+  );
+}
+
+/** Mức bắt đầu ở chế độ tự động: máy yếu bắt đầu ở mức thấp, màn cảm ứng ở mức vừa. */
+export function initialAutoLevel(coarsePointer: boolean, lowPower = false): QualityLevel {
+  if (lowPower) return 'low';
   return coarsePointer ? 'medium' : 'high';
 }
 

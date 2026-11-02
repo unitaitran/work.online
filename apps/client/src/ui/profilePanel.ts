@@ -34,6 +34,8 @@ export interface AccountActions {
   newRecoveryCode(): Promise<string | null>;
   /** Xoá tài khoản và toàn bộ dữ liệu. */
   deleteAccount(): Promise<boolean>;
+  analyticsEnabled(): boolean;
+  setAnalytics(enabled: boolean): void;
 }
 
 export interface ProfilePanelOptions {
@@ -237,6 +239,16 @@ function renderAccount(o: ProfilePanelOptions): HTMLElement {
     });
   });
 
+  const analyticsBox = el('input', { attrs: { type: 'checkbox', id: 'analytics-toggle' } });
+  analyticsBox.checked = o.account.analyticsEnabled();
+  analyticsBox.addEventListener('change', () => {
+    o.account.setAnalytics(analyticsBox.checked);
+  });
+  const analyticsToggle = el('label', {
+    className: 'vent-check',
+    children: [analyticsBox, el('span', { text: a.analytics })],
+  });
+
   const confirm = el('input', {
     className: 'save-code',
     attrs: { type: 'text', 'aria-label': a.deleteConfirm, placeholder: a.deleteConfirm },
@@ -270,6 +282,12 @@ function renderAccount(o: ProfilePanelOptions): HTMLElement {
       el('p', { className: 'activity-intro', text: a.recoverHint }),
       codeBox,
       el('div', { className: 'activity-actions', children: [recover] }),
+      el('h3', { text: a.privacyTitle }),
+      el('ul', {
+        className: 'roadmap-unlocks',
+        children: a.privacy.map((line) => el('li', { text: line })),
+      }),
+      analyticsToggle,
       el('h3', { text: a.deleteTitle }),
       el('p', { className: 'activity-intro', text: a.deleteHint }),
       confirm,

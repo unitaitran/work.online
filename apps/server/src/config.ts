@@ -27,6 +27,12 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   /** Bật API dev (tua ngày, cộng XP). CHỈ dùng khi phát triển. */
   DEV_TOOLS: boolish.default(false),
+  /** Mã bản build (ví dụ git sha), client so để báo có bản mới. */
+  BUILD_ID: z.string().max(80).optional(),
+  /** Thư mục bản build client để server phục vụ cùng nguồn (bỏ trống = không phục vụ). */
+  CLIENT_DIST: z.string().optional(),
+  /** Số kết nối WebSocket tối đa từ một IP. */
+  WS_PER_IP: z.coerce.number().int().min(1).max(1000).default(8),
 });
 
 export interface ServerConfig {
@@ -41,6 +47,9 @@ export interface ServerConfig {
   trustProxy: boolean;
   corsOrigins: string[];
   devTools: boolean;
+  buildId: string | null;
+  clientDist: string | null;
+  wsPerIp: number;
 }
 
 /** Đọc cấu hình từ biến môi trường. Ném lỗi rõ ràng nếu giá trị sai. */
@@ -67,6 +76,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
       .map((origin) => origin.trim())
       .filter(Boolean),
     devTools: d.DEV_TOOLS,
+    buildId: d.BUILD_ID ?? null,
+    clientDist: d.CLIENT_DIST ?? null,
+    wsPerIp: d.WS_PER_IP,
   };
 }
 

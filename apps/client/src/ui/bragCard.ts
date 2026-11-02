@@ -68,7 +68,9 @@ function renderPortrait(
   } finally {
     avatar.dispose();
     material.dispose();
+    // Trả context WebGL ngay (trình duyệt giới hạn số context cùng lúc).
     renderer?.dispose();
+    renderer?.forceContextLoss();
   }
 }
 

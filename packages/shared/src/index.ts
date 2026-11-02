@@ -1,5 +1,6 @@
 export * from './activityEvents';
 export * from './actions';
+export * from './analytics';
 export * from './api';
 export * from './balance';
 export * from './career';

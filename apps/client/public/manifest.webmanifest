@@ -1,0 +1,20 @@
+{
+  "name": "Đi làm Online",
+  "short_name": "Đi làm",
+  "description": "Game văn phòng 3D nhiều người chơi: đi làm, thăng chức, mở công ty.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fdf3e7",
+  "theme_color": "#fdf3e7",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%27112%27%20fill%3D%27%23ff8a65%27/%3E%3Ccircle%20cx%3D%27256%27%20cy%3D%27214%27%20r%3D%27104%27%20fill%3D%27%23f8d9c4%27/%3E%3Cpath%20d%3D%27M152%20196c0-70%2048-108%20104-108s104%2038%20104%20108c-30-30-64-40-104-40s-74%2010-104%2040z%27%20fill%3D%27%232b2326%27/%3E%3Ccircle%20cx%3D%27218%27%20cy%3D%27222%27%20r%3D%2713%27%20fill%3D%27%232d2433%27/%3E%3Ccircle%20cx%3D%27294%27%20cy%3D%27222%27%20r%3D%2713%27%20fill%3D%27%232d2433%27/%3E%3Cpath%20d%3D%27M232%20262q24%2018%2048%200%27%20stroke%3D%27%232d2433%27%20stroke-width%3D%279%27%20fill%3D%27none%27%20stroke-linecap%3D%27round%27/%3E%3Crect%20x%3D%27150%27%20y%3D%27330%27%20width%3D%27212%27%20height%3D%27120%27%20rx%3D%2740%27%20fill%3D%27%23fdf3e7%27/%3E%3Crect%20x%3D%27238%27%20y%3D%27340%27%20width%3D%2736%27%20height%3D%2780%27%20rx%3D%2710%27%20fill%3D%27%233d6fb6%27/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

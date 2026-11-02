@@ -161,6 +161,10 @@ export interface Repositories {
   social: SocialRepo;
   wall: WallRepo;
   companies: CompanyRepo;
+  analytics: {
+    bump(day: string, event: string): void;
+    report(sinceDay: string): { day: string; event: string; count: number }[];
+  };
   /** Giá trị cấu hình lưu trong DB (khoá bí mật sinh một lần). */
   setting(key: string, create: () => string): string;
   /** Chạy nhiều thao tác trong một transaction. */
@@ -542,6 +546,19 @@ export function createSqliteRepositories(db: Db): Repositories {
     social,
     wall,
     companies: createCompanyRepo(db),
+    analytics: {
+      bump(day, event) {
+        db.prepare(
+          'INSERT INTO analytics_daily (day, event, count) VALUES (?, ?, 1) ON CONFLICT(day, event) DO UPDATE SET count = count + 1',
+        ).run(day, event);
+      },
+      report: (sinceDay) =>
+        db
+          .prepare(
+            'SELECT day, event, count FROM analytics_daily WHERE day >= ? ORDER BY day, event',
+          )
+          .all(sinceDay) as { day: string; event: string; count: number }[],
+    },
     setting(key, create) {
       const row = q.settingGet.get(key) as { value: string } | undefined;
       if (row) return row.value;
