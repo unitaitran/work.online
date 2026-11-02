@@ -1,5 +1,16 @@
 // Nối bộ tính điểm với WebSocket: nhận hành động, trả tiến độ, sếp giao việc định kỳ,
 // và (chỉ khi DEV_TOOLS) các API dev để thử vòng chơi nhanh.
+import {
+  buyRequestSchema,
+  equipRequestSchema,
+  hashString,
+  MAX_ROOM_PLANTS,
+  OFFICE_FLOOR,
+  officeInteractables,
+  PLANT_KINDS,
+  seededRng,
+  type PlantView,
+} from '@dilam/shared';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../app';
@@ -7,6 +18,9 @@ import { playerCodeOf } from '../auth/secrets';
 import { publicProfile } from '../rooms/profile';
 import type { Gateway, Session } from '../ws/gateway';
 import { ProgressEngine, type PlayerContext } from './progressEngine';
+import { ShopService } from './shop';
+import type { RoomPlant } from '../db/repositories';
+import { sendError } from '../http/routes';
 
 const MISSION_TICK_MS = 3000;
 const PRUNE_ACTIONS_MS = 60 * 60_000;
@@ -15,6 +29,7 @@ const ACTION_KEEP_MS = 2 * 86_400_000;
 
 export interface GameService {
   engine: ProgressEngine;
+  shop: ShopService;
   /** Đẩy trạng thái tiến độ mới nhất cho người chơi (sau khi công cụ khác sửa). */
   push(userId: string): void;
   contextFor(userId: string): PlayerContext;
@@ -26,6 +41,45 @@ export function attachGameService(
   gateway: Gateway,
 ): GameService {
   const engine = new ProgressEngine(ctx.repos, ctx.now);
+  const shop = new ShopService(ctx.repos, ctx.now);
+  const plantSpots = new Map(
+    officeInteractables(OFFICE_FLOOR)
+      .filter((item) => item.kind === 'plant')
+      .map((item) => [item.id, item.approach]),
+  );
+  const toView = (p: RoomPlant): PlantView => ({
+    id: p.id,
+    x: p.x,
+    z: p.z,
+    kind: p.kind,
+    owner: p.ownerName,
+  });
+  /** Gửi cho mọi phòng cùng loại (cây dùng chung cho mọi phòng văn phòng). */
+  const broadcastKind = (kind: string, message: Parameters<Session['send']>[0]): void => {
+    for (const info of gateway.rooms.list()) {
+      if (info.kind === kind) gateway.rooms.get(info.id)?.broadcastAll(message);
+    }
+  };
+  /** Tưới cây xong: một khóm hoa mọc cạnh chậu, mọi người trong phòng thấy. */
+  const growPlant = (session: Session, target: string): void => {
+    const spot = plantSpots.get(target);
+    if (!spot) return;
+    const kind = session.room.kind;
+    const at = ctx.now();
+    const rng = seededRng(hashString(`${target}|${String(at)}`));
+    const angle = rng() * Math.PI * 2;
+    const radius = 0.35 + rng() * 0.45;
+    const plant = ctx.repos.plants.add(kind, {
+      x: spot.x + Math.cos(angle) * radius,
+      z: spot.z + Math.sin(angle) * radius,
+      kind: Math.floor(rng() * PLANT_KINDS),
+      ownerName: ctx.repos.characters.get(session.userId)?.name ?? '',
+      at,
+    });
+    const removed = ctx.repos.plants.trim(kind, MAX_ROOM_PLANTS);
+    broadcastKind(kind, { type: 'plant_added', plant: toView(plant) });
+    if (removed.length > 0) broadcastKind(kind, { type: 'plant_removed', ids: removed });
+  };
 
   const contextFor = (userId: string): PlayerContext => {
     const user = ctx.repos.users.byId(userId);
@@ -50,6 +104,10 @@ export function attachGameService(
 
   gateway.onSession((session: Session) => {
     push(session.userId);
+    session.send({
+      type: 'room_plants',
+      plants: ctx.repos.plants.list(session.room.kind).map(toView),
+    });
   });
   gateway.onSessionEnd((session: Session) => {
     engine.forget(session.userId);
@@ -70,6 +128,9 @@ export function attachGameService(
       today: result.today,
       ...(result.outcome ? { outcome: result.outcome } : {}),
     });
+    if (message.action.kind === 'chore' && message.action.target.startsWith('plant-')) {
+      growPlant(session, message.action.target);
+    }
     // Đổi chức danh / nhánh thì cả phòng thấy nhãn mới.
     if (
       message.action.kind === 'choose_branch' ||
@@ -99,9 +160,42 @@ export function attachGameService(
     done();
   });
 
+  // ---------- Cửa hàng ----------
+  app.get('/api/shop/inventory', (request, reply) => {
+    const user = ctx.helpers.requireUser(request, reply);
+    if (!user) return reply;
+    return reply.send(shop.inventory(user.id));
+  });
+  app.post('/api/shop/buy', (request, reply) => {
+    const user = ctx.helpers.requireUser(request, reply);
+    if (!user || !ctx.helpers.allowWrite(request, reply, user.id)) return reply;
+    const body = ctx.helpers.parse(buyRequestSchema, request.body, reply);
+    if (!body) return reply;
+    const result = shop.buy(user.id, body.itemId);
+    if (!result.ok) return sendError(reply, 422, 'rejected', result.error);
+    push(user.id);
+    return reply.send(result.inventory);
+  });
+  app.post('/api/shop/equip', (request, reply) => {
+    const user = ctx.helpers.requireUser(request, reply);
+    if (!user || !ctx.helpers.allowWrite(request, reply, user.id)) return reply;
+    const body = ctx.helpers.parse(equipRequestSchema, request.body, reply);
+    if (!body) return reply;
+    const result = shop.equip(user.id, body.itemId, body.equip);
+    if (!result.ok) return sendError(reply, 422, 'rejected', result.error);
+    // Người khác trong phòng thấy trang phục / thú cưng mới.
+    gateway.sessionOf(user.id)?.room.updateProfile(user.id, publicProfile(ctx.repos, user.id));
+    return reply.send(result.inventory);
+  });
+  app.get('/api/shop/ledger', (request, reply) => {
+    const user = ctx.helpers.requireUser(request, reply);
+    if (!user) return reply;
+    return reply.send({ entries: ctx.repos.ledger.recent(user.id, 50) });
+  });
+
   if (ctx.config.devTools) registerDevRoutes(app, ctx, engine, push);
 
-  return { engine, push, contextFor };
+  return { engine, shop, push, contextFor };
 }
 
 const devShiftSchema = z.strictObject({ days: z.number().int().min(-30).max(400) });
@@ -132,10 +226,10 @@ function registerDevRoutes(
     const body = ctx.helpers.parse(devGrantSchema, request.body, reply);
     if (!body) return reply;
     const state = engine.state(user.id);
-    engine.save(user.id, {
-      ...state,
-      xp: state.xp + (body.xp ?? 0),
-      coins: state.coins + (body.coins ?? 0),
+    const coins = state.coins + (body.coins ?? 0);
+    ctx.repos.transaction(() => {
+      engine.save(user.id, { ...state, xp: state.xp + (body.xp ?? 0), coins });
+      if (body.coins) ctx.repos.ledger.add(user.id, ctx.now(), body.coins, 'dev', coins);
     });
     push(user.id);
     app.gateway.sessionOf(user.id)?.room.updateProfile(user.id, publicProfile(ctx.repos, user.id));

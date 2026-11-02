@@ -270,3 +270,16 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **Tặng cà phê cho NPC**: NPC chạy ở client nên server không kiểm tra NPC đứng đâu, chỉ kiểm tra đã pha xong một ly.
 - **Mã lưu cục bộ** (Phase 3) tự nhập lên server ở lần đăng nhập đầu tiên rồi đánh dấu đã nhập; tab "Lưu trữ" thay bằng tab "Tài khoản" (mã khôi phục mới, vào tài khoản khác, xoá tài khoản).
 - **Công cụ dev chuyển lên server** (`--dev`): tua ngày và cộng XP chỉ đổi dữ liệu trên server cho đúng luồng thật.
+
+## Phase 5A: xu, cửa hàng, thú cưng, công quả
+
+- **Xu = 50% XP thực nhận (làm tròn xuống) + 20 xu mỗi việc sếp giao.** Một ngày chơi đủ: khoảng 155 xu. Món rẻ nhất 80 xu (mua được ngày đầu), món đắt nhất 3200 xu (khoảng 3 tuần).
+- **Sổ cái `coin_ledger`** ghi mọi biến động (`earn:<hoạt động>`, `buy:<món>`, `import`, `dev`) kèm số dư sau; cột `balance` có ràng buộc `CHECK (balance >= 0)`. Test kiểm tra tổng sổ cái = số xu.
+- **Mua hàng trong một transaction** đọc lại số dư bên trong transaction (Node chạy một luồng + SQLite transaction), nên nhiều yêu cầu cùng lúc không làm xu âm.
+- **Mọi món đều mua một lần** (không có món tiêu hao). Món hiếm có thể khoá theo chức danh.
+- **Áo trong cửa hàng là "màu áo"** phủ lên kiểu áo đang mặc, không thêm kiểu mới, để không phình số mesh nhân vật.
+- **Đồ bàn hiện trên bàn người chủ đang ngồi** (bàn không thuộc riêng ai); trang trí ghế hiện ở chỗ đang ngồi. Tối đa 3 đồ bàn.
+- **Thú cưng chỉ vẽ cho người được vẽ chi tiết** (gần nhất), đi theo sau lưng chủ; robot hút bụi chạy vòng quanh; xương rồng luôn quay về phía chủ.
+- **Công quả là mini-game 5-10 giây**: tưới cây (giữ nút, thả trong vạch xanh), lau bàn (chà qua lại, nút khi đang ngồi ở bàn), dọn pantry (bấm 5 cốc, ở tủ lạnh), gỡ kẹt máy in (35% lần dùng máy in bị kẹt, bấm nhanh 12 lần). Server không chấm mini-game, chỉ kiểm tra đứng gần đúng chỗ, giới hạn 6 lần/ngày và cùng một chỗ cách nhau 5 phút.
+- **Tưới cây xong mọc một khóm hoa** cạnh chậu, lưu ở server theo loại phòng (mọi phòng văn phòng dùng chung), tối đa 30, cây cũ nhất tự mất.
+- **Nhiệm vụ ngày** chính là "việc sếp giao" (3 việc ngẫu nhiên mỗi ngày), làm mới lúc 4 giờ sáng giờ địa phương.

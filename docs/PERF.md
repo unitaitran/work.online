@@ -131,3 +131,21 @@ Máy đo: container Linux dùng chung (Node 22), server và bot chạy cùng má
 Ghi chú: phòng chung mặc định 40 người nên tải thật mỗi phòng nhẹ hơn khoảng 6 lần (số cặp người giảm theo bình phương). Phần `states` chỉ gửi người trong 14 m và chỉ khi đổi, nên người đứng yên không tốn băng thông.
 
 **Client**: người chơi khác vẽ chi tiết tối đa 6/12/20 người gần nhất (chất lượng thấp/vừa/cao); xa hơn vẽ khối trụ cùng màu áo bằng **một InstancedMesh** (1 draw call cho mọi người ở xa).
+
+## Phase 5A: 40 người cùng mặc đồ và dắt thú cưng
+
+Chạy: `GEAR=1 PORT=3000 npm run loadtest -w @dilam/server -- 39 60` (39 bot mặc áo, nón, phụ kiện, dắt thú cưng) rồi mở trình duyệt vào `?debug` làm người thứ 40 và đọc `__dilam.stats()`.
+
+Máy đo: container không có GPU, Chromium vẽ bằng SwiftShader (phần mềm), nên **fps và thời gian khung ở đây không đại diện cho máy thật**; chỉ số đáng tin là số draw call, tam giác và hình học.
+
+| Chất lượng                      | Vẽ chi tiết      | Draw call | Tam giác | Hình học trong bộ nhớ |
+| ------------------------------- | ---------------- | --------: | -------: | --------------------: |
+| Không ai khác (đối chứng, thấp) |                  |        27 |   18 094 |                    29 |
+| Thấp                            | 6 người gần nhất |        71 |   51 878 |                    71 |
+| Vừa (có bóng)                   | 12               |       196 |  155 606 |                   111 |
+| Cao (có bóng)                   | 20               |       242 |  186 296 |                   163 |
+
+- Mỗi nhân vật chi tiết là 6 mesh gộp (nón, phụ kiện, màu áo gộp vào mesh đầu/thân có sẵn nên **không thêm draw call**); thú cưng thêm 1 mesh. Người ở xa: 1 InstancedMesh chung.
+- Có bóng thì mỗi mesh vẽ thêm một lượt vào shadow map, nên mức vừa/cao tăng gấp đôi số draw call.
+- Đã sửa trong đợt đo: đọc khung canvas một lần mỗi khung hình (trước đó mỗi bong bóng gọi `getBoundingClientRect`), và chỉ hiện nhãn tên cho người gần (vẽ chi tiết) hoặc đang nói.
+- Mục tiêu điện thoại tầm trung (≤ 100 draw call): chế độ tự động bắt đầu ở mức thấp trên màn cảm ứng, đúng ngân sách.

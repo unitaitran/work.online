@@ -1843,3 +1843,239 @@ button.office-badge:focus-visible {
     bottom: calc(max(12px, env(safe-area-inset-bottom)) + 150px);
   }
 }
+
+/* ---------- Cửa hàng, công quả (Phase 5A) ---------- */
+
+.shop-button {
+  position: absolute;
+  right: 12px;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 120px);
+  box-shadow: 0 4px 14px rgb(59 50 65 / 14%);
+}
+
+.wipe-button {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 150px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.modal.modal-wide {
+  width: min(760px, 100%);
+}
+
+.shop-coins {
+  margin: 0 0 8px;
+  font-weight: 800;
+  color: #8a5a00;
+}
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+}
+
+.shop-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.shop-preview-canvas {
+  width: 220px;
+  height: 260px;
+  border-radius: 16px;
+  background: linear-gradient(#fdf3e7, #f3e2cf);
+  touch-action: none;
+  cursor: grab;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.shop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shop-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.shop-card:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.shop-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgb(0 0 0 / 10%);
+}
+
+.shop-card.rarity-rare {
+  border-color: #8fc7ff;
+}
+
+.shop-card.rarity-epic {
+  border-color: #f2c14e;
+}
+
+.shop-item-name {
+  margin: 10px 0 2px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.shop-rarity {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.shop-rarity.rarity-rare {
+  color: #2f6fb3;
+}
+
+.shop-rarity.rarity-epic {
+  color: #b07a00;
+}
+
+.chore-timer {
+  margin: 0 0 8px;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
+.chore-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 180px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f6f1ea;
+}
+
+.water-gauge {
+  position: relative;
+  width: 60px;
+  height: 140px;
+  overflow: hidden;
+  border: 3px solid #8fb7d8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.water-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70%;
+  height: 22%;
+  background: rgb(95 200 120 / 35%);
+}
+
+.water-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: #6fb4e8;
+}
+
+.wipe-pad {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  border-radius: 12px;
+  background: #d9b48a;
+  touch-action: none;
+  cursor: grab;
+}
+
+.wipe-dirt {
+  position: absolute;
+  inset: 12px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 30% 40%, #7a5a3a 0 18%, transparent 19%),
+    radial-gradient(circle at 70% 60%, #6b4a2a 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 25%, #8a6a4a 0 10%, transparent 11%);
+  pointer-events: none;
+}
+
+.chore-tidy {
+  display: block;
+  height: 200px;
+}
+
+.tidy-cup {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 1.4rem;
+  box-shadow: 0 2px 8px rgb(59 50 65 / 18%);
+  cursor: pointer;
+}
+
+.unjam-printer {
+  position: relative;
+  width: 160px;
+  height: 90px;
+  border-radius: 12px;
+  background: #cfd5dd;
+  overflow: hidden;
+}
+
+.unjam-paper {
+  position: absolute;
+  left: 40px;
+  top: -40px;
+  width: 80px;
+  height: 100px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
+  transition: transform 0.08s;
+}
+
+.chore-stage.is-done {
+  background: #e7f6ee;
+}
+
+@media (max-width: 600px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-button {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 194px);
+  }
+}

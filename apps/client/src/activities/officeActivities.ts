@@ -9,6 +9,8 @@ import { STRINGS } from '../strings';
 import { openModal, type Modal } from '../ui/modal';
 import type { Interactable } from '../world/office/layout';
 import { mountCheckInPanel } from './checkIn/checkInPanel';
+import { mountChoreGame } from './chores/choreGame';
+import { printerJams, type ChoreKind } from './chores/choreLogic';
 import {
   BREW_MS,
   handOver,
@@ -41,6 +43,8 @@ export interface ActivityScene {
 export interface ActivityHud {
   showToast(text: string): void;
   setFocusAvailable(available: boolean): void;
+  /** Nút "Lau bàn" (khi đang ngồi ở bàn làm việc). */
+  setWipeAvailable(available: boolean): void;
   setCoffee(phase: CoffeeState['phase']): void;
 }
 
@@ -70,6 +74,8 @@ export class OfficeActivities {
   private modal: Modal | null = null;
   private focus: { stop(): void } | null = null;
   private seatedAtDesk = false;
+  /** Bàn đang ngồi (để lau bàn). */
+  private deskId: string | null = null;
   /** Đang ngồi ghế phòng họp từ lúc nào (để tính thời gian họp). */
   private meeting: { seatId: string; since: number } | null = null;
 
@@ -98,11 +104,18 @@ export class OfficeActivities {
       case 'coffee':
         this.brewCoffee();
         return true;
-      // Tưới cây = công quả; máy in phát sự kiện in. Vẫn hiện lời nhắn và âm thanh mặc định.
+      // Công quả: tưới cây, dọn pantry (tủ lạnh), gỡ kẹt máy in; mỗi việc là một mini-game.
       case 'plant':
-        this.o.bus.emit(makeEvent('chore', clock.now(), 0, { target: item.id }));
-        return false;
+        this.openChore('water', item.id);
+        return true;
+      case 'fridge':
+        this.openChore('tidy', 'fridge');
+        return true;
       case 'printer':
+        if (printerJams(Math.random)) {
+          this.openChore('unjam', 'printer');
+          return true;
+        }
         this.o.bus.emit(makeEvent('print', clock.now(), 0, {}));
         return false;
       default:
@@ -126,7 +139,9 @@ export class OfficeActivities {
       void this.o.progress.act({ kind: 'meeting_start', seatId: item.id });
     }
     this.seatedAtDesk = item?.kind === 'desk';
+    this.deskId = this.seatedAtDesk && item ? item.id : null;
     this.o.hud.setFocusAvailable(this.seatedAtDesk && !this.focus);
+    this.o.hud.setWipeAvailable(this.seatedAtDesk && !this.focus);
     if (!this.seatedAtDesk) this.focus?.stop();
   }
 
@@ -188,6 +203,28 @@ export class OfficeActivities {
           mountFocusSummary(this.openPanel(STRINGS.focus.summaryTitle).body, summary);
         },
       });
+    });
+  }
+
+  /** Nút "Lau bàn" khi đang ngồi ở bàn làm việc. */
+  wipeDesk(): void {
+    if (this.deskId) this.openChore('wipe', this.deskId);
+  }
+
+  /** Mở một mini-game công quả; xong thì phát sự kiện (server kiểm tra và tính XP). */
+  private openChore(kind: ChoreKind, target: string): void {
+    let game: { dispose(): void } | null = null;
+    const modal = this.openPanel(STRINGS.chores[kind].title, () => game?.dispose());
+    game = mountChoreGame(modal.body, {
+      kind,
+      onDone: (success) => {
+        if (!success) return;
+        this.o.play('ting');
+        this.o.bus.emit(makeEvent('chore', clock.now(), 0, { target }));
+        window.setTimeout(() => {
+          modal.close();
+        }, 900);
+      },
     });
   }
 

@@ -217,6 +217,9 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
     repos.transaction(() => {
       repos.progress.save(user.id, result.state, now());
       repos.progress.markImported(user.id);
+      if (result.state.coins > 0) {
+        repos.ledger.add(user.id, now(), result.state.coins, 'import', result.state.coins);
+      }
       repos.activity.add({
         userId: user.id,
         at: now(),

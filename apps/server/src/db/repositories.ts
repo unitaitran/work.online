@@ -70,12 +70,53 @@ export interface ActionRepo {
   pruneBefore(at: number): void;
 }
 
+export interface LedgerEntry {
+  at: number;
+  delta: number;
+  reason: string;
+  balance: number;
+}
+
+export interface LedgerRepo {
+  add(userId: string, at: number, delta: number, reason: string, balance: number): void;
+  sum(userId: string): number;
+  recent(userId: string, limit: number): LedgerEntry[];
+}
+
+export interface InventoryRepo {
+  owned(userId: string): string[];
+  has(userId: string, itemId: string): boolean;
+  /** false nếu đã có món này. */
+  add(userId: string, itemId: string, at: number): boolean;
+  equipped(userId: string): string[];
+  setEquipped(userId: string, items: readonly string[]): void;
+}
+
+export interface RoomPlant {
+  id: number;
+  x: number;
+  z: number;
+  kind: number;
+  ownerName: string;
+  at: number;
+}
+
+export interface PlantRepo {
+  list(roomKind: string): RoomPlant[];
+  add(roomKind: string, plant: Omit<RoomPlant, 'id'>): RoomPlant;
+  /** Giữ tối đa `max` cây mới nhất; trả về id các cây bị bỏ. */
+  trim(roomKind: string, max: number): number[];
+}
+
 export interface Repositories {
   users: UserRepo;
   characters: CharacterRepo;
   progress: ProgressRepo;
   activity: ActivityLogRepo;
   actions: ActionRepo;
+  ledger: LedgerRepo;
+  inventory: InventoryRepo;
+  plants: PlantRepo;
   /** Chạy nhiều thao tác trong một transaction. */
   transaction<T>(fn: () => T): T;
 }
@@ -144,6 +185,32 @@ export function createSqliteRepositories(db: Db): Repositories {
       'INSERT OR IGNORE INTO processed_actions (user_id, action_id, at) VALUES (?, ?, ?)',
     ),
     actionPrune: db.prepare('DELETE FROM processed_actions WHERE at < ?'),
+    ledgerAdd: db.prepare(
+      'INSERT INTO coin_ledger (user_id, at, delta, reason, balance) VALUES (?, ?, ?, ?, ?)',
+    ),
+    ledgerSum: db.prepare('SELECT COALESCE(SUM(delta), 0) AS s FROM coin_ledger WHERE user_id = ?'),
+    ledgerRecent: db.prepare(
+      'SELECT at, delta, reason, balance FROM coin_ledger WHERE user_id = ? ORDER BY id DESC LIMIT ?',
+    ),
+    invOwned: db.prepare('SELECT item_id FROM inventory WHERE user_id = ? ORDER BY acquired_at'),
+    invHas: db.prepare('SELECT 1 FROM inventory WHERE user_id = ? AND item_id = ?'),
+    invAdd: db.prepare(
+      'INSERT OR IGNORE INTO inventory (user_id, item_id, acquired_at) VALUES (?, ?, ?)',
+    ),
+    equipGet: db.prepare('SELECT items FROM equipment WHERE user_id = ?'),
+    equipSet: db.prepare(
+      'INSERT INTO equipment (user_id, items) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET items = excluded.items',
+    ),
+    plantList: db.prepare(
+      'SELECT id, x, z, kind, owner_name, at FROM room_plants WHERE room_kind = ? ORDER BY id',
+    ),
+    plantAdd: db.prepare(
+      'INSERT INTO room_plants (room_kind, x, z, kind, owner_name, at) VALUES (?, ?, ?, ?, ?, ?)',
+    ),
+    plantOld: db.prepare(
+      'SELECT id FROM room_plants WHERE room_kind = ? ORDER BY id DESC LIMIT -1 OFFSET ?',
+    ),
+    plantDelete: db.prepare('DELETE FROM room_plants WHERE id = ?'),
     logRecent: db.prepare(
       'SELECT user_id, at, kind, xp, coins, detail FROM activity_log WHERE user_id = ? ORDER BY id DESC LIMIT ?',
     ),
@@ -261,12 +328,75 @@ export function createSqliteRepositories(db: Db): Repositories {
     },
   };
 
+  const ledger: LedgerRepo = {
+    add(userId, at, delta, reason, balance) {
+      q.ledgerAdd.run(userId, at, delta, reason, balance);
+    },
+    sum: (userId) => (q.ledgerSum.get(userId) as { s: number }).s,
+    recent: (userId, limit) => q.ledgerRecent.all(userId, limit) as LedgerEntry[],
+  };
+
+  const inventory: InventoryRepo = {
+    owned: (userId) => (q.invOwned.all(userId) as { item_id: string }[]).map((row) => row.item_id),
+    has: (userId, itemId) => q.invHas.get(userId, itemId) !== undefined,
+    add: (userId, itemId, at) => q.invAdd.run(userId, itemId, at).changes === 1,
+    equipped(userId) {
+      const row = q.equipGet.get(userId) as { items: string } | undefined;
+      if (!row) return [];
+      const parsed = JSON.parse(row.items) as unknown;
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    },
+    setEquipped(userId, items) {
+      q.equipSet.run(userId, JSON.stringify(items));
+    },
+  };
+
+  const plants: PlantRepo = {
+    list: (roomKind) =>
+      (
+        q.plantList.all(roomKind) as {
+          id: number;
+          x: number;
+          z: number;
+          kind: number;
+          owner_name: string;
+          at: number;
+        }[]
+      ).map((row) => ({
+        id: row.id,
+        x: row.x,
+        z: row.z,
+        kind: row.kind,
+        ownerName: row.owner_name,
+        at: row.at,
+      })),
+    add(roomKind, plant) {
+      const info = q.plantAdd.run(
+        roomKind,
+        plant.x,
+        plant.z,
+        plant.kind,
+        plant.ownerName,
+        plant.at,
+      );
+      return { ...plant, id: Number(info.lastInsertRowid) };
+    },
+    trim(roomKind, max) {
+      const old = (q.plantOld.all(roomKind, max) as { id: number }[]).map((row) => row.id);
+      for (const id of old) q.plantDelete.run(id);
+      return old;
+    },
+  };
+
   return {
     users,
     characters,
     progress,
     activity,
     actions,
+    ledger,
+    inventory,
+    plants,
     transaction: (fn) => db.transaction(fn)(),
   };
 }

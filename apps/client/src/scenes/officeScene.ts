@@ -39,6 +39,9 @@ import { seededRng } from '../npc/schedule';
 import { STRINGS } from '../strings';
 import { BubbleLayer } from '../ui/bubbles';
 import { RemotePlayers } from './remotePlayers';
+import { RoomPlants } from './roomPlants';
+import { Companions } from '../avatar/companions';
+import { gearFromEquipped } from '../avatar/gear';
 import type { PoseName } from '../avatar/pose';
 import type { InteractionHint } from '../ui/officeHud';
 import { moveWithCollisions, type Aabb, type Vec2 } from '../world/collision';
@@ -97,7 +100,9 @@ export class OfficeScene implements SceneController {
   readonly camera = new PerspectiveCamera(50, 1, 0.1, 80);
   private readonly material: MeshLambertMaterial = createVertexColorMaterial();
   private readonly office: BuiltOffice;
-  private readonly avatar: AvatarModel;
+  private avatar: AvatarModel;
+  private companions: Companions | null = null;
+  private shadows = false;
   private readonly lighting: Lighting;
   private readonly dust: DustMotes;
   private readonly blob: Mesh;
@@ -116,6 +121,8 @@ export class OfficeScene implements SceneController {
   private readonly npcs: NpcAgent[];
   /** Người chơi khác trong phòng (Phase 4B). */
   readonly remotes: RemotePlayers;
+  /** Hoa người chơi đã tưới (Phase 5A). */
+  readonly plants: RoomPlants;
   private readonly canvas: HTMLElement;
   private readonly options: OfficeSceneOptions;
 
@@ -210,6 +217,8 @@ export class OfficeScene implements SceneController {
     });
 
     this.remotes = new RemotePlayers(this.scene, this.material, this.bubbles);
+    this.plants = new RoomPlants(this.material);
+    this.scene.add(this.plants.group);
 
     this.lookTarget.set(this.position.x, LOOK_HEIGHT, this.position.z);
     this.joystick = new VirtualJoystick(options.hudLayer, STRINGS.office.joystick);
@@ -288,6 +297,25 @@ export class OfficeScene implements SceneController {
 
   getPlayerPosition(): Vec2 {
     return { ...this.position };
+  }
+
+  /** Đổi đồ đang mặc / thú cưng (từ cửa hàng): dựng lại nhân vật. */
+  setGear(appearance: Appearance, equipped: readonly string[]): void {
+    const pose = this.avatar.pose;
+    this.avatar.dispose();
+    this.avatar = new AvatarModel(appearance, this.material, gearFromEquipped(equipped));
+    this.avatar.setPose(pose);
+    this.avatar.setShadows(this.shadows);
+    this.scene.add(this.avatar.root);
+    this.companions?.dispose();
+    const companions = new Companions(equipped, this.material);
+    if (companions.isEmpty) {
+      companions.dispose();
+      this.companions = null;
+    } else {
+      this.companions = companions;
+      this.scene.add(companions.group);
+    }
   }
 
   /** Vị trí, hướng, tư thế hiện tại để gửi lên server. */
@@ -396,6 +424,7 @@ export class OfficeScene implements SceneController {
     this.dust.update(frameSeconds);
     this.updateBubbles();
     this.remotes.update(frameSeconds, { x, z }, (px, py, pz) => this.bubbleScreen(px, py, pz));
+    this.companions?.update(frameSeconds, { x, z, facing: this.facing, pose: this.avatar.pose });
     this.updateHint();
   }
 
@@ -404,6 +433,7 @@ export class OfficeScene implements SceneController {
   applyQuality(preset: QualityPreset): void {
     this.lighting.applyQuality(preset);
     this.avatar.setShadows(preset.shadows);
+    this.shadows = preset.shadows;
     for (const npc of this.npcs) npc.avatar.setShadows(preset.shadows);
     this.remotes.setQuality(preset.detailedAvatars, preset.shadows);
     this.blobAllowed = !preset.shadows;
@@ -422,6 +452,8 @@ export class OfficeScene implements SceneController {
     this.joystick.dispose();
     this.pointer.dispose();
     this.remotes.dispose();
+    this.plants.dispose();
+    this.companions?.dispose();
     this.bubbles.dispose();
     for (const npc of this.npcs) npc.dispose();
     this.avatar.dispose();
@@ -650,7 +682,7 @@ export class OfficeScene implements SceneController {
     const far =
       Math.hypot(x - this.camera.position.x, z - this.camera.position.z) > BUBBLE_MAX_DISTANCE;
     const screen = far ? null : this.projectPoint(x, y, z);
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.frameRect ?? this.canvas.getBoundingClientRect();
     const visible =
       screen !== null &&
       screen.x > rect.left - 40 &&
@@ -661,7 +693,11 @@ export class OfficeScene implements SceneController {
     return visible ? screen : null;
   }
 
+  /** Khung canvas đọc một lần mỗi khung hình (đọc lại cho từng bong bóng gây tính layout thừa). */
+  private frameRect: DOMRect | null = null;
+
   private updateBubbles(): void {
+    this.frameRect = this.canvas.getBoundingClientRect();
     for (const npc of this.npcs) {
       const p = npc.getPosition();
       this.bubbles.update(npc.spec.id, this.bubbleScreen(p.x, BUBBLE_HEIGHT, p.z), npc.status());

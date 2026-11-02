@@ -76,6 +76,19 @@ export interface PlayerSnapshot extends PlayerProfile {
   pose: Pose;
 }
 
+/** Cây người chơi đã tưới, ở lại trong phòng (Phase 5A). */
+export interface PlantView {
+  id: number;
+  x: number;
+  z: number;
+  /** Loại hoa (0..PLANT_KINDS-1). */
+  kind: number;
+  owner: string;
+}
+export const PLANT_KINDS = 4;
+/** Tối đa số cây mỗi loại phòng; cây cũ nhất tự mất. */
+export const MAX_ROOM_PLANTS = 30;
+
 /** Bản ghi vị trí gọn: [sid, x, z, hướng, chỉ số tư thế]. */
 export type StateTuple = [number, number, number, number, number];
 
@@ -160,6 +173,9 @@ export type ServerMessage =
   | { type: 'kicked'; reason: KickReason }
   | { type: 'pong'; t: number; serverTime: number }
   | { type: 'error'; code: ServerErrorCode }
+  | { type: 'room_plants'; plants: PlantView[] }
+  | { type: 'plant_added'; plant: PlantView }
+  | { type: 'plant_removed'; ids: number[] }
   | ActionServerMessage;
 
 // ---------------------------------------------------------------------------

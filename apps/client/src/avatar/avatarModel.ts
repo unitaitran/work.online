@@ -16,7 +16,20 @@ import {
 } from 'three';
 import { mergePieces, piece, type Piece } from '../engine/meshBuilder';
 import { hairColor, skinColor, type Appearance, type HairStyle, type Outfit } from './appearance';
+import {
+  bodyAccessoryPieces,
+  hatPieces,
+  HEAD_ACCESSORIES,
+  headAccessoryPieces,
+} from './equipmentPieces';
 import { blendPose, computePose, type PoseName, type PoseState } from './pose';
+
+/** Đồ đang mặc (từ cửa hàng): màu áo, nón, phụ kiện. */
+export interface AvatarGear {
+  topTint?: number;
+  hat?: { model: string; color: number };
+  accessory?: { model: string; color: number };
+}
 
 const EYE_COLOR = 0x2d2433;
 const BLUSH_COLOR = 0xf4a7a6;
@@ -197,8 +210,13 @@ export class AvatarModel {
   private poseTime = 0;
   private current: PoseState = computePose('stand', 0);
 
-  constructor(appearance: Appearance, material: Material) {
-    const outfit = OUTFIT_STYLES[appearance.outfit];
+  constructor(appearance: Appearance, material: Material, gear: AvatarGear = {}) {
+    const base = OUTFIT_STYLES[appearance.outfit];
+    const outfit =
+      gear.topTint !== undefined ? { ...base, top: gear.topTint, sleeve: gear.topTint } : base;
+    const acc = gear.accessory;
+    const headAcc = acc && HEAD_ACCESSORIES.has(acc.model) ? acc : null;
+    const bodyAcc = acc && !HEAD_ACCESSORIES.has(acc.model) ? acc : null;
     const skin = skinColor(appearance);
     const hair = hairColor(appearance);
 
@@ -210,6 +228,7 @@ export class AvatarModel {
       }),
       piece(new CylinderGeometry(0.05, 0.055, 0.08, 10), skin, { position: [0, NECK_Y, 0] }),
       ...outfit.details(),
+      ...(bodyAcc ? bodyAccessoryPieces(bodyAcc.model, bodyAcc.color) : []),
     ]);
     this.upper.add(torso);
 
@@ -252,6 +271,8 @@ export class AvatarModel {
           rotation: [0, 0, Math.PI],
         }),
         ...hairPieces(appearance.hairStyle, hair),
+        ...(gear.hat ? hatPieces(gear.hat.model, gear.hat.color) : []),
+        ...(headAcc ? headAccessoryPieces(headAcc.model, headAcc.color) : []),
       ]),
     );
     this.upper.add(this.head);

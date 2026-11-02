@@ -27,6 +27,7 @@ import {
   type Vec2,
 } from '@dilam/shared';
 import type { Repositories } from '../db/repositories';
+import { recordEarn } from './shop';
 
 /** Ngày trong game bắt đầu lúc 4 giờ sáng giờ địa phương (chấm công, giới hạn, việc sếp giao). */
 export const DAY_START_HOUR = 4;
@@ -44,6 +45,8 @@ const MIN_INTERVAL: Partial<Record<ActionKind, number>> = {
   vent: 5000,
 };
 const DEFAULT_INTERVAL = 300;
+/** Làm lại công quả ở cùng một chỗ sau chừng này (ms). */
+const CHORE_COOLDOWN_MS = 5 * 60_000;
 /** Sai số cho phép khi đo phiên tập trung kết thúc đúng giờ (trễ mạng). */
 const FOCUS_TOLERANCE_MS = 2000;
 
@@ -60,6 +63,7 @@ interface LiveState {
   meeting: { seatId: string; startedAt: number } | null;
   coffeeBrewAt: number | null;
   lastAt: Map<ActionKind, number>;
+  chores: Map<string, number>;
 }
 
 export type HandleResult =
@@ -111,7 +115,13 @@ export class ProgressEngine {
   private liveOf(userId: string): LiveState {
     let live = this.live.get(userId);
     if (!live) {
-      live = { focus: null, meeting: null, coffeeBrewAt: null, lastAt: new Map() };
+      live = {
+        focus: null,
+        meeting: null,
+        coffeeBrewAt: null,
+        lastAt: new Map(),
+        chores: new Map(),
+      };
       this.live.set(userId, live);
     }
     return live;
@@ -179,12 +189,24 @@ export class ProgressEngine {
             : makeEvent('coffee-drink', now, 0, {});
         break;
       }
-      case 'chore':
-        if (!action.target.startsWith('plant-') || !near(action.target)) {
-          return { ok: false, reason: 'too_far' };
+      case 'chore': {
+        // Công quả: tưới cây, lau bàn, dọn pantry (tủ lạnh), gỡ kẹt máy in.
+        const target = action.target;
+        const valid =
+          target.startsWith('plant-') ||
+          target.startsWith('desk-') ||
+          target === 'fridge' ||
+          target === 'printer';
+        if (!valid || !near(target)) return { ok: false, reason: 'too_far' };
+        // Cùng một chỗ chỉ làm lại sau CHORE_COOLDOWN_MS.
+        const lastChore = live.chores.get(target);
+        if (lastChore !== undefined && now - lastChore < CHORE_COOLDOWN_MS) {
+          return { ok: false, reason: 'too_fast' };
         }
-        event = makeEvent('chore', now, 0, { target: action.target });
+        live.chores.set(target, now);
+        event = makeEvent('chore', now, 0, { target });
         break;
+      }
       case 'print':
         if (!near('printer')) return { ok: false, reason: 'too_far' };
         event = makeEvent('print', now, 0, {});
@@ -257,6 +279,14 @@ export class ProgressEngine {
     const result = applyEvent(state, event, { today, now });
     this.repos.transaction(() => {
       this.save(userId, result.state);
+      recordEarn(
+        this.repos,
+        userId,
+        this.clock(),
+        result.coins,
+        `earn:${event.type}`,
+        result.state.coins,
+      );
       if (result.granted > 0 || result.coins > 0) {
         this.repos.activity.add({
           userId,

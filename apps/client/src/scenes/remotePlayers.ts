@@ -21,6 +21,8 @@ import {
   type Scene,
 } from 'three';
 import { AvatarModel } from '../avatar/avatarModel';
+import { Companions } from '../avatar/companions';
+import { gearFromEquipped } from '../avatar/gear';
 import { dampAngle } from '../engine/mathUtils';
 import type { BubbleLayer } from '../ui/bubbles';
 
@@ -52,6 +54,7 @@ interface Remote {
   facing: number;
   pose: Pose;
   avatar: AvatarModel | null;
+  companions: Companions | null;
   speech: { text: string; seconds: number } | null;
 }
 
@@ -117,6 +120,7 @@ export class RemotePlayers {
       facing,
       pose,
       avatar: null,
+      companions: null,
       speech: null,
     });
     this.bubbles.ensure(bubbleId(snapshot.sid), profile.name);
@@ -125,13 +129,11 @@ export class RemotePlayers {
   updateProfile(profile: PlayerProfile): void {
     const player = this.players.get(profile.sid);
     if (!player) return;
-    const appearanceChanged =
-      JSON.stringify(player.profile.appearance) !== JSON.stringify(profile.appearance);
+    const looksChanged =
+      JSON.stringify([player.profile.appearance, player.profile.equipped]) !==
+      JSON.stringify([profile.appearance, profile.equipped]);
     player.profile = profile;
-    if (appearanceChanged && player.avatar) {
-      player.avatar.dispose();
-      player.avatar = null;
-    }
+    if (looksChanged) this.dropModel(player);
     this.bubbles.remove(bubbleId(profile.sid));
     this.bubbles.ensure(bubbleId(profile.sid), profile.name);
   }
@@ -139,7 +141,7 @@ export class RemotePlayers {
   remove(sid: number): void {
     const player = this.players.get(sid);
     if (!player) return;
-    player.avatar?.dispose();
+    this.dropModel(player);
     this.players.delete(sid);
     this.bubbles.remove(bubbleId(sid));
   }
@@ -205,10 +207,20 @@ export class RemotePlayers {
     visible.forEach((player, index) => {
       if (index < this.detailed) {
         if (!player.avatar) {
-          player.avatar = new AvatarModel(player.profile.appearance, this.material);
+          player.avatar = new AvatarModel(
+            player.profile.appearance,
+            this.material,
+            gearFromEquipped(player.profile.equipped),
+          );
           player.avatar.setShadows(this.shadows);
           this.scene.add(player.avatar.root);
+          const companions = new Companions(player.profile.equipped, this.material);
+          if (!companions.isEmpty) {
+            this.scene.add(companions.group);
+            player.companions = companions;
+          } else companions.dispose();
         }
+        player.companions?.update(dt, player);
         player.avatar.root.visible = true;
         player.avatar.root.position.set(player.x, 0, player.z);
         player.avatar.root.rotation.y = player.facing;
@@ -216,10 +228,7 @@ export class RemotePlayers {
         player.avatar.update(dt);
       } else {
         // Xa: bỏ mô hình chi tiết, vẽ khối đơn giản cùng màu áo.
-        if (player.avatar) {
-          player.avatar.dispose();
-          player.avatar = null;
-        }
+        this.dropModel(player);
         if (proxyCount < MAX_PROXIES) {
           this.tmpPos.set(player.x, 0, player.z);
           this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
@@ -229,7 +238,9 @@ export class RemotePlayers {
           proxyCount += 1;
         }
       }
-      const screen = project(player.x, BUBBLE_HEIGHT, player.z);
+      // Nhãn tên chỉ cho người gần (vẽ chi tiết) hoặc đang nói: đỡ cập nhật DOM mỗi khung hình.
+      const showLabel = index < this.detailed || player.speech !== null;
+      const screen = showLabel ? project(player.x, BUBBLE_HEIGHT, player.z) : null;
       const label = player.speech?.text ?? titleName(player.profile.title, player.profile.branch);
       this.bubbles.update(bubbleId(player.profile.sid), screen, label);
     });
@@ -246,8 +257,15 @@ export class RemotePlayers {
     this.proxyMaterial.dispose();
   }
 
+  private dropModel(player: Remote): void {
+    player.avatar?.dispose();
+    player.avatar = null;
+    player.companions?.dispose();
+    player.companions = null;
+  }
+
   private hide(player: Remote): void {
-    if (player.avatar) player.avatar.root.visible = false;
+    this.dropModel(player);
     this.bubbles.update(bubbleId(player.profile.sid), null, '');
   }
 

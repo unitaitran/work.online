@@ -8,6 +8,7 @@ import {
   QUICK_CHATS,
   titleFor,
   titleName,
+  type InventoryResponse,
   type ProgressState,
   type ServerMessage,
 } from '@dilam/shared';
@@ -47,6 +48,7 @@ import { openModal } from './ui/modal';
 import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
 import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
+import { mountShopPanel } from './ui/shopPanel';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
@@ -337,6 +339,12 @@ function start(): void {
       onOpenSocial: () => {
         openSocial();
       },
+      onOpenShop: () => {
+        openShop();
+      },
+      onWipe: () => {
+        activities?.wipeDesk();
+      },
     });
     officeHud = hud;
     const officeActivities = new OfficeActivities({
@@ -484,6 +492,15 @@ function start(): void {
         case 'mission_assigned':
           progress.receive(message);
           break;
+        case 'room_plants':
+          scene.plants.set(message.plants);
+          break;
+        case 'plant_added':
+          scene.plants.add(message.plant);
+          break;
+        case 'plant_removed':
+          scene.plants.remove(message.ids);
+          break;
         default:
           break;
       }
@@ -532,6 +549,44 @@ function start(): void {
       const st = scene.getPlayerState();
       room.sendState(st.x, st.z, st.facing, st.pose);
     }, 100);
+
+    // Trang bị (cửa hàng): đọc lúc vào văn phòng, đổi thì dựng lại nhân vật và báo cả phòng.
+    let equipped: string[] = [];
+    const applyInventory = (inventory: InventoryResponse): void => {
+      if (JSON.stringify(inventory.equipped) !== JSON.stringify(equipped)) {
+        equipped = inventory.equipped;
+        scene.setGear(profile.appearance, equipped);
+        room.send({ type: 'profile_changed' });
+      }
+    };
+    void api.request<InventoryResponse>('GET', '/api/shop/inventory').then((result) => {
+      if (result.ok) applyInventory(result.value);
+    });
+    const shopCall = async (
+      path: string,
+      body: unknown,
+    ): Promise<{ ok: true; inventory: InventoryResponse } | { ok: false; error: string }> => {
+      const result = await api.request<InventoryResponse>('POST', path, body);
+      return result.ok
+        ? { ok: true, inventory: result.value }
+        : { ok: false, error: result.reason ?? result.error };
+    };
+    const openShop = (): void => {
+      let panel: { dispose(): void } | null = null;
+      const modal = officeActivities.openPanel(STRINGS.shop.title, () => panel?.dispose());
+      modal.body.closest('.modal')?.classList.add('modal-wide');
+      panel = mountShopPanel(modal.body, {
+        appearance: profile.appearance,
+        xp: progress.state.xp,
+        load: async () => {
+          const result = await api.request<InventoryResponse>('GET', '/api/shop/inventory');
+          return result.ok ? result.value : null;
+        },
+        buy: (itemId) => shopCall('/api/shop/buy', { itemId }),
+        equip: (itemId, equip) => shopCall('/api/shop/equip', { itemId, equip }),
+        onInventory: applyInventory,
+      });
+    };
 
     const openSocial = (): void => {
       const modal = officeActivities.openPanel(STRINGS.social.open);

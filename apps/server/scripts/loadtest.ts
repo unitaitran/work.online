@@ -2,6 +2,8 @@
 // độ trễ (ping/pong), CPU và bộ nhớ của tiến trình server.
 //
 //   npx tsx scripts/loadtest.ts [số bot=100] [số giây=30]
+//   GEAR=1: mỗi bot mặc áo, nón, phụ kiện và dắt thú cưng (đo ảnh hưởng ở client).
+//   PORT=3000: chạy server ở cổng cố định để mở thêm trình duyệt vào xem.
 //
 // Script tạo tài khoản thẳng vào một file SQLite tạm (không qua giới hạn tạo tài khoản theo IP),
 // rồi chạy server thật ở tiến trình con trỏ vào file đó.
@@ -10,7 +12,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseServerMessage, STATE_SEND_HZ, type ServerMessage } from '@dilam/shared';
+import { parseServerMessage, SHOP_ITEMS, STATE_SEND_HZ, type ServerMessage } from '@dilam/shared';
 import WebSocket from 'ws';
 import { openDatabase } from '../src/db/database';
 import { createSqliteRepositories } from '../src/db/repositories';
@@ -18,7 +20,8 @@ import { createAccountService } from '../src/game/accounts';
 
 const BOTS = Number(process.argv[2] ?? 100);
 const SECONDS = Number(process.argv[3] ?? 30);
-const PORT = 3900 + Math.floor(Math.random() * 90);
+const PORT = Number(process.env.PORT ?? 3900 + Math.floor(Math.random() * 90));
+const GEAR = process.env.GEAR === '1';
 const serverDir = fileURLToPath(new URL('..', import.meta.url));
 
 const dir = mkdtempSync(join(tmpdir(), 'dilam-load-'));
@@ -39,6 +42,15 @@ for (let i = 0; i < BOTS; i += 1) {
     },
     Date.now(),
   );
+  if (GEAR) {
+    const pick = (cat: string) => {
+      const items = SHOP_ITEMS.filter((item) => item.category === cat);
+      return items[i % items.length]?.id ?? '';
+    };
+    const ids = ['top', 'hat', 'accessory', 'pet'].map(pick);
+    for (const id of ids) repos.inventory.add(userId, id, Date.now());
+    repos.inventory.setEquipped(userId, ids);
+  }
   tokens.push(token);
 }
 db.close();

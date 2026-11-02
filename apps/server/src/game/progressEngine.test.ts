@@ -190,4 +190,33 @@ describe('ProgressEngine', () => {
       'checkin',
     ]);
   });
+  it('xu kiếm được đều ghi sổ cái: tổng sổ cái = số xu', () => {
+    act({ kind: 'checkin' });
+    position = at('plant-0');
+    act({ kind: 'chore', target: 'plant-0' });
+    position = at('desk-0');
+    act({ kind: 'focus_start', minutes: 1 });
+    clock += 60_000;
+    act({ kind: 'focus_end', presses: 10, scoredKeys: 10, lines: 10 });
+    const coins = engine.state(player.userId).coins;
+    expect(coins).toBeGreaterThan(0);
+    expect(repos.ledger.sum(player.userId)).toBe(coins);
+  });
+
+  it('công quả: lau bàn, dọn pantry, gỡ kẹt máy in; cùng chỗ phải chờ', () => {
+    position = at('fridge');
+    expect(act({ kind: 'chore', target: 'fridge' })).toMatchObject({
+      ok: true,
+      outcome: { granted: 12 },
+    });
+    clock += 60_000;
+    expect(act({ kind: 'chore', target: 'fridge' })).toEqual({ ok: false, reason: 'too_fast' });
+    position = at('printer');
+    expect(act({ kind: 'chore', target: 'printer' })).toMatchObject({ ok: true });
+    clock += 3000;
+    position = at('desk-2');
+    expect(act({ kind: 'chore', target: 'desk-2' })).toMatchObject({ ok: true });
+    clock += 3000;
+    expect(act({ kind: 'chore', target: 'gate' })).toEqual({ ok: false, reason: 'too_far' });
+  });
 });

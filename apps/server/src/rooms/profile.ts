@@ -13,5 +13,6 @@ export function publicProfile(repos: Repositories, userId: string): Omit<PlayerP
     appearance: character?.appearance ?? DEFAULT_APPEARANCE,
     title: progress ? titleFor(progress.state.xp) : 1,
     branch: progress?.state.branch ?? null,
+    equipped: repos.inventory.equipped(userId),
   };
 }

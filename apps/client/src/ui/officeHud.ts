@@ -20,6 +20,8 @@ export interface OfficeHudOptions {
   onDrinkCoffee(): void;
   onOpenProfile(): void;
   onOpenSocial(): void;
+  onOpenShop(): void;
+  onWipe(): void;
 }
 
 /** Thông tin tiến độ hiển thị trên HUD. */
@@ -51,6 +53,7 @@ export interface OfficeHud {
   setHint(hint: InteractionHint | null): void;
   /** Hiện nút "Gõ phím tập trung" (khi đang ngồi ở bàn làm việc). */
   setFocusAvailable(available: boolean): void;
+  setWipeAvailable(available: boolean): void;
   /** Trạng thái ly cà phê: đang pha / đang cầm / không có. */
   setCoffee(phase: 'idle' | 'brewing' | 'holding'): void;
   setProgress(view: ProgressView): void;
@@ -218,6 +221,23 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     options.onOpenSocial();
   });
   const netStatus = el('p', { className: 'net-status', attrs: { role: 'status' } });
+  const shopButton = el('button', {
+    className: 'button button-soft shop-button',
+    text: STRINGS.shop.open,
+    attrs: { type: 'button' },
+  });
+  shopButton.addEventListener('click', () => {
+    options.onOpenShop();
+  });
+  const wipeButton = el('button', {
+    className: 'button button-soft wipe-button',
+    text: STRINGS.chores.wipeButton,
+    attrs: { type: 'button' },
+  });
+  wipeButton.hidden = true;
+  wipeButton.addEventListener('click', () => {
+    options.onWipe();
+  });
 
   const eventsLink = el('a', {
     className: 'events-link',
@@ -258,6 +278,8 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       eventsLink,
       netStatus,
       socialButton,
+      shopButton,
+      wipeButton,
       coffeeChip,
       focusButton,
       interact,
@@ -325,6 +347,9 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       if (!mission) return;
       missionGoal.textContent = mission.goalText;
       missionCount.textContent = STRINGS.progress.mission.progress(mission.progress, mission.total);
+    },
+    setWipeAvailable(available) {
+      wipeButton.hidden = !available;
     },
     setNetStatus(text, tone) {
       netStatus.textContent = text;

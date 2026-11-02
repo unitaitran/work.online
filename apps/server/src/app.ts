@@ -27,6 +27,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     gateway: Gateway;
     game: GameService;
+    repos: Repositories;
   }
 }
 
@@ -73,6 +74,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const context: AppContext = { config, repos, accounts, helpers, now };
   const gateway = attachWebSocketGateway(app, context, options.gateway);
   presence = gateway;
+  app.decorate('repos', repos);
   app.decorate('gateway', gateway);
   app.decorate('game', attachGameService(app, context, gateway));
 

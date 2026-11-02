@@ -30,7 +30,7 @@ export class BubbleLayer {
     const bubble = this.bubbles.get(id);
     if (!bubble) return;
     if (!screen) {
-      bubble.element.hidden = true;
+      if (!bubble.element.hidden) bubble.element.hidden = true;
       return;
     }
     bubble.element.hidden = false;

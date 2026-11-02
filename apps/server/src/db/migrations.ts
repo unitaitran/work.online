@@ -71,4 +71,40 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX processed_actions_at ON processed_actions(at);
     `,
   },
+  {
+    version: 3,
+    sql: `
+      -- Sổ cái xu: MỌI biến động xu (cộng, trừ, lý do, số dư sau). Tổng delta = số xu hiện có.
+      CREATE TABLE coin_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        delta INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        balance INTEGER NOT NULL CHECK (balance >= 0)
+      );
+      CREATE INDEX coin_ledger_user ON coin_ledger(user_id, id);
+      CREATE TABLE inventory (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        acquired_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, item_id)
+      );
+      CREATE TABLE equipment (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        items TEXT NOT NULL
+      );
+      -- Cây người chơi đã tưới, ở lại trong phòng (tối đa 30 mỗi loại phòng).
+      CREATE TABLE room_plants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_kind TEXT NOT NULL,
+        x REAL NOT NULL,
+        z REAL NOT NULL,
+        kind INTEGER NOT NULL,
+        owner_name TEXT NOT NULL,
+        at INTEGER NOT NULL
+      );
+      CREATE INDEX room_plants_kind ON room_plants(room_kind, id);
+    `,
+  },
 ];

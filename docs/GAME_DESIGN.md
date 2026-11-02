@@ -52,6 +52,10 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - **Xu** là lương ảo: 50% XP thực nhận (làm tròn xuống) + 20 xu mỗi việc sếp giao. Dùng mua đồ và làm vốn mở công ty.
 - **Uy tín** +1 mỗi lần giúp đồng nghiệp (tặng cà phê, công quả).
 
+## Cửa hàng
+
+41 món tự thiết kế trong `packages/shared/src/shop.ts`: áo (màu), nón, phụ kiện, đồ bàn, ghế, thú cưng (mèo, cún, xương rồng biết nhìn, bể cá, robot hút bụi). Mỗi món có giá, độ hiếm (phổ biến / ít gặp / hiếm / cực hiếm) và có thể khoá theo chức danh. Có khung xem thử 3D.
+
 ## Hoạt động
 
 - Chấm công.
