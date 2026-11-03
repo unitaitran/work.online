@@ -314,23 +314,29 @@ describe('sếp giao việc', () => {
             ? [focus(1, true, goal.amount)]
             : goal.kind === 'meetingMinutes'
               ? [meeting(goal.amount)]
-              : Array.from({ length: goal.amount }, () =>
-                  goal.event === 'coffee-gift'
-                    ? gift()
-                    : goal.event === 'chore'
-                      ? chore()
-                      : goal.event === 'print'
-                        ? makeEvent('print', T0, 0, {})
-                        : goal.event === 'task-flip'
-                          ? makeEvent('task-flip', T0, 0, { taskId: 1, completed: true })
-                          : goal.event === 'kpi-fortune'
-                            ? makeEvent('kpi-fortune', T0, 0, {
-                                day: DAY,
-                                fortuneId: 1,
-                                repeat: false,
-                              })
-                            : checkin(),
-                );
+              : goal.kind === 'ceoMeeting'
+                ? [
+                    makeEvent('meeting', T0, goal.amount * 60_000, {
+                      seatId: 'meeting-ceo-0',
+                    }),
+                  ]
+                : Array.from({ length: goal.amount }, () =>
+                    goal.event === 'coffee-gift'
+                      ? gift()
+                      : goal.event === 'chore'
+                        ? chore()
+                        : goal.event === 'print'
+                          ? makeEvent('print', T0, 0, {})
+                          : goal.event === 'task-flip'
+                            ? makeEvent('task-flip', T0, 0, { taskId: 1, completed: true })
+                            : goal.event === 'kpi-fortune'
+                              ? makeEvent('kpi-fortune', T0, 0, {
+                                  day: DAY,
+                                  fortuneId: 1,
+                                  repeat: false,
+                                })
+                              : checkin(),
+                  );
       let missionDone = false;
       for (const e of events) {
         const r = applyEvent(s, e, { today: DAY, now });

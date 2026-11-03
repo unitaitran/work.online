@@ -4,6 +4,7 @@ import {
   NAME_MAX_LENGTH,
   normalizeName,
   OUTFITS,
+  OUTFIT_COLORS,
   SKIN_TONES,
   type Appearance,
   type Profile,
@@ -147,7 +148,7 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
   });
 
   const form = el('form', {
-    className: 'creator-panel',
+    className: 'creator-panel creator-edit',
     attrs: { 'aria-labelledby': 'creator-title' },
     children: [
       el('div', {
@@ -161,64 +162,92 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
         ? [el('p', { className: 'notice', text: options.notice, attrs: { role: 'status' } })]
         : []),
       el('div', {
-        className: 'creator-field',
+        className: 'creator-columns',
         children: [
-          el('label', {
-            className: 'creator-label',
-            text: s.nameLabel,
-            attrs: { for: 'creator-name' },
+          el('div', {
+            className: 'creator-col',
+            children: [
+              el('div', {
+                className: 'creator-field',
+                children: [
+                  el('label', {
+                    className: 'creator-label',
+                    text: s.nameLabel,
+                    attrs: { for: 'creator-name' },
+                  }),
+                  el('div', { className: 'creator-name-row', children: [nameInput, randomButton] }),
+                ],
+              }),
+              choiceGroup(
+                s.skin,
+                SKIN_TONES.map((color, index) => ({
+                  value: index,
+                  label: STRINGS.skinTones[index] ?? '',
+                  swatch: color,
+                })),
+                appearance.skin,
+                (skin) => {
+                  update({ skin });
+                },
+              ),
+              choiceGroup(
+                s.hairStyle,
+                HAIR_STYLES.map((style) => ({ value: style, label: STRINGS.hairStyles[style] })),
+                appearance.hairStyle,
+                (hairStyle) => {
+                  update({ hairStyle });
+                },
+              ),
+              choiceGroup(
+                s.hairColor,
+                HAIR_COLORS.map((color, index) => ({
+                  value: index,
+                  label: STRINGS.hairColors[index] ?? '',
+                  swatch: color,
+                })),
+                appearance.hairColor,
+                (hairColor) => {
+                  update({ hairColor });
+                },
+              ),
+            ],
           }),
-          el('div', { className: 'creator-name-row', children: [nameInput, randomButton] }),
+          el('div', {
+            className: 'creator-col',
+            children: [
+              choiceGroup(
+                s.outfit,
+                OUTFITS.map((outfit) => ({ value: outfit, label: STRINGS.outfits[outfit] })),
+                appearance.outfit,
+                (outfit) => {
+                  update({ outfit });
+                },
+              ),
+              choiceGroup(
+                s.outfitColor,
+                OUTFIT_COLORS.map((color, index) => ({
+                  value: index,
+                  label: STRINGS.outfitColors[index] ?? '',
+                  // Ô đầu (màu mặc định của kiểu) vẽ kẻ sọc nhẹ thay cho màu.
+                  swatch: color >= 0 ? color : 0xf1ece3,
+                })),
+                appearance.outfitColor ?? 0,
+                (outfitColor) => {
+                  update({ outfitColor });
+                },
+              ),
+              choiceGroup(
+                s.pose,
+                POSES.map((pose) => ({ value: pose, label: STRINGS.poses[pose] })),
+                'stand',
+                (pose) => {
+                  options.onPoseChange(pose);
+                },
+              ),
+            ],
+          }),
         ],
       }),
-      choiceGroup(
-        s.skin,
-        SKIN_TONES.map((color, index) => ({
-          value: index,
-          label: STRINGS.skinTones[index] ?? '',
-          swatch: color,
-        })),
-        appearance.skin,
-        (skin) => {
-          update({ skin });
-        },
-      ),
-      choiceGroup(
-        s.hairStyle,
-        HAIR_STYLES.map((style) => ({ value: style, label: STRINGS.hairStyles[style] })),
-        appearance.hairStyle,
-        (hairStyle) => {
-          update({ hairStyle });
-        },
-      ),
-      choiceGroup(
-        s.hairColor,
-        HAIR_COLORS.map((color, index) => ({
-          value: index,
-          label: STRINGS.hairColors[index] ?? '',
-          swatch: color,
-        })),
-        appearance.hairColor,
-        (hairColor) => {
-          update({ hairColor });
-        },
-      ),
-      choiceGroup(
-        s.outfit,
-        OUTFITS.map((outfit) => ({ value: outfit, label: STRINGS.outfits[outfit] })),
-        appearance.outfit,
-        (outfit) => {
-          update({ outfit });
-        },
-      ),
-      choiceGroup(
-        s.pose,
-        POSES.map((pose) => ({ value: pose, label: STRINGS.poses[pose] })),
-        'stand',
-        (pose) => {
-          options.onPoseChange(pose);
-        },
-      ),
       saveButton,
     ],
   });

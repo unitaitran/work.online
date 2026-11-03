@@ -178,6 +178,25 @@ export class RemotePlayers {
     }
   }
 
+  /** Người chơi khác gần điểm (x, z) nhất trong bán kính (không tính người đã ẩn). */
+  nearest(
+    x: number,
+    z: number,
+    radius: number,
+  ): { sid: number; code: string; name: string; x: number; z: number } | null {
+    let best: { sid: number; code: string; name: string; x: number; z: number } | null = null;
+    let bestD = radius;
+    for (const p of this.players.values()) {
+      if (this.hiddenCodes.has(p.profile.code)) continue;
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d <= bestD) {
+        bestD = d;
+        best = { sid: p.profile.sid, code: p.profile.code, name: p.profile.name, x: p.x, z: p.z };
+      }
+    }
+    return best;
+  }
+
   list(): RemoteListEntry[] {
     return [...this.players.values()].map((p) => ({
       sid: p.profile.sid,

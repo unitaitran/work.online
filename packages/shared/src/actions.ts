@@ -34,6 +34,7 @@ export const actionSchema = z.discriminatedUnion('kind', [
     completed: z.boolean(),
   }),
   z.strictObject({ kind: z.literal('coffee_brew') }),
+  // Người nhận: id NPC, hoặc "player:<mã nhân viên>" khi tặng người chơi khác cùng phòng.
   z.strictObject({ kind: z.literal('coffee_gift'), npcId: id }),
   z.strictObject({ kind: z.literal('coffee_drink') }),
   z.strictObject({ kind: z.literal('chore'), target: id }),

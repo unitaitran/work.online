@@ -115,7 +115,7 @@ const checkInSchema = z.object({
 
 const goalSchema = z.union([
   z.object({
-    kind: z.enum(['focusMinutes', 'lines', 'meetingMinutes']),
+    kind: z.enum(['focusMinutes', 'lines', 'meetingMinutes', 'ceoMeeting']),
     amount: z.number().int().positive(),
   }),
   z.object({

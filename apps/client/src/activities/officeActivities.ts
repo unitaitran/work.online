@@ -152,7 +152,8 @@ export class OfficeActivities {
     if (!result.ok) return;
     this.coffee = result.state;
     this.o.hud.setCoffee(this.coffee.phase);
-    this.o.scene.npcSay(npcId, STRINGS.coffee.thanks, 4);
+    // NPC cảm ơn ngay; người chơi thật tự cảm ơn ở máy của họ.
+    if (!npcId.startsWith('player:')) this.o.scene.npcSay(npcId, STRINGS.coffee.thanks, 4);
     this.o.play('ting');
     this.o.hud.showToast(STRINGS.coffee.gifted(name));
     this.o.bus.emit(makeEvent('coffee-gift', clock.now(), 0, { npcId }));
@@ -241,15 +242,26 @@ export class OfficeActivities {
   // ---------- Từng hoạt động ----------
 
   /** Mở hộp thoại; cảnh 3D bị khoá điều khiển cho tới khi đóng. */
+  /** Bảng mở tiếp theo sẽ "quay lại" đây khi người chơi tự đóng (ví dụ về bảng Văn phòng). */
+  openFrom(back: () => void): void {
+    this.nextBack = back;
+  }
+
+  private nextBack: (() => void) | null = null;
+
   openPanel(title: string, onClose?: () => void): Modal {
     this.modal?.close();
     this.o.scene.setInputLocked(true);
+    const back = this.nextBack;
+    this.nextBack = null;
     const modal = openModal(this.o.root, {
       title,
-      onClose: () => {
+      onClose: (byUser) => {
         if (this.modal === modal) this.modal = null;
         if (!this.modal && !this.focus) this.o.scene.setInputLocked(false);
         onClose?.();
+        // Tự đóng bảng con thì quay về bảng đã mở nó.
+        if (byUser && back) back();
       },
     });
     this.modal = modal;

@@ -4,6 +4,7 @@ import type { ActivityEvent } from './activityEvents';
 import { BALANCE } from './balance';
 import { levelFor, titleForLevel, type Department } from './levels';
 import {
+  CEO_MEETING_MISSION,
   MISSION_TEMPLATES,
   pickMission,
   progressMission,
@@ -438,3 +439,8 @@ export function tickBossMissions(
 }
 
 export { MISSION_TEMPLATES };
+
+/** Đang có việc "Họp với sếp" chưa xong: được vào phòng sếp (cả ở văn phòng chung). */
+export function hasCeoMeeting(state: ProgressState): boolean {
+  return activeMission(state)?.templateId === CEO_MEETING_MISSION;
+}

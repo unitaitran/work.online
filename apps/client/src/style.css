@@ -3607,3 +3607,509 @@ button.office-badge:focus-visible {
     transition: none;
   }
 }
+
+/* ---------- Khung cấp tuyển dụng & mời vào công ty (làm lại) ---------- */
+
+.band-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.band-hiring {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.band-list {
+  display: grid;
+  gap: 8px;
+}
+
+.band-row {
+  display: grid;
+  grid-template-columns: auto 92px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  transition: opacity 160ms ease;
+}
+
+.band-row.is-off {
+  opacity: 0.5;
+}
+
+.band-chip {
+  justify-self: start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.band-intern {
+  background: #9aa3ad;
+}
+.band-fresher {
+  background: #6cc28a;
+}
+.band-junior {
+  background: #4a90d9;
+}
+.band-middle {
+  background: #b07cd8;
+}
+.band-senior {
+  background: var(--accent-dark);
+}
+
+.band-range {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.band-input {
+  width: 58px;
+  padding: 6px 8px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fffaf5;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink);
+  -moz-appearance: textfield;
+}
+
+.band-input::-webkit-outer-spin-button,
+.band-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.band-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(255 138 101 / 22%);
+}
+
+/* Công tắc gạt thay cho ô tích. */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d9d2c8;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  transition: transform 180ms ease;
+}
+
+.switch:checked {
+  background: var(--accent);
+}
+
+.switch:checked::after {
+  transform: translateX(16px);
+}
+
+.switch:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.invite-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-code {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px dashed var(--accent);
+  background: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--accent-dark);
+}
+
+@media (max-width: 480px) {
+  .band-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .band-range {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .switch::after,
+  .band-row {
+    transition: none;
+  }
+}
+
+/* ---------- Mượt mà toàn giao diện ---------- */
+
+/* Hộp thoại: nền mờ dần, hộp phóng nhẹ và trượt lên khi mở; ngược lại khi đóng. */
+.modal-backdrop {
+  opacity: 0;
+  backdrop-filter: blur(0);
+  transition:
+    opacity 200ms ease,
+    backdrop-filter 200ms ease;
+}
+
+.modal-backdrop.is-open {
+  opacity: 1;
+  backdrop-filter: blur(3px);
+}
+
+.modal-backdrop.is-closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal-backdrop .modal {
+  transform: translateY(14px) scale(0.97);
+  transition: transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+.modal-backdrop.is-open .modal {
+  transform: none;
+}
+
+.modal-backdrop.is-closing .modal {
+  transform: translateY(8px) scale(0.98);
+  transition-duration: 160ms;
+}
+
+/* Nút: đổi màu mượt, nổi nhẹ khi rê chuột, lún khi bấm, có vòng sáng khi dùng bàn phím. */
+.button,
+.lobby-tile,
+.choice,
+.auth-tab,
+.social-chip,
+.view-switch,
+.menu-button,
+.panel-close,
+.modal-close,
+.lobby-help {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 140ms ease,
+    opacity 160ms ease;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.button:active:not(:disabled),
+.lobby-tile:active,
+.choice:active,
+.social-chip:active,
+.menu-button:active,
+.panel-close:active,
+.modal-close:active {
+  transform: scale(0.96);
+}
+
+.button-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgb(232 112 75 / 30%);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.modal-close:hover,
+.panel-close:hover {
+  background: #ffd3c1;
+}
+
+/* Bảng, thẻ, thông báo hiện ra mượt. */
+@keyframes ui-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.creator-panel,
+.mission-card,
+.coffee-chip,
+.company-card,
+.coach,
+.menu-sheet,
+.view-panel {
+  animation: ui-pop-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.toast,
+.home-logo,
+.interact-button,
+.focus-button,
+.wipe-button {
+  animation: ui-fade-in 200ms ease;
+}
+
+/* Bên trong hộp thoại: nội dung đổi tab hiện mượt. */
+.modal-body > * {
+  animation: ui-fade-in 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-backdrop .modal,
+  .button,
+  .lobby-tile,
+  .choice,
+  .auth-tab,
+  .social-chip,
+  .view-switch,
+  .menu-button,
+  .panel-close,
+  .modal-close,
+  .lobby-help {
+    transition: none;
+  }
+
+  .creator-panel,
+  .mission-card,
+  .coffee-chip,
+  .company-card,
+  .coach,
+  .menu-sheet,
+  .view-panel,
+  .toast,
+  .home-logo,
+  .interact-button,
+  .focus-button,
+  .wipe-button,
+  .modal-body > * {
+    animation: none;
+  }
+
+  .button:hover:not(:disabled),
+  .button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ---------- Bản đồ công ty: tìm, lọc, danh sách gọn ---------- */
+
+.map-side {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.company-map-filter {
+  display: grid;
+  gap: 8px;
+}
+
+.map-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-chips .pselect-button {
+  margin-left: auto;
+  padding: 6px 10px 6px 12px;
+  font-size: 0.85rem;
+}
+
+.map-count {
+  margin: 0;
+}
+
+.map-rows {
+  display: grid;
+  gap: 6px;
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.map-rows .company-map-item {
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.map-rows .company-name {
+  font-size: 0.95rem;
+}
+
+.map-rows .fortune-note {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+}
+
+.map-fit {
+  margin: 2px 0 0;
+  color: #2e7d4f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.map-more {
+  justify-self: center;
+}
+
+/* ---------- Sửa nhân vật: một cột, gọn để vừa một màn hình (không phải cuộn) ---------- */
+
+.creator-columns,
+.creator-col {
+  display: grid;
+}
+
+@media (min-width: 760px) {
+  .creator-panel.creator-edit {
+    width: 440px;
+    padding: 18px 20px;
+  }
+}
+
+.creator-edit .panel-head {
+  margin-bottom: 8px;
+}
+
+.creator-edit .creator-title {
+  font-size: 1.3rem;
+}
+
+.creator-edit .creator-field {
+  margin-bottom: 9px;
+}
+
+.creator-edit .creator-label {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+}
+
+.creator-edit .creator-input {
+  padding: 7px 12px;
+}
+
+.creator-edit .creator-name-row .button {
+  padding: 7px 14px;
+}
+
+.creator-edit .choice-group {
+  gap: 6px;
+}
+
+.creator-edit .choice {
+  padding: 4px 11px;
+  font-size: 0.85rem;
+}
+
+.creator-edit .choice-swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.creator-edit .creator-enter {
+  padding: 11px 18px;
+}
+
+/* Sửa nhân vật: lấp đầy chiều cao màn hình — các mục giãn đều, cỡ ô theo chiều cao màn hình. */
+@media (min-width: 760px) {
+  .creator-panel.creator-edit {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .creator-edit .creator-columns {
+    flex: 1;
+  }
+
+  .creator-edit .creator-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    height: 100%;
+  }
+
+  .creator-edit .creator-field {
+    margin-bottom: clamp(5px, 1vh, 12px);
+  }
+
+  .creator-edit .creator-label {
+    font-size: clamp(0.76rem, 1.5vh, 0.9rem);
+  }
+
+  .creator-edit .choice {
+    padding: clamp(4px, 0.8vh, 8px) clamp(10px, 1.4vh, 15px);
+    font-size: clamp(0.82rem, 1.6vh, 0.95rem);
+  }
+
+  .creator-edit .choice-swatch {
+    width: clamp(28px, 4.2vh, 42px);
+    height: clamp(28px, 4.2vh, 42px);
+    padding: 0;
+  }
+
+  .creator-edit .creator-input {
+    padding: clamp(7px, 1.1vh, 11px) 12px;
+  }
+
+  .creator-edit .creator-enter {
+    margin-top: 4px;
+    padding: clamp(10px, 1.6vh, 14px) 18px;
+  }
+}

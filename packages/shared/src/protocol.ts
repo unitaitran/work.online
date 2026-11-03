@@ -219,6 +219,8 @@ export type ServerMessage =
   | { type: 'room_plants'; plants: PlantView[] }
   | { type: 'plant_added'; plant: PlantView }
   | { type: 'plant_removed'; ids: number[] }
+  /** Người chơi khác vừa tặng mình một ly cà phê. */
+  | { type: 'coffee_received'; fromSid: number; fromName: string }
   /** Có người rủ cả phòng uống trà sữa (gửi cho mọi người trừ người rủ). */
   | { type: 'tea_round'; round: MilkTeaRoundView }
   /** Người rủ: lượt của mình đã mở (đã trả cốc của mình, `xp` được cộng). */

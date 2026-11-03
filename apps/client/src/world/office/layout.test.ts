@@ -55,7 +55,10 @@ describe('bố cục tầng văn phòng', () => {
   });
 
   it('từ chỗ xuất hiện đi tới được mọi vật tương tác và điểm đi dạo (trừ bàn trong phòng CEO)', () => {
-    const outside = items.filter((item) => item.kind !== 'ceodesk');
+    // Đồ trong phòng CEO (bàn sếp, sofa họp) cần thẻ mới tới được.
+    const outside = items.filter(
+      (item) => item.kind !== 'ceodesk' && !item.id.startsWith('meeting-ceo-'),
+    );
     for (const target of [...outside.map((item) => item.approach), ...OFFICE_FLOOR.strollSpots]) {
       const path = findPath(OFFICE_FLOOR.spawn, target, obstacles, RADIUS, OFFICE_FLOOR.bounds);
       expect(path, JSON.stringify(target)).not.toBeNull();

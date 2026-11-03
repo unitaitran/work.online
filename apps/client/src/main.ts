@@ -13,7 +13,7 @@ import {
   dayMood,
   PROTOCOL_VERSION,
   COMPANY_COLORS,
-  type BuildingResponse,
+  hasCeoMeeting,
   type CompanyPublic,
   type MyCompanyResponse,
   type InventoryResponse,
@@ -80,7 +80,6 @@ const lazy = {
   company: () => import('./ui/companyPanel'),
   wall: () => import('./ui/wallPanel'),
   leaderboard: () => import('./ui/leaderboardPanel'),
-  building: () => import('./ui/buildingPanel'),
   brag: () => import('./ui/bragCard'),
   dev: () => import('./ui/devPanel'),
   companyMap: () => import('./ui/companyMapPanel'),
@@ -257,6 +256,25 @@ const INTERACT_SOUNDS: Partial<Record<InteractableKind, SoundName>> = {
   window: 'ting',
 };
 
+/** Đánh dấu "vừa đăng nhập" qua lần tải lại trang (để vào thẳng nơi làm của tài khoản mới). */
+const AFTER_LOGIN_KEY = 'dilam.afterLogin';
+function markAfterLogin(): void {
+  try {
+    window.sessionStorage.setItem(AFTER_LOGIN_KEY, '1');
+  } catch {
+    // bị chặn lưu: vẫn tải lại, chỉ là dừng ở màn Ở nhà
+  }
+}
+function takeAfterLogin(): boolean {
+  try {
+    const marked = window.sessionStorage.getItem(AFTER_LOGIN_KEY) === '1';
+    window.sessionStorage.removeItem(AFTER_LOGIN_KEY);
+    return marked;
+  } catch {
+    return false;
+  }
+}
+
 /** Hộp thoại mã khôi phục (chỉ hiện một lần khi vừa tạo tài khoản). */
 function showRecoveryCode(code: string): void {
   const a = STRINGS.account;
@@ -398,7 +416,7 @@ function start(): void {
   };
 
   /** Bản đồ công ty: danh sách công ty theo vùng, tỉnh/thành; xin vào làm. */
-  const mountCompanyMap = (modal: Modal): void => {
+  const mountCompanyMap = (modal: Modal, onJoined?: () => void): void => {
     modal.body.closest('.modal')?.classList.add('modal-wide');
     void lazy.companyMap().then(({ mountCompanyMapPanel }) => {
       mountCompanyMapPanel(modal.body, {
@@ -413,6 +431,12 @@ function start(): void {
           const r = await api.request('POST', '/api/company/apply', { companyId });
           return r.ok ? null : (r.reason ?? r.error);
         },
+        level: () => levelFor(progress.state.xp),
+        join: async (code) => {
+          const r = await api.request('POST', '/api/company/join', { code });
+          return r.ok ? null : (r.reason ?? r.error);
+        },
+        ...(onJoined ? { onJoined } : {}),
       });
     });
   };
@@ -449,6 +473,19 @@ function start(): void {
   const myJob = (state: ProgressState = progress.state): string =>
     jobAtLevel(levelFor(state.xp), state.branch);
 
+  /** Vào văn phòng nơi đang làm (công ty của mình / công ty đang làm / văn phòng chung). */
+  const goToWork = (profile: Profile): void => {
+    const employer = progress.state.employer;
+    if (employer === null) {
+      // Nghỉ việc rồi: quay lại Công Sở trước khi vào văn phòng chung.
+      void api.request('POST', '/api/company/rejoin-default', {}).then(() => {
+        showOffice(profile, null);
+      });
+      return;
+    }
+    showOffice(profile, null, employer.startsWith('company:') ? employer : 'office');
+  };
+
   // ---------- Màn "Ở nhà": ngoài văn phòng ----------
   const account = { guest: session.me.guest, username: session.me.username };
   const showLobby = (profile: Profile, notice: string | null): void => {
@@ -484,15 +521,7 @@ function start(): void {
         notice,
         account: { ...account },
         onWork: () => {
-          const employer = progress.state.employer;
-          if (employer === null) {
-            // Nghỉ việc rồi: quay lại Công Sở trước khi vào văn phòng chung.
-            void api.request('POST', '/api/company/rejoin-default', {}).then(() => {
-              showOffice(profile, null);
-            });
-            return;
-          }
-          showOffice(profile, null, employer.startsWith('company:') ? employer : 'office');
+          goToWork(profile);
         },
         onCompany: () => {
           modal?.close();
@@ -513,7 +542,12 @@ function start(): void {
         onCompanyMap: () => {
           modal?.close();
           modal = openModal(hudRoot, { title: STRINGS.companyMap.title });
-          mountCompanyMap(modal);
+          // Vào công ty bằng mã mời: dựng lại màn Ở nhà để nút Đi làm trỏ tới công ty mới.
+          mountCompanyMap(modal, () => {
+            window.setTimeout(() => {
+              showLobby(profile, STRINGS.companyMap.joined);
+            }, 900);
+          });
         },
         onEdit: () => {
           showCreator(profile, storageNotice, (saved) => {
@@ -532,12 +566,14 @@ function start(): void {
         onLogin: async (username, password) => {
           const result = await login(api, stores, username, password);
           if (!result.ok) return result.error;
+          markAfterLogin();
           window.location.reload();
           return null;
         },
         onRecover: async (code) => {
           const result = await recoverAccount(api, stores, code);
           if (!result.ok) return result.error;
+          markAfterLogin();
           window.location.reload();
           return null;
         },
@@ -581,7 +617,13 @@ function start(): void {
     // Gán sau khi dựng xong phòng và bảng công ty (bên dưới).
     let roomKindNow = (): string => 'office';
     let openCompanyNow = (): void => undefined;
+    let openHubNow = (): void => undefined;
     const onEvent = (event: OfficeEvent): void => {
+      if (event.type === 'screen') {
+        if (event.item.kind === 'ceodesk') openCompanyNow();
+        else if (event.item.kind === 'desk') openHubNow();
+        return;
+      }
       if (event.type === 'seatTaken') {
         hud?.showToast(STRINGS.interact.seatTaken(event.name));
         return;
@@ -599,7 +641,9 @@ function start(): void {
         audio.play(ok ? 'ting' : 'printer');
         hud?.showToast(
           ok
-            ? STRINGS.ceo.swipeOk
+            ? hasCeoMeeting(progress.state)
+              ? STRINGS.ceo.swipeMeeting
+              : STRINGS.ceo.swipeOk
             : roomKindNow().startsWith('company:')
               ? STRINGS.ceo.swipeDenied
               : STRINGS.ceo.sharedOffice,
@@ -764,6 +808,8 @@ function start(): void {
     };
     const offProgress = progress.onChange((state, change) => {
       refreshProgress(state);
+      // Nhận / xong việc "Họp với sếp" thì mở / đóng thẻ vào phòng sếp.
+      updateCeoAccess();
       if (change.kind === 'outcome') {
         const result = change.outcome;
         if (result.granted > 0)
@@ -846,6 +892,13 @@ function start(): void {
           break;
         case 'quick_chat':
           scene.remotes.say(message.sid, QUICK_CHATS[message.index] ?? '');
+          break;
+        case 'coffee_received':
+          // Được người chơi khác tặng cà phê: cảm ơn (bong bóng) và báo.
+          audio.play('ting');
+          officeHudView.showToast(STRINGS.coffee.received(message.fromName));
+          scene.playerSay(STRINGS.coffee.thanks, 'coffee');
+          scene.remotes.say(message.fromSid, '☕');
           break;
         // ---------- Rủ uống trà sữa ----------
         case 'tea_round':
@@ -1075,11 +1128,17 @@ function start(): void {
       });
     };
     openCompanyNow = openCompany;
+    openHubNow = () => {
+      openHub();
+    };
     roomKindNow = () => roomKind;
     /** Thẻ CEO: chỉ trong phòng công ty mình làm chủ. */
+    // Thẻ vào phòng sếp: chủ công ty (trong phòng công ty của mình) hoặc đang có việc
+    // "Họp với sếp" (server cũng kiểm tra như vậy).
     const updateCeoAccess = (): void => {
-      scene.setCeoAccess(false);
-      if (!roomKind.startsWith('company:')) return;
+      const meeting = hasCeoMeeting(progress.state);
+      scene.setCeoAccess(meeting);
+      if (meeting || !roomKind.startsWith('company:')) return;
       const kind = roomKind;
       void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
         if (!r.ok || roomKind !== kind) return;
@@ -1179,22 +1238,6 @@ function start(): void {
         });
       });
     };
-    const openBuilding = (): void => {
-      const modal = officeActivities.openPanel(STRINGS.building.title);
-      void lazy.building().then(({ mountBuildingPanel }) => {
-        mountBuildingPanel(modal.body, {
-          load: async () => {
-            const r = await api.request<BuildingResponse>('GET', '/api/building');
-            return r.ok ? r.value : null;
-          },
-          go: (roomId) => {
-            room.send({ type: 'switch_room', roomId });
-            modal.close();
-          },
-          label: (info) => (info.kind === 'office' ? STRINGS.building.office : info.name),
-        });
-      });
-    };
     const openBrag = (): void => {
       track(store, 'brag_open');
       const modal = officeActivities.openPanel(STRINGS.brag.title);
@@ -1245,7 +1288,6 @@ function start(): void {
       const entries: [string, () => void][] = [
         [h.leaderboard, openLeaderboard],
         [h.wall, openWall],
-        [h.building, openBuilding],
         [h.brag, openBrag],
         [h.company, openCompany],
         [h.companyMap, openCompanyMap],
@@ -1261,6 +1303,8 @@ function start(): void {
             });
             b.addEventListener('click', () => {
               modal.close();
+              // Đóng mục con (×, bấm ra ngoài, Esc) thì quay về bảng Văn phòng.
+              officeActivities.openFrom(openHub);
               open();
             });
             return b;
@@ -1486,7 +1530,9 @@ function start(): void {
   // máy có nhân vật cũ (Phase 1-3) thì đưa lên server.
   if (session.me.character) {
     saveProfile(store, session.me.character);
-    showLobby(session.me.character, startNotice);
+    // Vừa đăng nhập tài khoản khác: vào thẳng văn phòng nơi tài khoản đó đang làm.
+    if (takeAfterLogin()) goToWork(session.me.character);
+    else showLobby(session.me.character, startNotice);
   } else {
     const local = loadProfile(store);
     const fresh: Profile = local ?? {
