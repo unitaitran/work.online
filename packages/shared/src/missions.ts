@@ -7,6 +7,8 @@ export type MissionGoal =
   | { kind: 'focusMinutes'; amount: number }
   | { kind: 'lines'; amount: number }
   | { kind: 'meetingMinutes'; amount: number }
+  /** Ngồi họp ở sofa phòng sếp (phút). Có việc này mới được vào phòng sếp. */
+  | { kind: 'ceoMeeting'; amount: number }
   | {
       kind: 'count';
       event: 'coffee-gift' | 'chore' | 'print' | 'task-flip' | 'kpi-fortune' | 'checkin';
@@ -31,6 +33,9 @@ export interface Mission {
   assignedAt: number;
   completedAt: number | null;
 }
+
+/** Việc "Họp với sếp": đang có việc này thì được quẹt thẻ vào phòng sếp. */
+export const CEO_MEETING_MISSION = 'ceo-meeting';
 
 export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   {
@@ -106,6 +111,12 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
     goal: { kind: 'meetingMinutes', amount: 3 },
   },
   {
+    id: CEO_MEETING_MISSION,
+    text: 'Sếp nhắn: "Em qua phòng anh họp nhanh nhé, cứ ngồi sofa đợi anh."',
+    goalText: 'Vào phòng sếp, ngồi sofa họp 1 phút',
+    goal: { kind: 'ceoMeeting', amount: 1 },
+  },
+  {
     id: 'task-1',
     text: 'Sếp nhắn: "Ra bảng việc lật một task nhỏ rồi làm cho xong nha em."',
     goalText: 'Lật và hoàn thành 1 task',
@@ -142,6 +153,10 @@ export function missionContribution(goal: MissionGoal, event: ActivityEvent): nu
       return event.type === 'focus-typing' ? event.detail.lines : 0;
     case 'meetingMinutes':
       return event.type === 'meeting' ? Math.floor(event.durationMs / 60_000) : 0;
+    case 'ceoMeeting':
+      return event.type === 'meeting' && event.detail.seatId.startsWith('meeting-ceo-')
+        ? Math.floor(event.durationMs / 60_000)
+        : 0;
     case 'count':
       if (event.type !== goal.event) return 0;
       if (event.type === 'task-flip') return event.detail.completed ? 1 : 0;

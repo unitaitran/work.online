@@ -92,6 +92,11 @@ export function mountViewPanel(
     toggle.classList.add('in-menu');
     panel.classList.add('is-touch');
     menu.prepend(toggle);
+    // Menu đóng (bấm X hoặc di chuyển) thì bảng Góc nhìn đóng theo.
+    menu.addEventListener('menu-close', () => {
+      panel.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+    });
     root.append(panel);
   } else {
     root.append(toggle, panel);

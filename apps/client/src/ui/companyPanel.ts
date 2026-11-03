@@ -246,30 +246,6 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       ]),
     );
 
-    // Vào bằng mã mời (danh sách công ty nằm ở "Tìm việc").
-    const codeInput = el('input', {
-      className: 'creator-input',
-      attrs: {
-        type: 'text',
-        placeholder: s.joinCodePlaceholder,
-        'aria-label': s.joinCode,
-        autocomplete: 'off',
-      },
-    });
-    parts.push(
-      card('company-card-code', [
-        el('span', { className: 'company-card-label', text: s.joinCode }),
-        el('div', {
-          className: 'creator-name-row',
-          children: [
-            codeInput,
-            button(s.join, () => {
-              void act('/api/company/join', { code: codeInput.value }).then(load);
-            }),
-          ],
-        }),
-      ]),
-    );
     return parts;
   };
 
@@ -737,22 +713,50 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       }),
     );
     if (d.isOwner) parts.push(renderBands(d.company.hiringBands, d.company.hiring));
-    const code = el('code', {
-      className: 'recovery-code',
-      text: inviteCode ? p.inviteCode(inviteCode) : '',
-    });
-    code.hidden = inviteCode === null;
+    const invite = button(
+      inviteCode ? p.inviteAgain : p.invite,
+      () => {
+        void act<{ code: string }>('/api/company/invite').then((r) => {
+          if (r) inviteCode = r.code;
+          void load();
+        });
+      },
+      inviteCode === null,
+    );
+    const codeRow: HTMLElement[] = [];
+    if (inviteCode) {
+      const value = inviteCode;
+      const copy = el('button', {
+        className: 'button button-soft',
+        text: p.copy,
+        attrs: { type: 'button' },
+      });
+      copy.addEventListener('click', () => {
+        void Promise.resolve()
+          .then(() => navigator.clipboard.writeText(value))
+          .then(() => {
+            copy.textContent = p.copied;
+          })
+          .catch(() => undefined);
+      });
+      codeRow.push(
+        el('div', {
+          className: 'invite-code-row',
+          children: [el('code', { className: 'invite-code', text: value }), copy],
+        }),
+      );
+    }
     parts.push(
-      code,
-      el('div', {
-        className: 'activity-actions',
+      el('section', {
+        className: 'company-card invite-card',
         children: [
-          button(p.invite, () => {
-            void act<{ code: string }>('/api/company/invite').then((r) => {
-              if (r) inviteCode = r.code;
-              void load();
-            });
+          el('div', {
+            className: 'company-card-title',
+            children: [el('span', { text: `✉️ ${p.inviteTitle}` })],
           }),
+          el('p', { className: 'band-hint', text: p.inviteHint }),
+          ...codeRow,
+          el('div', { className: 'activity-actions', children: [invite] }),
         ],
       }),
     );
@@ -765,7 +769,12 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     const rows = POSITIONS.map((position) => {
       const band = bands[position];
       const open = el('input', {
-        attrs: { type: 'checkbox', 'aria-label': `${p.bandOpen} ${POSITION_NAMES[position]}` },
+        className: 'switch',
+        attrs: {
+          type: 'checkbox',
+          role: 'switch',
+          'aria-label': `${p.bandOpen} ${POSITION_NAMES[position]}`,
+        },
       });
       open.checked = band !== null;
       const num = (value: number, label: string): HTMLInputElement => {
@@ -786,45 +795,58 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       const fallback = DEFAULT_HIRING_BANDS[position] ?? { min: 1, max: 1 };
       const min = num(band?.min ?? fallback.min, p.bandFrom);
       const max = num(band?.max ?? fallback.max, p.bandTo);
+      let rowEl: HTMLElement | null = null;
       const sync = (): void => {
         min.disabled = !open.checked;
         max.disabled = !open.checked;
+        rowEl?.classList.toggle('is-off', !open.checked);
       };
       open.addEventListener('change', sync);
+      rowEl = el('div', {
+        className: 'band-row',
+        children: [
+          open,
+          el('span', {
+            className: `band-chip band-${position}`,
+            text: POSITION_NAMES[position],
+          }),
+          el('span', {
+            className: 'band-range',
+            children: [el('span', { text: p.bandLevel }), min, el('span', { text: '–' }), max],
+          }),
+        ],
+      });
       sync();
+      const element = rowEl;
       return {
         position,
         read: (): LevelBand | null =>
           open.checked
             ? { min: Math.round(Number(min.value)), max: Math.round(Number(max.value)) }
             : null,
-        element: el('div', {
-          className: 'band-row',
-          children: [
-            el('label', {
-              className: 'band-name',
-              children: [open, el('strong', { text: POSITION_NAMES[position] })],
-            }),
-            el('span', { text: p.bandFrom }),
-            min,
-            el('span', { text: p.bandTo }),
-            max,
-          ],
-        }),
+        element,
       };
     });
-    const hiringBox = el('input', { attrs: { type: 'checkbox' } });
+    const hiringBox = el('input', {
+      className: 'switch',
+      attrs: { type: 'checkbox', role: 'switch', 'aria-label': p.hiringOpen },
+    });
     hiringBox.checked = hiring;
-    return el('div', {
-      className: 'company-form company-bands',
+    return el('section', {
+      className: 'company-card company-bands',
       children: [
-        el('h3', { text: p.bandsTitle }),
-        el('p', { className: 'fortune-note', text: p.bandsIntro }),
-        ...rows.map((row) => row.element),
-        el('label', {
-          className: 'band-name',
-          children: [hiringBox, el('span', { text: p.hiringOpen })],
+        el('div', {
+          className: 'company-card-title',
+          children: [
+            el('span', { text: `📋 ${p.bandsTitle}` }),
+            el('label', {
+              className: 'band-hiring',
+              children: [el('span', { text: p.hiringOpen }), hiringBox],
+            }),
+          ],
         }),
+        el('p', { className: 'band-hint', text: p.bandsIntro }),
+        el('div', { className: 'band-list', children: rows.map((row) => row.element) }),
         el('div', {
           className: 'activity-actions',
           children: [

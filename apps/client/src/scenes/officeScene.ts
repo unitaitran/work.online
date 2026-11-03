@@ -1,3 +1,4 @@
+import { CEO_MEETING_SEAT_PREFIX } from '@dilam/shared';
 // Tầng văn phòng Phase 2A: đi lại, chạm để dùng đồ vật, ngồi làm việc, đồng nghiệp NPC.
 import {
   Box3,
@@ -100,7 +101,9 @@ const PLAYER_ID = 'player';
 export type OfficeEvent =
   | { type: 'interact'; item: Interactable }
   | { type: 'gift'; npcId: string; name: string }
-  | { type: 'seatTaken'; name: string };
+  | { type: 'seatTaken'; name: string }
+  /** Bấm vào máy tính ở chỗ đang ngồi. */
+  | { type: 'screen'; item: Interactable };
 
 export interface OfficeSceneOptions {
   canvas: HTMLElement;
@@ -237,7 +240,10 @@ export class OfficeScene implements SceneController {
       bounds: this.bounds,
       interactables: itemMap,
       seats: this.seats,
-      meetingSeatIds: this.items.filter((item) => item.kind === 'meeting').map((item) => item.id),
+      // NPC không ngồi sofa họp trong phòng sếp.
+      meetingSeatIds: this.items
+        .filter((item) => item.kind === 'meeting' && !item.id.startsWith(CEO_MEETING_SEAT_PREFIX))
+        .map((item) => item.id),
       coffeeSpots: coffee
         ? [0, 1, 2].map((i) => ({
             spot: { x: coffee.approach.x - 0.1, z: coffee.approach.z + 0.7 + i * 0.7 },
@@ -258,7 +264,7 @@ export class OfficeScene implements SceneController {
     // Người chơi khác đang ngồi: nâng lên theo độ cao chỗ ngồi gần nhất (sofa cao hơn ghế).
     this.remotes.setSeatLift((x, z) => seatLiftNear(this.items, x, z));
     this.bubbles.ensure(SELF_BUBBLE, options.playerName ?? '');
-    this.plants = new RoomPlants(this.material);
+    this.plants = new RoomPlants(this.material, layout.plants);
     // Đồng hồ lớn trên tường bắc, bên phải dãy cửa sổ (logo công ty ở tường sảnh).
     const lastWindow = layout.windows.spans.at(-1)?.maxX ?? 4.5;
     const rightShelf = layout.shelves.reduce((m, b) => Math.max(m, b.maxX), lastWindow);
@@ -419,11 +425,10 @@ export class OfficeScene implements SceneController {
       this.standUp();
       return;
     }
-    const npc = this.giftTarget();
-    if (npc) {
-      const p = npc.getPosition();
-      this.facing = headingOf({ x: p.x - this.position.x, z: p.z - this.position.z });
-      this.options.onEvent({ type: 'gift', npcId: npc.spec.id, name: npc.name });
+    const target = this.giftTarget();
+    if (target) {
+      this.facing = headingOf({ x: target.x - this.position.x, z: target.z - this.position.z });
+      this.options.onEvent({ type: 'gift', npcId: target.id, name: target.name });
       return;
     }
     const nearby = nearestInteractable(this.position, this.items);
@@ -879,7 +884,12 @@ export class OfficeScene implements SceneController {
       }
     }
     if (picked) {
-      if (picked === this.seated) return;
+      if (picked === this.seated) {
+        // Bấm vào màn hình máy tính khi đang ngồi: bàn sếp mở quản lý công ty, bàn làm việc
+        // mở bảng Văn phòng.
+        this.options.onEvent({ type: 'screen', item: picked });
+        return;
+      }
       if (this.seated) this.standUp();
       this.requestInteraction(picked);
       return;
@@ -906,19 +916,24 @@ export class OfficeScene implements SceneController {
     this.showMarker(destination);
   }
 
-  /** NPC đứng gần nhất trong tầm tặng cà phê (khi đang cầm ly). */
-  private giftTarget(): NpcAgent | null {
+  /**
+   * Người nhận cà phê gần nhất trong tầm tặng (khi đang cầm ly): NPC hoặc người chơi khác.
+   * `id`: id NPC, hoặc "player:<mã>" cho người chơi.
+   */
+  private giftTarget(): { id: string; name: string; x: number; z: number } | null {
     if (this.seated || !this.options.canGiftCoffee()) return null;
-    let best: NpcAgent | null = null;
+    let best: { id: string; name: string; x: number; z: number } | null = null;
     let bestDistance = GIFT_RADIUS;
     for (const npc of this.npcs) {
       const p = npc.getPosition();
       const d = Math.hypot(p.x - this.position.x, p.z - this.position.z);
       if (d <= bestDistance) {
-        best = npc;
+        best = { id: npc.spec.id, name: npc.name, x: p.x, z: p.z };
         bestDistance = d;
       }
     }
+    const remote = this.remotes.nearest(this.position.x, this.position.z, bestDistance);
+    if (remote) best = { id: `player:${remote.code}`, name: remote.name, x: remote.x, z: remote.z };
     return best;
   }
 
@@ -931,9 +946,9 @@ export class OfficeScene implements SceneController {
       this.options.onHint({ kind: 'stand', label: STRINGS.interact.standUp });
       return;
     }
-    const npc = this.giftTarget();
-    if (npc) {
-      this.options.onHint({ kind: 'gift', label: npc.name });
+    const target = this.giftTarget();
+    if (target) {
+      this.options.onHint({ kind: 'gift', label: target.name });
       return;
     }
     const nearby = this.path.length === 0 ? nearestInteractable(this.position, this.items) : null;

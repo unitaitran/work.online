@@ -247,6 +247,12 @@ export class Room {
     this.broadcast(message, null);
   }
 
+  /** Tính lại quyền vào phòng CEO (ví dụ vừa nhận / vừa xong việc "Họp với sếp"). */
+  refreshCeo(userId: string): void {
+    const member = this.members.get(userId);
+    if (member) member.ceo = this.options.isCeo?.(userId) ?? false;
+  }
+
   /** Hồ sơ công khai của một người đang trong phòng (sid, tên...). */
   profileOf(userId: string): PlayerProfile | null {
     return this.members.get(userId)?.profile ?? null;

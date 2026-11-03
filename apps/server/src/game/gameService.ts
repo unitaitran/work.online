@@ -10,6 +10,7 @@ import {
   PLANT_KINDS,
   seededRng,
   type PlantView,
+  hasCeoMeeting,
 } from '@dilam/shared';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -18,7 +19,7 @@ import { devToolsAllowed } from '../config';
 import { playerCodeOf } from '../auth/secrets';
 import { publicProfile } from '../rooms/profile';
 import type { Gateway, Session } from '../ws/gateway';
-import { ProgressEngine, type PlayerContext } from './progressEngine';
+import { PLAYER_GIFT_PREFIX, ProgressEngine, type PlayerContext } from './progressEngine';
 import { ShopService } from './shop';
 import { RoomEventDirector } from './roomEvents';
 import { MilkTeaService } from './milkTea';
@@ -76,7 +77,8 @@ export function attachGameService(
     const at = ctx.now();
     const rng = seededRng(hashString(`${target}|${String(at)}`));
     const angle = rng() * Math.PI * 2;
-    const radius = 0.35 + rng() * 0.45;
+    // Mọc trong chậu cây vừa tưới (client đặt lên mặt đất trong chậu, quanh mép).
+    const radius = 0.12 + rng() * 0.06;
     const plant = ctx.repos.plants.add(kind, {
       x: spot.x + Math.cos(angle) * radius,
       z: spot.z + Math.sin(angle) * radius,
@@ -99,6 +101,11 @@ export function attachGameService(
       coffeeOut: () => {
         const room = gateway.sessionOf(userId)?.room;
         return room ? events.coffeeOut(room.id) : false;
+      },
+      colleagueAt: (code) => {
+        const room = gateway.sessionOf(userId)?.room;
+        const other = room?.userIds().find((id) => playerCodeOf(id) === code);
+        return room && other ? room.positionOf(other) : null;
       },
     };
   };
@@ -144,6 +151,8 @@ export function attachGameService(
       state: engine.state(userId),
       today: engine.today(userId, player.timeZone),
     });
+    // Việc "Họp với sếp" vừa giao / vừa xong: tính lại quyền vào phòng sếp.
+    session.room.refreshCeo(userId);
   };
 
   gateway.onSession((session: Session) => {
@@ -190,6 +199,7 @@ export function attachGameService(
       session.send({ type: 'action_rejected', id: message.id, reason: result.reason });
       return true;
     }
+    session.room.refreshCeo(session.userId);
     session.send({
       type: 'progress',
       id: message.id,
@@ -197,6 +207,22 @@ export function attachGameService(
       today: result.today,
       ...(result.outcome ? { outcome: result.outcome } : {}),
     });
+    // Tặng cà phê cho người chơi khác: báo cho người nhận.
+    if (
+      message.action.kind === 'coffee_gift' &&
+      message.action.npcId.startsWith(PLAYER_GIFT_PREFIX)
+    ) {
+      const code = message.action.npcId.slice(PLAYER_GIFT_PREFIX.length);
+      const receiver = session.room.userIds().find((id) => playerCodeOf(id) === code);
+      const giver = session.room.profileOf(session.userId);
+      if (receiver && giver) {
+        session.room.sendTo(receiver, {
+          type: 'coffee_received',
+          fromSid: giver.sid,
+          fromName: giver.name,
+        });
+      }
+    }
     if (message.action.kind === 'chore' && message.action.target.startsWith('plant-')) {
       growPlant(session, message.action.target);
     }
@@ -339,9 +365,11 @@ export function attachGameService(
       return mine ? `company:${mine.id}` : 'office';
     },
     // Phòng CEO chỉ mở trong phòng công ty, cho đúng chủ công ty đó.
+    // Thẻ vào phòng sếp: chủ công ty (phòng công ty của mình), hoặc đang có việc "Họp với sếp".
     isCeo: (userId, kind) =>
-      kind.startsWith('company:') &&
-      ctx.repos.companies.get(kind.slice('company:'.length))?.ownerId === userId,
+      (kind.startsWith('company:') &&
+        ctx.repos.companies.get(kind.slice('company:'.length))?.ownerId === userId) ||
+      hasCeoMeeting(engine.state(userId)),
   });
   registerCompanyRoutes(app, ctx, company);
   registerSocialRoutes(

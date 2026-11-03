@@ -492,6 +492,8 @@ function glassFramePieces(layout: OfficeLayout): Piece[] {
 function ceoPieces(layout: OfficeLayout): Piece[] {
   const pieces: Piece[] = [];
   const { desk: cd, cabinet, reader, bounds } = layout.ceoRoom;
+  const sofaEast =
+    (layout.ceoRoom.sofa.minX + layout.ceoRoom.sofa.maxX) / 2 > (bounds.minX + bounds.maxX) / 2;
   const top = 0.45;
   const cx = (cd.minX + cd.maxX) / 2;
   // Bàn sếp 2,6 × 1,0 m: mặt gỗ sẫm, hộc đen hai bên, tấm chắn trước có dải đỏ.
@@ -616,35 +618,179 @@ function ceoPieces(layout: OfficeLayout): Piece[] {
   pieces.push(
     piece(new SphereGeometry(0.12, 12, 10), RED, { position: [cab.x, 0.98, cab.z + 0.35] }),
   );
-  // Tranh lớn trên tường nam phòng sếp (mặt quay vào phòng).
-  const art = { x: cx, z: bounds.maxZ - 0.012 };
-  pieces.push(
-    piece(new PlaneGeometry(1.9, 1.05), GOLD, {
-      position: [art.x, 1.75, art.z],
-      rotation: [0, Math.PI, 0],
-    }),
-  );
-  pieces.push(
-    piece(new PlaneGeometry(1.8, 0.95), BLACK, {
-      position: [art.x, 1.75, art.z - 0.004],
-      rotation: [0, Math.PI, 0],
-    }),
-  );
-  pieces.push(
-    piece(new CircleGeometry(0.32, 32), RED, {
-      position: [art.x - 0.3, 1.8, art.z - 0.008],
-      rotation: [0, Math.PI, 0],
-    }),
-  );
-  pieces.push(
-    piece(new PlaneGeometry(0.9, 0.05), CREAM, {
-      position: [art.x + 0.25, 1.5, art.z - 0.008],
-      rotation: [0, Math.PI, 0.35],
-    }),
-  );
+  // Tủ trưng bày sau lưng ghế sếp và sofa họp.
+  pieces.push(...ceoDisplayPieces(layout.ceoRoom.display));
+  pieces.push(...ceoSofaPieces(layout.ceoRoom.sofa, sofaEast));
   // Máy quẹt thẻ (mặt ngoài vách tây).
   pieces.push(boxPiece(reader, 0.95, 1.25, BLACK));
   return pieces;
+}
+
+/**
+ * Tủ trưng bày sau lưng sếp (kiểu giá mở như giá sách ngoài văn phòng): nền tối, ván gỗ óc chó
+ * trên giá ống đen; trưng cúp vàng, mũ lưỡi trai, sách và hộp quà. Mặt trước quay vào phòng (-Z).
+ */
+function ceoDisplayPieces(d: Aabb): Piece[] {
+  const out: Piece[] = [];
+  const planks = [0.42, 0.92, 1.42, 1.92];
+  const t = 0.035;
+  const w = d.maxX - d.minX;
+  const at = (f: number): number => d.minX + f * w;
+  const cz = d.maxZ - 0.19;
+  out.push(boxPiece({ ...d, minZ: d.maxZ - 0.02 }, 0, 2.2, SHELF_BACK));
+  for (const y of planks) {
+    out.push(boxPiece({ ...d, maxZ: d.maxZ - 0.02 }, y - t, y, PLANK));
+    out.push(boxPiece({ ...d, maxZ: d.minZ + 0.012 }, y - t, y, PLANK_EDGE));
+    for (const f of [0.15, 0.5, 0.85]) {
+      out.push(
+        piece(new CylinderGeometry(0.016, 0.016, d.maxZ - d.minZ - 0.04, 8), 0x141417, {
+          position: [at(f), y - t - 0.02, (d.minZ + d.maxZ) / 2],
+          rotation: [Math.PI / 2, 0, 0],
+        }),
+      );
+    }
+  }
+  const [p0, p1, p2, p3] = planks as [number, number, number, number];
+  // Tầng dưới: hàng sách dựng và một chồng sách nằm.
+  const bookColors = [0x1f2a44, 0xd94f9a, 0xf3f1ec, 0x2b2b30, 0xc8202a, 0x6b4a33, 0xe0b84a];
+  let x = at(0.06);
+  bookColors.forEach((color, k) => {
+    const bw = 0.05 + (k % 3) * 0.012;
+    const bh = 0.26 + ((k * 7) % 5) * 0.025;
+    out.push(
+      boxPiece({ minX: x, maxX: x + bw, minZ: cz - 0.1, maxZ: cz + 0.1 }, p0, p0 + bh, color),
+    );
+    x += bw + 0.006;
+  });
+  for (let k = 0; k < 3; k += 1) {
+    out.push(
+      boxPiece(
+        { minX: at(0.62) + k * 0.01, maxX: at(0.9) - k * 0.015, minZ: cz - 0.11, maxZ: cz + 0.11 },
+        p0 + k * 0.045,
+        p0 + (k + 1) * 0.045,
+        bookColors[(k + 2) % bookColors.length] ?? CREAM,
+      ),
+    );
+  }
+  // Tầng hai: ba chiếc cúp vàng (đế đen, thân, cốc, quai).
+  for (const [f, scale] of [
+    [0.2, 0.85],
+    [0.5, 1.15],
+    [0.8, 0.85],
+  ] as const) {
+    const tx = at(f);
+    out.push(
+      boxPiece(
+        {
+          minX: tx - 0.07 * scale,
+          maxX: tx + 0.07 * scale,
+          minZ: cz - 0.07 * scale,
+          maxZ: cz + 0.07 * scale,
+        },
+        p1,
+        p1 + 0.06 * scale,
+        0x1a1a1e,
+      ),
+      piece(new CylinderGeometry(0.018 * scale, 0.03 * scale, 0.1 * scale, 10), GOLD, {
+        position: [tx, p1 + 0.11 * scale, cz],
+      }),
+      piece(new CylinderGeometry(0.075 * scale, 0.035 * scale, 0.13 * scale, 14), GOLD, {
+        position: [tx, p1 + 0.225 * scale, cz],
+      }),
+    );
+    for (const side of [-1, 1]) {
+      out.push(
+        piece(new TorusGeometry(0.035 * scale, 0.008 * scale, 6, 12), GOLD, {
+          position: [tx + side * 0.08 * scale, p1 + 0.23 * scale, cz],
+        }),
+      );
+    }
+  }
+  // Tầng ba: ba mũ lưỡi trai (chóp tròn, lưỡi trai quay ra phòng).
+  for (const [f, color] of [
+    [0.2, RED],
+    [0.5, 0x1a1a1e],
+    [0.8, CREAM],
+  ] as const) {
+    const hx = at(f);
+    out.push(
+      piece(new SphereGeometry(0.09, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), color, {
+        position: [hx, p2, cz + 0.02],
+      }),
+      piece(new BoxGeometry(0.15, 0.012, 0.1), color, { position: [hx, p2 + 0.006, cz - 0.1] }),
+    );
+  }
+  // Tầng trên: hộp quà trắng nơ đỏ và hai cuốn sách dựng.
+  out.push(
+    boxPiece(
+      { minX: at(0.1), maxX: at(0.3), minZ: cz - 0.1, maxZ: cz + 0.1 },
+      p3,
+      p3 + 0.2,
+      0xf3f1ec,
+    ),
+    boxPiece(
+      { minX: at(0.195), maxX: at(0.205), minZ: cz - 0.103, maxZ: cz + 0.103 },
+      p3,
+      p3 + 0.203,
+      RED,
+    ),
+    boxPiece(
+      { minX: at(0.1) - 0.003, maxX: at(0.3) + 0.003, minZ: cz - 0.01, maxZ: cz + 0.01 },
+      p3,
+      p3 + 0.203,
+      RED,
+    ),
+    boxPiece(
+      { minX: at(0.62), maxX: at(0.67), minZ: cz - 0.1, maxZ: cz + 0.1 },
+      p3,
+      p3 + 0.27,
+      0x1f2a44,
+    ),
+    boxPiece(
+      { minX: at(0.68), maxX: at(0.73), minZ: cz - 0.1, maxZ: cz + 0.1 },
+      p3,
+      p3 + 0.25,
+      0xd94f9a,
+    ),
+  );
+  return out;
+}
+
+/** Sofa da 2 chỗ trong phòng sếp: lưng sát tường (đông nếu `east`), quay mặt vào phòng. */
+function ceoSofaPieces(s: Aabb, east: boolean): Piece[] {
+  const leather = 0x2e2e35;
+  // Toạ độ x tính từ lưng sofa vào trong.
+  const back = east ? s.maxX : s.minX;
+  const inward = east ? -1 : 1;
+  const out: Piece[] = [
+    boxPiece(s, 0.05, 0.32, leather),
+    boxPiece(
+      east ? { ...s, minX: s.maxX - 0.2 } : { ...s, maxX: s.minX + 0.2 },
+      0.05,
+      0.78,
+      leather,
+    ),
+    boxPiece({ ...s, maxZ: s.minZ + 0.14 }, 0.05, 0.52, 0x26262c),
+    boxPiece({ ...s, minZ: s.maxZ - 0.14 }, 0.05, 0.52, 0x26262c),
+  ];
+  for (const z of [s.minZ + 0.35, s.maxZ - 0.35]) {
+    out.push(
+      piece(new BoxGeometry(0.52, 0.1, 0.48), 0x4a4a53, {
+        position: [back + inward * 0.46, 0.37, z],
+      }),
+      piece(new BoxGeometry(0.1, 0.36, 0.46), 0x4a4a53, {
+        position: [back + inward * 0.27, 0.58, z],
+      }),
+    );
+  }
+  // Gối đỏ ở góc.
+  out.push(
+    piece(new BoxGeometry(0.08, 0.22, 0.22), RED, {
+      position: [back + inward * 0.36, 0.55, s.minZ + 0.28],
+      rotation: [0, 0, -0.25 * inward],
+    }),
+  );
+  return out;
 }
 
 function meetingPieces(layout: OfficeLayout): Piece[] {

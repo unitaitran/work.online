@@ -287,6 +287,8 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   // Màn cảm ứng: thanh trên chỉ giữ thẻ tên, xu và "Đi về"; các nút khác gom vào menu ☰ góc trái
   // dưới (bấm mới bật lên), cần gạt nằm bên phải.
   let menu: HTMLElement | null = null;
+  let onPointerMove: ((event: PointerEvent) => void) | null = null;
+  let onKeyMove: ((event: KeyboardEvent) => void) | null = null;
   let menuButton: HTMLButtonElement | null = null;
   if (options.touch) {
     const sheet = el('div', {
@@ -309,6 +311,8 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     const setOpen = (open: boolean): void => {
       isOpen = open;
       sheet.hidden = !open;
+      // Đóng menu thì các bảng con (Góc nhìn...) cũng đóng theo.
+      if (!open) sheet.dispatchEvent(new Event('menu-close'));
       toggle.textContent = open ? '✕' : '☰';
       toggle.setAttribute('aria-expanded', String(open));
       toggle.setAttribute('aria-label', open ? s.menuClose : s.menu);
@@ -319,10 +323,33 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     // Chọn một mục (trừ âm thanh, đồ họa) thì menu tự đóng.
     sheet.addEventListener('click', (event) => {
       const target = event.target;
-      if (target instanceof HTMLElement && target.closest('.menu-sheet > .button')) setOpen(false);
+      if (
+        target instanceof HTMLElement &&
+        target.closest('.menu-sheet > .button:not(.view-button)')
+      )
+        setOpen(false);
     });
     menu = sheet;
     menuButton = toggle;
+    // Di chuyển (cần gạt, chạm sàn, phím đi) là tự đóng menu.
+    const closeOnMove = (): void => {
+      if (isOpen || !panelsClosed()) setOpen(false);
+    };
+    const panelsClosed = (): boolean =>
+      [...document.querySelectorAll('.view-panel.is-touch')].every(
+        (p) => (p as HTMLElement).hidden,
+      );
+    onPointerMove = (event: PointerEvent): void => {
+      const target = event.target;
+      if (target instanceof Element && (target.closest('.joystick') || target.id === 'scene')) {
+        closeOnMove();
+      }
+    };
+    onKeyMove = (event: KeyboardEvent): void => {
+      if (/^(Key[WASD]|Arrow)/.test(event.code)) closeOnMove();
+    };
+    document.addEventListener('pointerdown', onPointerMove, true);
+    window.addEventListener('keydown', onKeyMove);
   }
 
   const bar = el('div', {
@@ -442,6 +469,8 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       drinkButton.hidden = phase !== 'holding';
     },
     dispose() {
+      if (onPointerMove) document.removeEventListener('pointerdown', onPointerMove, true);
+      if (onKeyMove) window.removeEventListener('keydown', onKeyMove);
       window.clearTimeout(toastTimer);
       layer.remove();
     },

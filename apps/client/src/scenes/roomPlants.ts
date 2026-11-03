@@ -12,6 +12,11 @@ import {
 } from 'three';
 import { mergePieces, piece, type Piece } from '../engine/meshBuilder';
 
+/** Khóm hoa cách chậu trong khoảng này thì dời vào chậu; mép trong chậu và mặt đất trong chậu. */
+const POT_SNAP = 1.4;
+const POT_RIM = 0.17;
+const SOIL_Y = 0.42;
+
 const PETALS = [0xff8fb1, 0xffd34d, 0xb48cf2, 0xff9e5e] as const;
 
 function flowerPieces(kind: number): Piece[] {
@@ -53,7 +58,11 @@ export class RoomPlants {
   readonly group = new Group();
   private readonly meshes = new Map<number, { mesh: Mesh; geometry: BufferGeometry }>();
 
-  constructor(private readonly material: Material) {}
+  /** `pots`: tâm các chậu cây trong phòng; khóm hoa mọc trong chậu gần nhất. */
+  constructor(
+    private readonly material: Material,
+    private readonly pots: readonly { x: number; z: number }[] = [],
+  ) {}
 
   set(plants: readonly PlantView[]): void {
     for (const id of [...this.meshes.keys()]) this.remove([id]);
@@ -64,7 +73,23 @@ export class RoomPlants {
     if (this.meshes.has(plant.id)) return;
     const geometry = mergePieces(flowerPieces(plant.kind));
     const mesh = new Mesh(geometry, this.material);
-    mesh.position.set(plant.x, 0, plant.z);
+    // Dời vào mép trong chậu gần nhất (trên mặt đất trong chậu, nhô ra dưới tán cây).
+    let best: { x: number; z: number } | null = null;
+    let bestD = POT_SNAP;
+    for (const pot of this.pots) {
+      const d = Math.hypot(plant.x - pot.x, plant.z - pot.z);
+      if (d < bestD) {
+        bestD = d;
+        best = pot;
+      }
+    }
+    if (best) {
+      const a = Math.atan2(plant.z - best.z, plant.x - best.x) + plant.id * 0.9;
+      mesh.position.set(best.x + Math.cos(a) * POT_RIM, SOIL_Y, best.z + Math.sin(a) * POT_RIM);
+      mesh.scale.setScalar(0.8);
+    } else {
+      mesh.position.set(plant.x, 0, plant.z);
+    }
     this.group.add(mesh);
     this.meshes.set(plant.id, { mesh, geometry });
   }

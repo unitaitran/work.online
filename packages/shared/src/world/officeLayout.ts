@@ -116,6 +116,10 @@ export interface CeoRoom {
   cabinet: Aabb;
   /** Máy quẹt thẻ gắn mặt ngoài vách, cạnh cửa. */
   reader: Aabb;
+  /** Tủ trưng bày sau lưng ghế sếp (mũ, cúp, sách...). */
+  display: Aabb;
+  /** Sofa 2 chỗ để họp với sếp (sát tường đông cạnh tủ, quay mặt về phía bàn sếp). */
+  sofa: Aabb;
 }
 
 export interface OfficeLayout {
@@ -271,6 +275,8 @@ export const OFFICE_FLOOR: OfficeLayout = {
     desk: box(-3.6, 3.9, 2.6, 1),
     cabinet: { minX: -1.62, maxX: -1.08, minZ: 4.4, maxZ: 5.9 },
     reader: box(-6.13, 3.95, 0.16, 0.26),
+    display: box(-3.6, 6.325, 2.4, 0.35),
+    sofa: { minX: -1.92, maxX: -1.15, minZ: 2.2, maxZ: 3.4 },
   },
   // Khu dịch vụ gọn sát tường đông: cây nước đứng dưới sàn ngay đầu bắc của quầy, quầy ngắn
   // (máy pha cà phê, lò vi sóng), tủ lạnh sát cuối quầy; chừa trống khoảng cạnh phòng nghỉ.
@@ -335,6 +341,9 @@ export function waterCoolerBox(layout: OfficeLayout): Aabb {
   return box(layout.pantry.water.x, layout.pantry.water.z, 0.36, 0.36);
 }
 
+/** Ghế sofa họp trong phòng sếp (dùng cho nhiệm vụ "Họp với sếp"). */
+export const CEO_MEETING_SEAT_PREFIX = 'meeting-ceo-';
+
 export function deskBox(layout: OfficeLayout, desk: Desk): Aabb {
   // Bàn xoay 90°: chiều rộng nằm theo trục Z, chiều sâu theo trục X.
   return box(desk.x, desk.z, layout.desk.depth, layout.desk.width);
@@ -374,6 +383,8 @@ export function officeObstacles(layout: OfficeLayout, options: { ceo?: boolean }
     ceoRoom.desk,
     ceoRoom.cabinet,
     ceoRoom.reader,
+    ceoRoom.display,
+    ceoRoom.sofa,
     layout.meeting.table,
     pantry.counter,
     waterCoolerBox(layout),
@@ -434,6 +445,25 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
       facing: seat.facing,
       pose: 'sit',
       pick: { min: [seat.x - 0.25, 0, seat.z - 0.25], max: [seat.x + 0.25, 0.65, seat.z + 0.25] },
+    });
+  });
+
+  // Sofa họp trong phòng sếp: ghế kiểu "meeting" (ngồi là tính phút họp), id riêng
+  // "meeting-ceo-*" để nhiệm vụ "Họp với sếp" nhận ra và NPC không tới ngồi.
+  const cs = layout.ceoRoom.sofa;
+  const room = layout.ceoRoom.bounds;
+  // Sofa ở nửa đông của phòng thì lưng sát tường đông, quay mặt về phía tây (và ngược lại).
+  const east = (cs.minX + cs.maxX) / 2 > (room.minX + room.maxX) / 2;
+  [cs.minZ + 0.32, cs.maxZ - 0.32].forEach((z, i) => {
+    list.push({
+      id: `${CEO_MEETING_SEAT_PREFIX}${String(i)}`,
+      kind: 'meeting',
+      approach: { x: east ? cs.minX - APPROACH_GAP - 0.1 : cs.maxX + APPROACH_GAP + 0.1, z },
+      seat: { x: east ? cs.minX + 0.25 : cs.maxX - 0.25, z },
+      facing: east ? -Math.PI / 2 : Math.PI / 2,
+      pose: 'sit',
+      seatHeight: 0.46,
+      pick: { min: [cs.minX, 0, z - 0.3], max: [cs.maxX, 0.8, z + 0.3] },
     });
   });
 

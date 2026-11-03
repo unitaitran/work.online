@@ -1,15 +1,12 @@
 // Bản đồ công ty: sơ đồ Việt Nam vẽ bằng SVG (chấm theo toạ độ gần đúng của 34 tỉnh, thành), số
-// công ty ở mỗi nơi; chạm một tỉnh để lọc danh sách. Danh sách nhóm theo miền, tỉnh/thành.
+// công ty ở mỗi nơi; chạm một tỉnh để lọc. Danh sách gọn có tìm, lọc, sắp xếp và chia trang.
 import {
   COMPANY_COLORS,
   POSITION_NAMES,
-  POSITIONS,
+  positionFor,
   PROVINCES,
   provinceOf,
-  REGION_NAMES,
   type CompanyPublic,
-  type Province,
-  type Region,
 } from '@dilam/shared';
 import { STRINGS } from '../strings';
 import { el } from './dom';
@@ -18,6 +15,12 @@ export interface CompanyMapApi {
   load(): Promise<CompanyPublic[] | null>;
   /** Nộp đơn; null là thành công, ngược lại là mã lỗi. */
   apply(companyId: string): Promise<string | null>;
+  /** Cấp hiện tại của người chơi (lọc "Hợp cấp mình"). */
+  level?(): number;
+  /** Vào công ty bằng mã mời; null là thành công, ngược lại là mã lỗi. */
+  join(code: string): Promise<string | null>;
+  /** Vào được công ty (để màn ngoài cập nhật nơi làm). */
+  onJoined?(): void;
 }
 
 const s = STRINGS.companyMap;
@@ -155,22 +158,54 @@ function drawMap(counts: Map<string, number>, onPick: (id: string) => void): SVG
   return root;
 }
 
-function bandsText(c: CompanyPublic): string {
-  if (!c.hiring) return s.notHiring;
-  return POSITIONS.flatMap((position) => {
-    const band = c.hiringBands[position];
-    return band ? [`${POSITION_NAMES[position]} ${s.hiringBand(band.min, band.max)}`] : [];
-  }).join(' · ');
-}
-
 export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): void {
   const message = el('p', { className: 'activity-message', attrs: { role: 'status' } });
   const mapBox = el('div', { className: 'company-map-box' });
   const filterBar = el('div', { className: 'company-map-filter' });
   const list = el('div', { className: 'company-map-list' });
+  // Có mã mời thì vào thẳng công ty, không cần nộp đơn.
+  const c = STRINGS.company;
+  const codeInput = el('input', {
+    className: 'creator-input',
+    attrs: {
+      type: 'text',
+      placeholder: c.joinCodePlaceholder,
+      'aria-label': c.joinCode,
+      autocomplete: 'off',
+    },
+  });
+  const joinButton = el('button', {
+    className: 'button button-primary',
+    text: c.join,
+    attrs: { type: 'button' },
+  });
+  joinButton.addEventListener('click', () => {
+    const code = codeInput.value.trim();
+    if (!code) return;
+    joinButton.disabled = true;
+    void api.join(code).then((error) => {
+      joinButton.disabled = false;
+      message.textContent = error ? (c.errors[error] ?? STRINGS.net.actionFailed) : s.joined;
+      message.dataset.tone = error ? 'error' : 'ok';
+      if (!error) {
+        codeInput.value = '';
+        api.onJoined?.();
+      }
+    });
+  });
   body.append(
+    el('section', {
+      className: 'company-card company-card-code',
+      children: [
+        el('span', { className: 'company-card-label', text: c.joinCode }),
+        el('div', { className: 'creator-name-row', children: [codeInput, joinButton] }),
+      ],
+    }),
     el('p', { className: 'activity-intro', text: s.intro }),
-    el('div', { className: 'company-map-layout', children: [mapBox, list] }),
+    el('div', {
+      className: 'company-map-layout',
+      children: [mapBox, el('div', { className: 'map-side', children: [filterBar, list] })],
+    }),
     message,
   );
   list.append(el('p', { className: 'fortune-note', text: s.loading }));
@@ -178,6 +213,14 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
   let companies: CompanyPublic[] = [];
   let selected: string | null = null;
   const applied = new Set<string>();
+
+  /** Vị trí mình vào được ở công ty này (theo cấp hiện tại), để người xem biết ngay. */
+  const fitText = (c: CompanyPublic): string => {
+    const level = api.level?.();
+    if (level === undefined || !c.hiring) return '';
+    const position = positionFor(c.hiringBands, level);
+    return position ? s.fits(POSITION_NAMES[position]) : '';
+  };
 
   const card = (c: CompanyPublic): HTMLElement => {
     const icon = el('span', {
@@ -220,9 +263,9 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
                 el('strong', { className: 'company-name', text: c.name }),
                 el('p', {
                   className: 'fortune-note',
-                  text: `${STRINGS.company.industries[c.industry] ?? ''} · ${STRINGS.company.stages[c.stage] ?? ''} · ${STRINGS.company.floorLabel(c.building, c.floor)} · ${STRINGS.company.members(c.members + 1)}${online ? ` · ${online}` : ''}`,
+                  text: `${STRINGS.company.industries[c.industry] ?? ''} · ${provinceOf(c.province)?.name ?? ''} · ${STRINGS.company.members(c.members + 1)}${online ? ` · ${online}` : ''}`,
                 }),
-                el('p', { className: 'fortune-note', text: bandsText(c) }),
+                ...(fitText(c) ? [el('p', { className: 'map-fit', text: fitText(c) })] : []),
               ],
             }),
           ],
@@ -232,53 +275,130 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
     });
   };
 
+  // ---------- Tìm, lọc, sắp xếp, chia trang (chịu được rất nhiều công ty) ----------
+  const search = el('input', {
+    className: 'creator-input map-search',
+    attrs: { type: 'search', placeholder: s.searchPlaceholder, 'aria-label': s.searchPlaceholder },
+  });
+  const chip = (text: string): HTMLButtonElement =>
+    el('button', {
+      className: 'auth-tab',
+      text,
+      attrs: { type: 'button', 'aria-pressed': 'false' },
+    });
+  const hiringOnly = chip(s.filterHiring);
+  const fitsMe = chip(s.filterFits);
+  const sort = el('select', { className: 'map-sort', attrs: { 'aria-label': s.sortLabel } });
+  for (const [value, label] of [
+    ['members', s.sortMembers],
+    ['online', s.sortOnline],
+    ['newest', s.sortStage],
+    ['name', s.sortName],
+  ] as const) {
+    sort.append(el('option', { text: label, attrs: { value } }));
+  }
+  const provinceChip = el('button', { className: 'auth-tab is-active', attrs: { type: 'button' } });
+  provinceChip.hidden = true;
+  provinceChip.addEventListener('click', () => {
+    selected = null;
+    shown = PAGE;
+    render();
+  });
+  const resultCount = el('p', { className: 'fortune-note map-count' });
+  filterBar.append(
+    search,
+    el('div', { className: 'map-chips', children: [hiringOnly, fitsMe, provinceChip, sort] }),
+    resultCount,
+  );
+  const toggle = (b: HTMLButtonElement): void => {
+    b.addEventListener('click', () => {
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', String(on));
+      b.classList.toggle('is-active', on);
+      shown = PAGE;
+      render();
+    });
+  };
+  toggle(hiringOnly);
+  toggle(fitsMe);
+  let searchTimer: number | undefined;
+  search.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      shown = PAGE;
+      render();
+    }, 150);
+  });
+  sort.addEventListener('change', () => {
+    shown = PAGE;
+    render();
+  });
+  list.before(filterBar);
+
+  const PAGE = 20;
+  let shown = PAGE;
+  const fold = (text: string): string =>
+    text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .toLowerCase();
+
+  const visible = (): CompanyPublic[] => {
+    const q = fold(search.value.trim());
+    const level = api.level?.() ?? null;
+    const rows = companies.filter((c) => {
+      if (selected && c.province !== selected) return false;
+      if (hiringOnly.getAttribute('aria-pressed') === 'true' && !c.hiring) return false;
+      if (fitsMe.getAttribute('aria-pressed') === 'true') {
+        if (level === null || !c.hiring || positionFor(c.hiringBands, level) === null) return false;
+      }
+      if (q && !fold(`${c.name} ${provinceOf(c.province)?.name ?? ''}`).includes(q)) return false;
+      return true;
+    });
+    const by = sort.value;
+    rows.sort((a, b) =>
+      by === 'online'
+        ? b.online - a.online
+        : by === 'newest'
+          ? b.stage - a.stage
+          : by === 'name'
+            ? a.name.localeCompare(b.name, 'vi')
+            : b.members - a.members,
+    );
+    return rows;
+  };
+
   const render = (): void => {
     const counts = countByProvince(companies);
     mapBox.replaceChildren(
       drawMap(counts, (id) => {
         selected = selected === id ? null : id;
+        shown = PAGE;
         render();
       }),
     );
-    const all = el('button', {
-      className: `auth-tab${selected === null ? ' is-active' : ''}`,
-      text: `${s.all} (${String(companies.length)})`,
+    provinceChip.hidden = selected === null;
+    provinceChip.textContent = selected ? `${provinceOf(selected)?.name ?? ''} ✕` : '';
+    const rows = visible();
+    resultCount.textContent = s.results(rows.length, companies.length);
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', { className: 'fortune-note', text: s.empty }));
+      return;
+    }
+    const more = el('button', {
+      className: 'button button-soft map-more',
+      text: s.more(rows.length - shown),
       attrs: { type: 'button' },
     });
-    all.addEventListener('click', () => {
-      selected = null;
+    more.addEventListener('click', () => {
+      shown += PAGE;
       render();
     });
-    filterBar.replaceChildren(all);
-    if (selected) {
-      filterBar.append(
-        el('span', { className: 'auth-tab is-active', text: provinceOf(selected)?.name ?? '' }),
-      );
-    }
-    const groups: HTMLElement[] = [filterBar];
-    for (const region of ['north', 'central', 'south'] as Region[]) {
-      const provinces = PROVINCES.filter(
-        (p: Province) => p.region === region && (selected === null || p.id === selected),
-      );
-      const sections = provinces.flatMap((p) => {
-        const here = companies.filter((c) => c.province === p.id);
-        if (here.length === 0 && selected === null) return [];
-        return [
-          el('section', {
-            className: 'company-map-province',
-            children: [
-              el('h4', { text: `${p.name} · ${s.count(here.length)}` }),
-              here.length === 0
-                ? el('p', { className: 'fortune-note', text: s.empty })
-                : el('ul', { className: 'company-list', children: here.map(card) }),
-            ],
-          }),
-        ];
-      });
-      if (sections.length > 0) groups.push(el('h3', { text: REGION_NAMES[region] }), ...sections);
-    }
-    if (groups.length === 1) groups.push(el('p', { className: 'fortune-note', text: s.empty }));
-    list.replaceChildren(...groups);
+    list.replaceChildren(
+      el('ul', { className: 'company-list map-rows', children: rows.slice(0, shown).map(card) }),
+      ...(rows.length > shown ? [more] : []),
+    );
   };
 
   void api.load().then((data) => {

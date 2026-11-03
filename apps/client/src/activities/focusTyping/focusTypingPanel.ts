@@ -106,8 +106,11 @@ export function openFocusWindow(root: HTMLElement, options: FocusWindowOptions):
     options.onPress(result.scored);
     if (result.scored) {
       const item = el('li', { text: lineAt(session.lines - 1, session.seed) });
+      // Số thứ tự thật (dòng cũ bị bỏ bớt nên không để danh sách tự đánh lại từ 1).
+      item.value = session.lines;
       lines.append(item);
       while (lines.children.length > VISIBLE_LINES) lines.firstElementChild?.remove();
+      lines.scrollTop = lines.scrollHeight;
     } else {
       warning.hidden = false;
       window.clearTimeout(warningTimer);

@@ -16,6 +16,7 @@ export {
   NAME_MAX_LENGTH,
   normalizeName,
   OUTFITS,
+  OUTFIT_COLORS,
   SKIN_TONES,
 } from '@dilam/shared';
 export type { Appearance, HairStyle, Outfit, Profile } from '@dilam/shared';

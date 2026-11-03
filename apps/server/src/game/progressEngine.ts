@@ -60,7 +60,13 @@ export interface PlayerContext {
   position(): Vec2 | null;
   /** Phòng đang có sự kiện "hết cà phê" (máy pha tạm nghỉ). */
   coffeeOut?(): boolean;
+  /** Vị trí của người chơi khác cùng phòng theo mã nhân viên (null nếu không có). */
+  colleagueAt?(code: string): Vec2 | null;
 }
+
+/** Tặng cà phê cho người chơi khác: phải đứng gần (m, theo vị trí server). */
+const PLAYER_GIFT_RANGE = 3;
+export const PLAYER_GIFT_PREFIX = 'player:';
 
 interface LiveState {
   focus: { minutes: number; startedAt: number } | null;
@@ -187,6 +193,15 @@ export class ProgressEngine {
         break;
       case 'coffee_gift':
       case 'coffee_drink': {
+        if (action.kind === 'coffee_gift' && action.npcId.startsWith(PLAYER_GIFT_PREFIX)) {
+          const code = action.npcId.slice(PLAYER_GIFT_PREFIX.length);
+          const mine = player.position();
+          const theirs = code === player.playerCode ? null : (player.colleagueAt?.(code) ?? null);
+          if (!mine || !theirs) return { ok: false, reason: 'not_allowed' };
+          if (Math.hypot(mine.x - theirs.x, mine.z - theirs.z) > PLAYER_GIFT_RANGE) {
+            return { ok: false, reason: 'too_far' };
+          }
+        }
         const brewAt = live.coffeeBrewAt;
         if (brewAt === null || now - brewAt < COFFEE_BREW_MS - 300) {
           return { ok: false, reason: 'not_started' };
