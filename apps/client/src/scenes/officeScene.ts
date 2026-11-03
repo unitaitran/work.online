@@ -356,7 +356,7 @@ export class OfficeScene implements SceneController {
     return this.ceoAccess;
   }
 
-  /** Logo trên tường sảnh: phòng công ty hiện tên công ty, văn phòng chung hiện Mây Hồng. */
+  /** Logo trên tường sảnh: phòng công ty hiện tên công ty, văn phòng chung hiện Công Sở. */
   setCompanySign(info: SignInfo | null): void {
     this.sign?.dispose();
     this.sign = new CompanySign(

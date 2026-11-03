@@ -131,7 +131,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     const card = (className: string, children: HTMLElement[]): HTMLElement =>
       el('section', { className: `company-card ${className}`, children });
 
-    // Nơi đang làm (+ nút rời / quay lại Mây Hồng).
+    // Nơi đang làm (+ nút rời / quay lại Công Sở).
     const action =
       my.employer === null
         ? button(s.rejoin, () => {

@@ -1,6 +1,6 @@
 // Logo công ty kiểu chữ neon trắng trên tường xám (tường tây ở sảnh lối vào, phía trên tượng
 // gấu), dòng khẩu hiệu chữ đen bên dưới. Vẽ bằng canvas, không dùng file ảnh hay logo thật.
-// Văn phòng chung hiện tên Mây Hồng; phòng công ty hiện tên công ty người chơi đặt.
+// Văn phòng chung hiện tên Công Sở; phòng công ty hiện tên công ty người chơi đặt.
 import {
   CanvasTexture,
   Group,

@@ -5,8 +5,8 @@ export const STRINGS = {
   creator: {
     title: 'Sửa nhân vật',
     nameLabel: 'Tên trên thẻ',
-    namePlaceholder: 'Ví dụ: Nguyễn Minh Anh',
-    randomName: 'Thỉnh tên',
+    namePlaceholder: 'VD:Nguyễn Văn Mười',
+    randomName: 'Tên',
     randomNameHint: 'Xin một cái tên ngẫu nhiên',
     skin: 'Màu da',
     hairStyle: 'Kiểu tóc',
@@ -38,7 +38,7 @@ export const STRINGS = {
   },
   office: {
     /** Tên tầng văn phòng; giai điệu nhạc nền cũng sinh từ tên này. */
-    floorName: 'Văn phòng Mây Hồng · Tầng 7',
+    floorName: 'Văn phòng Công Sở · Tầng 7',
     editCard: 'Sửa thẻ',
     qualityLabel: 'Đồ họa',
     qualityModes: {
@@ -362,7 +362,7 @@ export const STRINGS = {
       noDepartment: 'Chưa chọn (từ chức danh 3)',
       noBranch: 'Chưa chọn (từ chức danh 5)',
       unemployed: 'Đang tự do',
-      employers: { 'may-hong': 'Văn phòng Mây Hồng' } as Record<string, string>,
+      employers: { 'may-hong': 'Văn phòng Công Sở' } as Record<string, string>,
       coins: 'Xu',
       reputation: 'Uy tín',
     },
@@ -656,7 +656,7 @@ export const STRINGS = {
   },
   building: {
     open: 'Bản đồ toà nhà',
-    title: 'Toà nhà Mây Hồng',
+    title: 'Toà nhà Công Sở',
     floor: (n: number) => `Tầng ${String(n)}`,
     office: 'Văn phòng chung',
     people: (online: number, cap: number) => `${String(online)}/${String(cap)} người`,
@@ -752,7 +752,7 @@ export const STRINGS = {
       'Chủ công ty',
     ] as readonly string[],
     employer: {
-      'may-hong': 'Văn phòng Mây Hồng',
+      'may-hong': 'Văn phòng Công Sở',
       none: 'Đang tự do',
     } as Record<string, string>,
     npcEmployer: (name: string) => `Công ty ${name}`,
@@ -783,7 +783,7 @@ export const STRINGS = {
     },
     leave: 'Rời công ty',
     leaveConfirm: 'Bấm lần nữa để rời công ty',
-    rejoin: 'Quay lại Văn phòng Mây Hồng',
+    rejoin: 'Quay lại Văn phòng Công Sở',
     enterRoom: 'Vào văn phòng công ty',
     apply: 'Nộp đơn',
     applied: 'Đã nộp đơn',
@@ -991,7 +991,7 @@ export const STRINGS = {
     } as Record<string, string>,
   },
   sign: {
-    defaultName: 'Mây Hồng',
+    defaultName: 'Công Sở',
     defaultTagline: 'Cùng nhau làm nên chuyện',
   },
   zones: {
@@ -1027,8 +1027,8 @@ export const STRINGS = {
       `Cấp ${String(level)} · ${title} · ${String(coins)} xu`,
     work: 'Đi làm',
     workAt: (place: string) => place,
-    workDefault: 'Văn phòng Mây Hồng',
-    workBack: 'Quay lại Văn phòng Mây Hồng',
+    workDefault: 'Văn phòng Công Sở',
+    workBack: 'Quay lại Văn phòng Công Sở',
     unemployed: 'Bạn đang nghỉ việc.',
     edit: 'Sửa nhân vật',
     company: 'Công ty',

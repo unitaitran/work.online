@@ -9,7 +9,7 @@ Số liệu ở `packages/shared/src/balance.ts`, xem `docs/BALANCE.md`.
 - **Cấp độ 1–500** tăng tự động theo tổng XP (bảng `XP_TABLE`).
 - **Chức danh tự lên theo cấp**: cứ vài cấp lên một bậc, không cần kỳ đánh giá. Lên bậc thì có màn chúc mừng.
 - **Chức danh hiển thị theo nơi làm** (`packages/shared/src/job.ts`):
-  - Văn phòng chung (Mây Hồng / công ty NPC): thang 13 chức danh bên dưới.
+  - Văn phòng chung (Công Sở / công ty NPC): thang 13 chức danh bên dưới.
   - Tự mở công ty: **CEO**.
   - Làm ở công ty người chơi khác: vị trí Intern / Fresher / Junior / Middle / Senior theo cấp hiện tại và khung cấp CEO đặt cho từng vị trí. Lên cấp chạm khung mới thì lên vị trí (có màn chúc mừng).
   - Đổi chỗ làm thì chức danh đổi theo; cấp (XP) giữ nguyên. Thang chức danh chung vẫn dùng để mở khoá phòng ban, nhánh và đồ trong cửa hàng.

@@ -482,7 +482,7 @@ function start(): void {
         onWork: () => {
           const employer = progress.state.employer;
           if (employer === null) {
-            // Nghỉ việc rồi: quay lại Mây Hồng trước khi vào văn phòng chung.
+            // Nghỉ việc rồi: quay lại Công Sở trước khi vào văn phòng chung.
             void api.request('POST', '/api/company/rejoin-default', {}).then(() => {
               showOffice(profile, null);
             });

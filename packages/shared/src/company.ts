@@ -417,7 +417,6 @@ export function companyEventFor(companyId: string, day: string): CompanyEventKin
 
 /** Công ty NPC (tên tự đặt, không có thật) gửi offer cho người chơi. */
 export const NPC_COMPANIES = [
-  'Mây Hồng',
   'Bánh Mì Sáng Tạo',
   'Ốc Sên Logistics',
   'Cú Đêm Studio',

@@ -51,7 +51,7 @@ export interface RoomAccess {
   isCeo?(userId: string, kind: string): boolean;
   /**
    * Phòng của nơi đang làm: "company:<id>" (chủ hoặc thành viên công ty) hoặc "office"
-   * (văn phòng chung Mây Hồng). Người chơi chỉ được vào phòng này.
+   * (văn phòng chung Công Sở). Người chơi chỉ được vào phòng này.
    */
   homeRoom?(userId: string): string;
 }
@@ -269,7 +269,7 @@ export function attachWebSocketGateway(
           }
           roomId = rooms.ensure(roomId, access.capacity(roomId)).id;
         } else if (roomId === 'office') {
-          // Đang làm ở công ty riêng thì không vào văn phòng chung Mây Hồng.
+          // Đang làm ở công ty riêng thì không vào văn phòng chung Công Sở.
           if ((access.homeRoom?.(userId) ?? 'office') !== 'office') {
             session.send({ type: 'switch_failed', reason: 'forbidden' });
             return;

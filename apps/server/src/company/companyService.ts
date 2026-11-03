@@ -49,7 +49,7 @@ const DAY_MS = 86_400_000;
 const COMPANY_TZ = 'Asia/Ho_Chi_Minh';
 const INVITE_TTL_MS = 3 * DAY_MS;
 const OFFER_EVERY_MS = 3 * DAY_MS;
-/** Mã công ty NPC mặc định (Văn phòng Mây Hồng). */
+/** Mã công ty NPC mặc định (Văn phòng Công Sở). */
 const DEFAULT_EMPLOYER = BALANCE.company.defaultEmployer;
 
 export type CompanyError =
@@ -629,7 +629,7 @@ export class CompanyService {
     return ok(undefined);
   }
 
-  /** Quay lại văn phòng Mây Hồng (công ty NPC mặc định). */
+  /** Quay lại Văn phòng Công Sở (công ty NPC mặc định). */
   rejoinDefault(userId: string): Result {
     if (this.repos.companies.byOwner(userId) || this.repos.companies.member(userId))
       return fail('employed');
@@ -725,7 +725,7 @@ export class CompanyService {
       NPC_COMPANIES[
         Number.parseInt(hashSecret(`${userId}|${String(this.now())}`).slice(0, 4), 16) %
           NPC_COMPANIES.length
-      ] ?? 'Mây Hồng';
+      ] ?? 'Bánh Mì Sáng Tạo';
     this.repos.companies.addOffer(userId, pick, this.now());
   }
 

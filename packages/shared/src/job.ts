@@ -1,5 +1,5 @@
 // Chức danh đang hiển thị phụ thuộc nơi làm:
-// - Văn phòng chung (Mây Hồng / công ty NPC): thang 13 chức danh tự lên theo cấp.
+// - Văn phòng chung (Công Sở / công ty NPC): thang 13 chức danh tự lên theo cấp.
 // - Tự mở công ty: CEO.
 // - Làm ở công ty người chơi khác: vị trí theo cấp hiện tại và khung cấp CEO đặt cho từng vị trí.
 // Cấp (XP) là của người chơi, không mất khi đổi chỗ làm; chỉ chức danh đổi theo nơi làm.
