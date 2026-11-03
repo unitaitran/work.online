@@ -3,6 +3,8 @@
 import { GAME_NAME, type UsernameCheckResponse } from '@dilam/shared';
 import type { SessionError } from '../net/session';
 import { STRINGS } from '../strings';
+import { NAME_MAX_LENGTH } from '../avatar/appearance';
+import { randomVietnameseName } from '../avatar/names';
 import { mountAccountForm } from './accountForm';
 import { el } from './dom';
 
@@ -17,7 +19,8 @@ export interface LobbyOptions {
   onCompany: () => void;
   onCompanyMap: () => void;
   onEdit: () => void;
-  onHelp: () => void;
+  /** Đổi tên trên thẻ; trả câu báo lỗi hoặc null nếu thành công. */
+  onRename: (name: string) => Promise<string | null>;
   /** Đăng ký cho tài khoản đang chơi: null là thành công. */
   onRegister: (username: string, password: string) => Promise<SessionError | null>;
   onLogin: (username: string, password: string) => Promise<SessionError | null>;
@@ -45,6 +48,78 @@ export function mountLobbyPanel(
     return b;
   };
 
+  // Tên: bấm ✏️ để sửa ngay tại đây (không cần vào Sửa nhân vật).
+  let currentName = options.name;
+  const nameBox = el('div', { className: 'lobby-name' });
+  const showName = (): void => {
+    const edit = el('button', {
+      className: 'lobby-name-edit',
+      text: '✏️',
+      attrs: { type: 'button', title: s.rename, 'aria-label': s.rename },
+    });
+    edit.addEventListener('click', showEditor);
+    nameBox.replaceChildren(
+      el('h1', {
+        className: 'creator-title',
+        text: s.hello(currentName),
+        attrs: { id: 'lobby-title' },
+      }),
+      edit,
+    );
+  };
+  function showEditor(): void {
+    const input = el('input', {
+      className: 'creator-input',
+      attrs: { type: 'text', maxlength: String(NAME_MAX_LENGTH), 'aria-label': s.rename },
+    });
+    input.value = currentName;
+    const random = el('button', {
+      className: 'button button-soft',
+      text: STRINGS.creator.randomName,
+      attrs: { type: 'button' },
+    });
+    random.addEventListener('click', () => {
+      input.value = randomVietnameseName(Math.random, input.value);
+      input.focus();
+    });
+    const save = el('button', {
+      className: 'button button-primary',
+      text: STRINGS.creator.save,
+      attrs: { type: 'submit' },
+    });
+    const error = el('p', { className: 'activity-message', attrs: { role: 'status' } });
+    const form = el('form', {
+      className: 'lobby-name-form',
+      children: [
+        el('div', { className: 'creator-name-row', children: [input, random, save] }),
+        error,
+      ],
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      save.disabled = true;
+      void options.onRename(name).then((problem) => {
+        save.disabled = false;
+        if (problem) {
+          error.textContent = problem;
+          error.dataset.tone = 'error';
+          return;
+        }
+        currentName = name;
+        showName();
+      });
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') showName();
+    });
+    nameBox.replaceChildren(form);
+    input.focus();
+    input.select();
+  }
+  showName();
+
   const work = el('button', {
     className: 'button button-primary lobby-work',
     attrs: { type: 'button' },
@@ -63,15 +138,6 @@ export function mountLobbyPanel(
   });
   work.addEventListener('click', () => {
     options.onWork();
-  });
-
-  const help = el('button', {
-    className: 'lobby-help',
-    text: '?',
-    attrs: { type: 'button', title: s.help, 'aria-label': s.help },
-  });
-  help.addEventListener('click', () => {
-    options.onHelp();
   });
 
   // ---------- Tài khoản ----------
@@ -135,16 +201,8 @@ export function mountLobbyPanel(
         className: 'lobby-head',
         children: [
           el('div', {
-            children: [
-              el('h1', {
-                className: 'creator-title',
-                text: s.hello(options.name),
-                attrs: { id: 'lobby-title' },
-              }),
-              el('p', { className: 'lobby-stats', text: options.stats }),
-            ],
+            children: [nameBox, el('p', { className: 'lobby-stats', text: options.stats })],
           }),
-          help,
         ],
       }),
       ...(options.notice ? [el('p', { className: 'notice', text: options.notice })] : []),

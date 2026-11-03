@@ -18,6 +18,9 @@ export interface LeaderboardApi {
   setHidden(hidden: boolean): Promise<boolean>;
 }
 
+/** Chỉ hiện top 10 (hạng của mình vẫn hiện riêng bên dưới). */
+const TOP = 10;
+
 export function mountLeaderboardPanel(body: HTMLElement, api: LeaderboardApi): void {
   const s = STRINGS.board;
   let period: LeaderboardPeriod = 'week';
@@ -31,7 +34,6 @@ export function mountLeaderboardPanel(body: HTMLElement, api: LeaderboardApi): v
   const since = el('p', { className: 'fortune-note' });
   const list = el('ol', { className: 'board-list' });
   const mine = el('p', { className: 'board-mine' });
-  const hide = el('input', { attrs: { type: 'checkbox', id: 'board-hide' } });
 
   const load = (): void => {
     tabs.replaceChildren(
@@ -51,11 +53,10 @@ export function mountLeaderboardPanel(body: HTMLElement, api: LeaderboardApi): v
     void api.load(period, department).then((data) => {
       if (!data) return;
       since.textContent = s.since(data.since);
-      hide.checked = data.hidden;
       list.replaceChildren(
         ...(data.rows.length === 0
           ? [el('li', { className: 'activity-intro', text: s.empty })]
-          : data.rows.map((row) =>
+          : data.rows.slice(0, TOP).map((row) =>
               el('li', {
                 className: row.me ? 'is-me' : '',
                 children: [
@@ -80,16 +81,7 @@ export function mountLeaderboardPanel(body: HTMLElement, api: LeaderboardApi): v
     department = select.value as Department | 'all';
     load();
   });
-  hide.addEventListener('change', () => {
-    void api.setHidden(hide.checked).then(load);
-  });
-  body.append(
-    tabs,
-    select,
-    since,
-    list,
-    mine,
-    el('label', { className: 'vent-check', children: [hide, el('span', { text: s.hideMe })] }),
-  );
+  // Tuần / tháng bên trái, phòng ban bên phải cùng một hàng.
+  body.append(el('div', { className: 'board-head', children: [tabs, select] }), since, list, mine);
   load();
 }

@@ -467,6 +467,13 @@ export const STRINGS = {
       xpBig: '+5000 XP',
       coins: '+1000 xu',
       failed: 'Chưa bật công cụ dev.',
+      othersTitle: 'Cộng cho người khác',
+      othersPlaceholder: 'tên đăng nhập, cách nhau dấu phẩy',
+      amount: 'Số lượng',
+      plusCoins: '+ xu',
+      plusXp: '+ XP',
+      granted: (ok: string[], missing: string[]) =>
+        `${ok.length > 0 ? `Đã cộng: ${ok.join(', ')}` : 'Không cộng được ai'}${missing.length > 0 ? ` · Không thấy: ${missing.join(', ')}` : ''}`,
     },
   },
   update: {
@@ -540,6 +547,11 @@ export const STRINGS = {
     quickChats: 'Câu nhanh',
     players: 'Đồng nghiệp trong phòng',
     noPlayers: 'Chưa có ai khác trong phòng.',
+    search: 'Tìm đồng nghiệp…',
+    hiddenOnly: 'Đang ẩn',
+    noMatch: 'Không có ai khớp.',
+    count: (shown: number, total: number) =>
+      shown === total ? `${String(total)} người` : `${String(shown)}/${String(total)} người`,
     hide: 'Ẩn',
     unhide: 'Hiện lại',
     hiddenNote: 'Chỉ ẩn với riêng bạn.',
@@ -953,6 +965,12 @@ export const STRINGS = {
     },
     people: {
       members: 'Thành viên',
+      search: 'Tìm nhân viên theo tên…',
+      filterAll: 'Tất cả',
+      manage: 'Quản lý ▾',
+      noMatch: 'Không có ai khớp.',
+      count: (shown: number, total: number) =>
+        shown === total ? `${String(total)} người` : `${String(shown)}/${String(total)} người`,
       applications: 'Đơn xin việc',
       noApplications: 'Chưa có đơn nào.',
       approve: 'Duyệt',
@@ -1120,6 +1138,12 @@ export const STRINGS = {
     companyMap: 'Tìm việc',
     help: 'Hướng dẫn',
     accountTitle: 'Tài khoản',
+    rename: 'Đổi tên',
+    welcomeName: {
+      title: 'Bạn tên là gì?',
+      body: 'Tên này hiện trên thẻ nhân viên và trên đầu nhân vật. Đổi lại lúc nào cũng được.',
+      next: 'Tiếp',
+    },
     guestWarn: 'Đang chơi thử: đăng ký để giữ tiến độ.',
     signedInAs: (username: string) => `Đăng nhập: ${username}`,
     legacy: 'Đặt tên đăng nhập để dễ vào lại.',

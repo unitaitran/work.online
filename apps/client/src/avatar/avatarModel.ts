@@ -435,7 +435,8 @@ function hairPieces(style: HairStyle, color: number): Piece[] {
       for (const t of [-0.6, -0.2, 0.2, 0.6]) spike(t, 0.7, 0.16, -0.1);
       for (const t of [-1.2, -0.4, 0.4, 1.2]) spike(t, 0.35, 0.2, 0.45, dark);
       spike(0, 0.05, 0.2, 0.5);
-      for (const t of [2.2, Math.PI, -2.2, 1.7, -1.7]) spike(t, 0.8, 0.16, 0.5);
+      // Hàng sau đỉnh đầu (trên phần tóc phồng phía sau, không bị che).
+      for (const t of [2.4, Math.PI, -2.4]) spike(t, 0.55, 0.18, 0.55, dark);
       break;
     }
     case 'braid':

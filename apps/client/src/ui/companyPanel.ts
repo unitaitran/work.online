@@ -90,6 +90,9 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
   let tab: 'overview' | 'projects' | 'people' | 'feed' = 'overview';
   let inviteCode: string | null = null;
   let leaveArmed = false;
+  /** Tìm / lọc danh sách nhân viên (giữ qua các lần tải lại). */
+  let memberQuery = '';
+  let memberFilter: Position | 'all' = 'all';
 
   const say = (text: string, tone: 'ok' | 'error' = 'error'): void => {
     message.textContent = text;
@@ -617,11 +620,50 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
 
   const renderPeople = (d: CompanyDetail): HTMLElement[] => {
     const p = s.people;
-    const parts: HTMLElement[] = [el('h3', { text: p.members })];
-    parts.push(
-      el('ul', {
-        className: 'company-list',
-        children: d.members.map((m) => {
+    const parts: HTMLElement[] = [el('h3', { text: `${p.members} (${String(d.members.length)})` })];
+    // Tìm theo tên / mã, lọc theo vị trí (giữ nguyên khi danh sách tải lại).
+    const searchBox = el('input', {
+      className: 'creator-input',
+      attrs: { type: 'search', placeholder: p.search, 'aria-label': p.search },
+    });
+    searchBox.value = memberQuery;
+    const filters = el('div', { className: 'map-chips' });
+    const listBox = el('ul', { className: 'company-list member-rows' });
+    const countText = el('p', { className: 'fortune-note map-count' });
+    const fold = (t: string): string =>
+      t
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .toLowerCase();
+    const renderFilters = (): void => {
+      filters.replaceChildren(
+        ...(['all', ...POSITIONS] as const).map((key) => {
+          const b = el('button', {
+            className: `auth-tab${memberFilter === key ? ' is-active' : ''}`,
+            text: key === 'all' ? p.filterAll : POSITION_NAMES[key],
+            attrs: { type: 'button' },
+          });
+          b.addEventListener('click', () => {
+            memberFilter = key;
+            renderFilters();
+            renderMembers();
+          });
+          return b;
+        }),
+      );
+    };
+    const renderMembers = (): void => {
+      const q = fold(memberQuery.trim());
+      const rows = d.members.filter(
+        (m) =>
+          (memberFilter === 'all' || m.owner || m.position === memberFilter) &&
+          (!q || fold(`${m.name} ${m.code}`).includes(q)),
+      );
+      countText.textContent = p.count(rows.length, d.members.length);
+      listBox.replaceChildren(
+        ...(rows.length === 0 ? [el('li', { className: 'activity-intro', text: p.noMatch })] : []),
+        ...rows.map((m) => {
           const actions: HTMLElement[] = [];
           if (!m.owner) {
             const task = el('select', {
@@ -654,23 +696,52 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
               ),
             );
           }
-          return el('li', {
-            className: 'company-member',
+          // Dòng gọn: tên, vị trí, cấp; các nút quản lý gom vào "Quản lý" (mở khi cần).
+          const info = el('span', {
+            className: 'member-info',
             children: [
+              el('strong', { text: m.name }),
               el('span', {
-                children: [
-                  el('strong', { text: m.name }),
-                  el('span', {
-                    // Trong công ty, chức danh là CEO hoặc vị trí theo khung cấp (không dùng thang chức danh chung).
-                    text: ` · ${m.owner ? p.owner : `${positionText(m.position)} · ${s.ranks[m.role] ?? ''}`} · ${p.level(m.level)}`,
-                  }),
-                ],
+                text: ` · ${m.owner ? p.owner : positionText(m.position)} · ${p.level(m.level)}`,
               }),
-              el('div', { className: 'company-actions', children: actions }),
             ],
           });
+          return el('li', {
+            className: 'company-member member-row',
+            children:
+              actions.length === 0
+                ? [info]
+                : [
+                    el('details', {
+                      className: 'member-manage',
+                      children: [
+                        el('summary', {
+                          children: [
+                            info,
+                            el('span', { className: 'member-more', text: p.manage }),
+                          ],
+                        }),
+                        el('div', { className: 'company-actions', children: actions }),
+                      ],
+                    }),
+                  ],
+          });
         }),
-      }),
+      );
+    };
+    let searchTimer: number | undefined;
+    searchBox.addEventListener('input', () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        memberQuery = searchBox.value;
+        renderMembers();
+      }, 150);
+    });
+    renderFilters();
+    renderMembers();
+    parts.push(
+      el('div', { className: 'company-map-filter', children: [searchBox, filters, countText] }),
+      listBox,
     );
     parts.push(el('h3', { text: p.applications }));
     parts.push(

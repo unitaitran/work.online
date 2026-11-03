@@ -79,4 +79,21 @@ describe('công cụ dev chỉ cho tài khoản trong DEV_USERS', () => {
     expect((await me(app, owner)).devTools).toBe(false);
     expect(await grant(app, owner)).toBe(404);
   });
+
+  it('cộng xu / XP cho người khác theo tên đăng nhập; người thường nhận 404', async () => {
+    const app = makeApp({ devUsers: ['taitran'] });
+    const admin = await register(app, 'taitran');
+    const other = await register(app, 'tung2004');
+    const send = (token: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/dev/grant-users',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { usernames: ['Tung2004', 'khongco'], coins: 1000 },
+      });
+    const res = await send(admin);
+    expect(res.json()).toEqual({ granted: ['tung2004'], missing: ['khongco'] });
+    expect((await me(app, other)).progress.coins).toBe(1000);
+    expect((await send(other)).statusCode).toBe(404);
+  });
 });

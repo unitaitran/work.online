@@ -29,7 +29,7 @@ import {
 import { ActivityBus } from './activities/events';
 import { OfficeActivities } from './activities/officeActivities';
 import { AudioEngine, type SoundName } from './audio/audioEngine';
-import { DEFAULT_APPEARANCE, type Profile } from './avatar/appearance';
+import { DEFAULT_APPEARANCE, NAME_MAX_LENGTH, type Profile } from './avatar/appearance';
 import { randomVietnameseName } from './avatar/names';
 import { Engine } from './engine/engine';
 import { detectLowPower, initialAutoLevel } from './engine/quality';
@@ -498,6 +498,68 @@ function start(): void {
     let observer: ResizeObserver | null = null;
     let modal: Modal | null = null;
     let coach: { dispose(): void } | null = null;
+    // Lần đầu vào: hỏi tên (điền sẵn tên ngẫu nhiên), lưu xong mới tới hướng dẫn.
+    const askName = (): void => {
+      const n = STRINGS.lobby.welcomeName;
+      const nameModal = openModal(hudRoot, {
+        title: n.title,
+        onClose: () => {
+          saveCoachDone(store, 'name');
+          if (!disposed && !loadCoachDone(store, 'lobby')) startCoach();
+        },
+      });
+      const input = el('input', {
+        className: 'creator-input',
+        attrs: { type: 'text', maxlength: String(NAME_MAX_LENGTH), 'aria-label': n.title },
+      });
+      input.value = profile.name;
+      const random = el('button', {
+        className: 'button button-soft',
+        text: STRINGS.creator.randomName,
+        attrs: { type: 'button' },
+      });
+      random.addEventListener('click', () => {
+        input.value = randomVietnameseName(Math.random, input.value);
+      });
+      const next = el('button', {
+        className: 'button button-primary',
+        text: n.next,
+        attrs: { type: 'submit' },
+      });
+      const error = el('p', { className: 'activity-message', attrs: { role: 'status' } });
+      const form = el('form', {
+        className: 'auth-form',
+        children: [
+          el('p', { className: 'activity-intro', text: n.body }),
+          el('div', { className: 'creator-name-row', children: [input, random] }),
+          error,
+          next,
+        ],
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const name = input.value.trim();
+        if (!name || name === profile.name) {
+          nameModal.close();
+          return;
+        }
+        next.disabled = true;
+        void saveCharacter({ ...profile, name }).then((result) => {
+          next.disabled = false;
+          if (!result.ok) {
+            error.textContent = result.notice;
+            error.dataset.tone = 'error';
+            return;
+          }
+          nameModal.close();
+          // Dựng lại màn Ở nhà với tên mới (hướng dẫn chạy tiếp ở đó).
+          showLobby(result.profile, null);
+        });
+      });
+      nameModal.body.append(form);
+      input.focus();
+      input.select();
+    };
     const startCoach = (): void => {
       coach?.dispose();
       coach = showCoachMarks(hudRoot, {
@@ -554,7 +616,12 @@ function start(): void {
             showLobby(saved, null);
           });
         },
-        onHelp: startCoach,
+        onRename: async (name) => {
+          const result = await saveCharacter({ ...profile, name });
+          if (!result.ok) return result.notice;
+          profile = result.profile;
+          return null;
+        },
         onRegister: async (username, password) => {
           const result = await register(api, stores, username, password);
           if (!result.ok) return result.error;
@@ -593,7 +660,8 @@ function start(): void {
       observer = new ResizeObserver(updateInset);
       observer.observe(panel.element);
       updateInset();
-      if (!loadCoachDone(store, 'lobby')) startCoach();
+      if (!loadCoachDone(store, 'name')) askName();
+      else if (!loadCoachDone(store, 'lobby')) startCoach();
     });
     window.addEventListener('resize', updateInset);
     teardown = () => {
@@ -1412,6 +1480,14 @@ function start(): void {
         devPanel = mountDevPanel(hudRoot, {
           call: async (path, body) => (await api.request('POST', path, body)).ok,
           today: () => progress.today,
+          grantUsers: async (usernames, grant) => {
+            const r = await api.request<{ granted: string[]; missing: string[] }>(
+              'POST',
+              '/api/dev/grant-users',
+              { usernames, ...grant },
+            );
+            return r.ok ? r.value : null;
+          },
           toast: (text) => {
             officeHudView.showToast(text);
           },

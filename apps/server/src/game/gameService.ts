@@ -11,6 +11,7 @@ import {
   seededRng,
   type PlantView,
   hasCeoMeeting,
+  normalizeUsername,
 } from '@dilam/shared';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -51,11 +52,8 @@ export function attachGameService(
 ): GameService {
   const engine = new ProgressEngine(ctx.repos, ctx.now);
   const shop = new ShopService(ctx.repos, ctx.now);
-  const plantSpots = new Map(
-    officeInteractables(OFFICE_FLOOR)
-      .filter((item) => item.kind === 'plant')
-      .map((item) => [item.id, item.approach]),
-  );
+  // Tâm từng chậu cây (hoa mọc trong chậu, không phải chỗ người chơi đứng tưới).
+  const plantSpots = new Map(OFFICE_FLOOR.plants.map((p, i) => [`plant-${String(i)}`, p]));
   const toView = (p: RoomPlant): PlantView => ({
     id: p.id,
     x: p.x,
@@ -426,6 +424,13 @@ const devEventSchema = z.strictObject({
   kind: z.enum(['boss_walk', 'wifi_down', 'coffee_out', 'surprise_meeting']),
 });
 const devShiftSchema = z.strictObject({ days: z.number().int().min(-30).max(400) });
+/** Cộng xu / XP cho người khác (theo tên đăng nhập), tối đa 20 người một lần. */
+const devGrantUsersSchema = z.strictObject({
+  usernames: z.array(z.string().min(1).max(40)).min(1).max(20),
+  xp: z.number().int().min(0).max(1_000_000).optional(),
+  coins: z.number().int().min(0).max(10_000_000).optional(),
+});
+
 const devGrantSchema = z.strictObject({
   xp: z.number().int().min(0).max(1_000_000).optional(),
   coins: z.number().int().min(0).max(10_000_000).optional(),
@@ -479,5 +484,34 @@ function registerDevRoutes(
     push(user.id);
     app.gateway.sessionOf(user.id)?.room.updateProfile(user.id, publicProfile(ctx.repos, user.id));
     return reply.send({ ok: true });
+  });
+  // Cộng xu / XP cho vài người khác (công cụ dev của tài khoản quản trị).
+  app.post('/api/dev/grant-users', (request, reply) => {
+    const user = requireDevUser(ctx, request, reply);
+    if (!user) return reply;
+    const body = ctx.helpers.parse(devGrantUsersSchema, request.body, reply);
+    if (!body) return reply;
+    const granted: string[] = [];
+    const missing: string[] = [];
+    for (const raw of body.usernames) {
+      const name = normalizeUsername(raw);
+      const target = ctx.repos.users.byUsername(name);
+      if (!target) {
+        missing.push(name);
+        continue;
+      }
+      const state = engine.state(target.id);
+      const coins = state.coins + (body.coins ?? 0);
+      ctx.repos.transaction(() => {
+        engine.save(target.id, { ...state, xp: state.xp + (body.xp ?? 0), coins });
+        if (body.coins) ctx.repos.ledger.add(target.id, ctx.now(), body.coins, 'dev:gift', coins);
+      });
+      push(target.id);
+      app.gateway
+        .sessionOf(target.id)
+        ?.room.updateProfile(target.id, publicProfile(ctx.repos, target.id));
+      granted.push(name);
+    }
+    return reply.send({ granted, missing });
   });
 }

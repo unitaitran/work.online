@@ -4113,3 +4113,161 @@ button.office-badge:focus-visible {
     padding: clamp(10px, 1.6vh, 14px) 18px;
   }
 }
+
+/* Nút căn giữa bằng transform (Chạm để dùng / Đứng dậy, Gõ phím tập trung, Lau bàn): rê chuột hay
+   bấm chỉ đổi màu, không nổi / lún (nếu không, transform đè mất phần căn giữa làm nút nhảy lệch). */
+.interact-button:hover:not(:disabled),
+.focus-button:hover:not(:disabled),
+.wipe-button:hover:not(:disabled) {
+  transform: translateX(-50%);
+}
+
+.interact-button:active:not(:disabled),
+.focus-button:active:not(:disabled),
+.wipe-button:active:not(:disabled) {
+  transform: translateX(-50%);
+}
+
+@media (pointer: coarse) {
+  .interact-button:hover:not(:disabled),
+  .interact-button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+.office-hud.is-touch .focus-button:hover:not(:disabled),
+.office-hud.is-touch .focus-button:active:not(:disabled),
+.office-hud.is-touch .wipe-button:hover:not(:disabled),
+.office-hud.is-touch .wipe-button:active:not(:disabled) {
+  transform: none;
+}
+
+/* ---------- Danh sách gọn: nhân viên, đồng nghiệp ---------- */
+
+.member-rows {
+  display: grid;
+  gap: 6px;
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 2px 0 0;
+}
+
+.member-rows > li {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.member-manage summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.member-manage summary::-webkit-details-marker {
+  display: none;
+}
+
+.member-more {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.member-manage[open] .member-more {
+  background: var(--accent);
+  color: #fff;
+}
+
+.member-manage .company-actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+  animation: ui-fade-in 160ms ease;
+}
+
+.member-info span {
+  color: var(--ink-soft);
+}
+
+/* Bảng xếp hạng: tuần/tháng và phòng ban cùng một hàng. */
+.board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.board-head .profile-tabs {
+  margin: 0;
+}
+
+/* Công cụ dev: cộng cho người khác. */
+.dev-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #2a2d36;
+  color: #fff;
+  font: inherit;
+}
+
+.dev-amount {
+  flex: none;
+  width: 80px;
+}
+
+/* Ở nhà: tên kèm nút sửa tại chỗ. */
+.lobby-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lobby-name .creator-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-name-edit {
+  flex: none;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease;
+}
+
+.lobby-name-edit:hover {
+  opacity: 1;
+  background: var(--accent-soft);
+}
+
+.lobby-name-form {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.lobby-name-form .button {
+  padding: 8px 12px;
+}
