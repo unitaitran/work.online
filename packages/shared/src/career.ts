@@ -1,20 +1,38 @@
-// Lựa chọn sự nghiệp: phòng ban (từ chức danh 3) và nhánh (từ chức danh 5). Mỗi thứ chọn một lần.
-import { BALANCE } from './balance';
-import { titleFor, type Branch, type Department } from './levels';
+// Lựa chọn sự nghiệp: phòng ban và nhánh, mỗi thứ chọn một lần. Mặc định mở theo mức chung
+// (GLOBAL_UNLOCK); làm ở công ty người chơi thì theo lộ trình CEO đặt (không sớm hơn mức chung).
+import { GLOBAL_UNLOCK } from './hiring';
+import { levelFor, type Branch, type Department } from './levels';
 import type { ProgressState } from './progress';
 
-export function needsDepartment(state: ProgressState): boolean {
-  return titleFor(state.xp) >= BALANCE.departmentFromTitle && state.department === null;
+/** Cấp mở khoá chọn phòng ban / nhánh (mặc định: mức chung). */
+export interface CareerUnlock {
+  department: number;
+  branch: number;
 }
 
-export function needsBranch(state: ProgressState): boolean {
-  return titleFor(state.xp) >= BALANCE.branchFromTitle && state.branch === null;
+export function needsDepartment(
+  state: ProgressState,
+  unlock: CareerUnlock = GLOBAL_UNLOCK,
+): boolean {
+  return levelFor(state.xp) >= unlock.department && state.department === null;
 }
 
-export function chooseDepartment(state: ProgressState, department: Department): ProgressState {
-  return needsDepartment(state) ? { ...state, department } : state;
+export function needsBranch(state: ProgressState, unlock: CareerUnlock = GLOBAL_UNLOCK): boolean {
+  return levelFor(state.xp) >= unlock.branch && state.branch === null;
 }
 
-export function chooseBranch(state: ProgressState, branch: Branch): ProgressState {
-  return needsBranch(state) ? { ...state, branch } : state;
+export function chooseDepartment(
+  state: ProgressState,
+  department: Department,
+  unlock: CareerUnlock = GLOBAL_UNLOCK,
+): ProgressState {
+  return needsDepartment(state, unlock) ? { ...state, department } : state;
+}
+
+export function chooseBranch(
+  state: ProgressState,
+  branch: Branch,
+  unlock: CareerUnlock = GLOBAL_UNLOCK,
+): ProgressState {
+  return needsBranch(state, unlock) ? { ...state, branch } : state;
 }

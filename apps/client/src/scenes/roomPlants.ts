@@ -13,7 +13,7 @@ import {
 import { mergePieces, piece, type Piece } from '../engine/meshBuilder';
 
 /** Khóm hoa cách chậu trong khoảng này thì dời vào chậu; mép trong chậu và mặt đất trong chậu. */
-const POT_SNAP = 1.4;
+const POT_SNAP = 2.2;
 const POT_RIM = 0.17;
 const SOIL_Y = 0.42;
 
@@ -83,13 +83,14 @@ export class RoomPlants {
         best = pot;
       }
     }
-    if (best) {
-      const a = Math.atan2(plant.z - best.z, plant.x - best.x) + plant.id * 0.9;
-      mesh.position.set(best.x + Math.cos(a) * POT_RIM, SOIL_Y, best.z + Math.sin(a) * POT_RIM);
-      mesh.scale.setScalar(0.8);
-    } else {
-      mesh.position.set(plant.x, 0, plant.z);
+    if (!best) {
+      // Không thuộc chậu nào: không hiện (hoa không mọc giữa sàn).
+      geometry.dispose();
+      return;
     }
+    const a = Math.atan2(plant.z - best.z, plant.x - best.x) + plant.id * 0.9;
+    mesh.position.set(best.x + Math.cos(a) * POT_RIM, SOIL_Y, best.z + Math.sin(a) * POT_RIM);
+    mesh.scale.setScalar(0.8);
     this.group.add(mesh);
     this.meshes.set(plant.id, { mesh, geometry });
   }

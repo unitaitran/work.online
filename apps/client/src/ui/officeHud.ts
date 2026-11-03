@@ -1,3 +1,4 @@
+import { BALANCE } from '@dilam/shared';
 import type { AudioSettings } from '../audio/audioEngine';
 import type { EngineStats } from '../engine/engine';
 import { QUALITY_MODES, isQualityMode, type QualityMode } from '../engine/quality';
@@ -436,7 +437,11 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       xpFloat.classList.remove('is-showing');
       xpFloat.getBoundingClientRect(); // ép trình duyệt tính lại để chạy lại hiệu ứng
       xpFloat.classList.add('is-showing');
-      if (capped) showToast(STRINGS.progress.xpCapped);
+      if (capped) {
+        const lines = STRINGS.progress.xpCapped;
+        const line = lines[Math.floor(Math.random() * lines.length)] ?? lines[0];
+        showToast(line(xp, Math.round(BALANCE.overCapRate * 100)));
+      }
     },
     setMission(mission) {
       missionCard.hidden = mission === null;

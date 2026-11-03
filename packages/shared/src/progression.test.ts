@@ -219,20 +219,21 @@ describe('xpFor', () => {
 });
 
 describe('giới hạn mềm mỗi ngày', () => {
-  it('dưới mức nhận đủ, vượt mức chỉ nhận 25%', () => {
+  it('dưới mức nhận đủ, vượt mức chỉ nhận 50%', () => {
     expect(applyDailyCap(0, 100)).toBe(100);
     expect(applyDailyCap(150, 40)).toBe(40);
-    expect(applyDailyCap(150, 80)).toBe(40 + 10);
-    expect(applyDailyCap(190, 70)).toBe(17);
-    expect(applyDailyCap(500, 3)).toBe(0);
+    expect(applyDailyCap(150, 80)).toBe(40 + 20);
+    expect(applyDailyCap(190, 70)).toBe(35);
+    expect(applyDailyCap(500, 3)).toBe(1);
+    expect(applyDailyCap(500, 1)).toBe(0);
     expect(applyDailyCap(0, 0)).toBe(0);
   });
 
   it('applyEvent cộng dồn đúng giới hạn trong ngày, sang ngày mới thì mở lại', () => {
     let s = createProgress(T0);
     s = applyAll(s, [tick('focus', 35)]); // 140
-    s = applyAll(s, [tick('focus', 25)]); // +50 đủ, +50 vượt → 12
-    expect(s.daily.earned).toBe(140 + 50 + 12);
+    s = applyAll(s, [tick('focus', 25)]); // +50 đủ, +50 vượt → 25
+    expect(s.daily.earned).toBe(140 + 50 + 25);
     expect(s.daily.counts.deskMinutes).toBe(60);
     const next = applyEvent(s, tick('focus', 10), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
     expect(next.granted).toBe(40);

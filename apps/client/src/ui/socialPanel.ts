@@ -63,11 +63,38 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
       return b;
     }),
   });
-  const list = el('ul', { className: 'social-players' });
+  const list = el('ul', { className: 'social-players member-rows' });
+  const search = el('input', {
+    className: 'creator-input',
+    attrs: { type: 'search', placeholder: s.search, 'aria-label': s.search },
+  });
+  const hiddenOnly = el('button', {
+    className: 'auth-tab',
+    text: s.hiddenOnly,
+    attrs: { type: 'button', 'aria-pressed': 'false' },
+  });
+  const countText = el('p', { className: 'fortune-note map-count' });
+  const fold = (t: string): string =>
+    t
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .toLowerCase();
   const renderPlayers = (): void => {
-    const players = o.players();
-    if (players.length === 0) {
+    const all = o.players();
+    if (all.length === 0) {
+      countText.textContent = '';
       list.replaceChildren(el('li', { className: 'activity-intro', text: s.noPlayers }));
+      return;
+    }
+    const q = fold(search.value.trim());
+    const onlyHidden = hiddenOnly.getAttribute('aria-pressed') === 'true';
+    const players = all.filter(
+      (p) => (!onlyHidden || p.hidden) && (!q || fold(`${p.name} ${p.title}`).includes(q)),
+    );
+    countText.textContent = s.count(players.length, all.length);
+    if (players.length === 0) {
+      list.replaceChildren(el('li', { className: 'activity-intro', text: s.noMatch }));
       return;
     }
     list.replaceChildren(
@@ -93,6 +120,17 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
       }),
     );
   };
+  let searchTimer: number | undefined;
+  search.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(renderPlayers, 150);
+  });
+  hiddenOnly.addEventListener('click', () => {
+    const on = hiddenOnly.getAttribute('aria-pressed') !== 'true';
+    hiddenOnly.setAttribute('aria-pressed', String(on));
+    hiddenOnly.classList.toggle('is-active', on);
+    renderPlayers();
+  });
   renderPlayers();
   // Rủ cả phòng uống trà sữa: nút nổi bật đầu bảng.
   const tea = el('button', {
@@ -113,6 +151,10 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
     el('h3', { text: s.quickChats }),
     chats,
     el('h3', { text: s.players }),
+    el('div', {
+      className: 'company-map-filter',
+      children: [search, el('div', { className: 'map-chips', children: [hiddenOnly] }), countText],
+    }),
     list,
     el('p', { className: 'fortune-note', text: s.hiddenNote }),
   );

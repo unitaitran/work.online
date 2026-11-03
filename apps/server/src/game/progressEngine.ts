@@ -27,6 +27,7 @@ import {
   type Mission,
   type ProgressState,
   type Vec2,
+  type CareerUnlock,
 } from '@dilam/shared';
 import type { Repositories } from '../db/repositories';
 import { recordEarn } from './shop';
@@ -60,6 +61,8 @@ export interface PlayerContext {
   position(): Vec2 | null;
   /** Phòng đang có sự kiện "hết cà phê" (máy pha tạm nghỉ). */
   coffeeOut?(): boolean;
+  /** Mốc chọn phòng ban / nhánh theo nơi làm (không có: mức chung). */
+  careerUnlock?(): CareerUnlock | undefined;
   /** Vị trí của người chơi khác cùng phòng theo mã nhân viên (null nếu không có). */
   colleagueAt?(code: string): Vec2 | null;
 }
@@ -282,15 +285,17 @@ export class ProgressEngine {
         event = makeEvent('vent', now, 0, { length: action.length, anonymous: action.anonymous });
         break;
       case 'choose_department': {
-        if (!needsDepartment(state)) return { ok: false, reason: 'not_allowed' };
-        const next = chooseDepartment(state, action.department);
+        const unlock = player.careerUnlock?.();
+        if (!needsDepartment(state, unlock)) return { ok: false, reason: 'not_allowed' };
+        const next = chooseDepartment(state, action.department, unlock);
         this.save(userId, next);
         live.lastAt.set(action.kind, now);
         return { ok: true, state: next, outcome: null, today };
       }
       case 'choose_branch': {
-        if (!needsBranch(state)) return { ok: false, reason: 'not_allowed' };
-        const next = chooseBranch(state, action.branch);
+        const unlock = player.careerUnlock?.();
+        if (!needsBranch(state, unlock)) return { ok: false, reason: 'not_allowed' };
+        const next = chooseBranch(state, action.branch, unlock);
         this.save(userId, next);
         live.lastAt.set(action.kind, now);
         return { ok: true, state: next, outcome: null, today };

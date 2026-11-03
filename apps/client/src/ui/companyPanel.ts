@@ -7,19 +7,18 @@ import {
   COMPANY_ICONS,
   INDUSTRIES,
   MISSION_TEMPLATES,
-  POSITION_NAMES,
-  POSITIONS,
   PROVINCES,
   provinceOf,
   REGION_NAMES,
   seededRng,
-  validateBands,
+  validateLadder,
   HIRING_MAX_LEVEL,
   DEFAULT_PROVINCE,
-  DEFAULT_HIRING_BANDS,
-  type HiringBands,
-  type LevelBand,
-  type Position,
+  GLOBAL_UNLOCK,
+  LADDER_NAME_MAX,
+  MAX_LADDER_STEPS,
+  type CompanyLadder,
+  type LadderStep,
   stageConfig,
   type CompanyDetail,
   type CompanyPublic,
@@ -46,8 +45,8 @@ const s = STRINGS.company;
 
 const hex = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 
-function positionText(position: Position | null): string {
-  return position ? s.people.position(POSITION_NAMES[position]) : s.people.noPosition;
+function positionText(position: string | null): string {
+  return position ? s.people.position(position) : s.people.noPosition;
 }
 
 export function npcName(nameIndex: number): string {
@@ -87,9 +86,12 @@ function companyBadge(c: CompanyPublic): HTMLElement {
 export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh(): void } {
   const message = el('p', { className: 'activity-message', attrs: { role: 'status' } });
   const content = el('div', { className: 'company-content' });
-  let tab: 'overview' | 'projects' | 'people' | 'feed' = 'overview';
+  let tab: 'overview' | 'projects' | 'people' | 'ladder' | 'feed' = 'overview';
   let inviteCode: string | null = null;
   let leaveArmed = false;
+  /** Tìm / lọc danh sách nhân viên (giữ qua các lần tải lại). */
+  let memberQuery = '';
+  let memberFilter = 'all';
 
   const say = (text: string, tone: 'ok' | 'error' = 'error'): void => {
     message.textContent = text;
@@ -389,7 +391,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       }),
     );
     const tabs: (typeof tab)[] = d.isOwner
-      ? ['overview', 'projects', 'people', 'feed']
+      ? ['overview', 'projects', 'people', 'ladder', 'feed']
       : ['overview', 'feed'];
     if (!tabs.includes(tab)) tab = 'overview';
     parts.push(
@@ -413,6 +415,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     if (tab === 'overview') parts.push(...renderOverview(d));
     if (tab === 'projects') parts.push(...renderProjects(d));
     if (tab === 'people') parts.push(...renderPeople(d));
+    if (tab === 'ladder') parts.push(renderBands(d.company.hiringBands, d.company.hiring));
     if (tab === 'feed') parts.push(renderFeed(d));
     return parts;
   };
@@ -617,11 +620,50 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
 
   const renderPeople = (d: CompanyDetail): HTMLElement[] => {
     const p = s.people;
-    const parts: HTMLElement[] = [el('h3', { text: p.members })];
-    parts.push(
-      el('ul', {
-        className: 'company-list',
-        children: d.members.map((m) => {
+    const parts: HTMLElement[] = [el('h3', { text: `${p.members} (${String(d.members.length)})` })];
+    // Tìm theo tên / mã, lọc theo vị trí (giữ nguyên khi danh sách tải lại).
+    const searchBox = el('input', {
+      className: 'creator-input',
+      attrs: { type: 'search', placeholder: p.search, 'aria-label': p.search },
+    });
+    searchBox.value = memberQuery;
+    const filters = el('div', { className: 'map-chips' });
+    const listBox = el('ul', { className: 'company-list member-rows' });
+    const countText = el('p', { className: 'fortune-note map-count' });
+    const fold = (t: string): string =>
+      t
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .toLowerCase();
+    const renderFilters = (): void => {
+      filters.replaceChildren(
+        ...['all', ...d.company.hiringBands.steps.map((step) => step.name)].map((key) => {
+          const b = el('button', {
+            className: `auth-tab${memberFilter === key ? ' is-active' : ''}`,
+            text: key === 'all' ? p.filterAll : key,
+            attrs: { type: 'button' },
+          });
+          b.addEventListener('click', () => {
+            memberFilter = key;
+            renderFilters();
+            renderMembers();
+          });
+          return b;
+        }),
+      );
+    };
+    const renderMembers = (): void => {
+      const q = fold(memberQuery.trim());
+      const rows = d.members.filter(
+        (m) =>
+          (memberFilter === 'all' || m.owner || m.position === memberFilter) &&
+          (!q || fold(`${m.name} ${m.code}`).includes(q)),
+      );
+      countText.textContent = p.count(rows.length, d.members.length);
+      listBox.replaceChildren(
+        ...(rows.length === 0 ? [el('li', { className: 'activity-intro', text: p.noMatch })] : []),
+        ...rows.map((m) => {
           const actions: HTMLElement[] = [];
           if (!m.owner) {
             const task = el('select', {
@@ -654,23 +696,52 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
               ),
             );
           }
-          return el('li', {
-            className: 'company-member',
+          // Dòng gọn: tên, vị trí, cấp; các nút quản lý gom vào "Quản lý" (mở khi cần).
+          const info = el('span', {
+            className: 'member-info',
             children: [
+              el('strong', { text: m.name }),
               el('span', {
-                children: [
-                  el('strong', { text: m.name }),
-                  el('span', {
-                    // Trong công ty, chức danh là CEO hoặc vị trí theo khung cấp (không dùng thang chức danh chung).
-                    text: ` · ${m.owner ? p.owner : `${positionText(m.position)} · ${s.ranks[m.role] ?? ''}`} · ${p.level(m.level)}`,
-                  }),
-                ],
+                text: ` · ${m.owner ? p.owner : positionText(m.position)} · ${p.level(m.level)}`,
               }),
-              el('div', { className: 'company-actions', children: actions }),
             ],
           });
+          return el('li', {
+            className: 'company-member member-row',
+            children:
+              actions.length === 0
+                ? [info]
+                : [
+                    el('details', {
+                      className: 'member-manage',
+                      children: [
+                        el('summary', {
+                          children: [
+                            info,
+                            el('span', { className: 'member-more', text: p.manage }),
+                          ],
+                        }),
+                        el('div', { className: 'company-actions', children: actions }),
+                      ],
+                    }),
+                  ],
+          });
         }),
-      }),
+      );
+    };
+    let searchTimer: number | undefined;
+    searchBox.addEventListener('input', () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        memberQuery = searchBox.value;
+        renderMembers();
+      }, 150);
+    });
+    renderFilters();
+    renderMembers();
+    parts.push(
+      el('div', { className: 'company-map-filter', children: [searchBox, filters, countText] }),
+      listBox,
     );
     parts.push(el('h3', { text: p.applications }));
     parts.push(
@@ -712,7 +783,6 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
               ),
       }),
     );
-    if (d.isOwner) parts.push(renderBands(d.company.hiringBands, d.company.hiring));
     const invite = button(
       inviteCode ? p.inviteAgain : p.invite,
       () => {
@@ -763,70 +833,140 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     return parts;
   };
 
-  /** CEO đặt khung cấp: mỗi vị trí bật/tắt, từ cấp - đến cấp. */
-  const renderBands = (bands: HiringBands, hiring: boolean): HTMLElement => {
+  /**
+   * CEO đặt lộ trình công ty: tối đa 10 bậc (tên, cấp bắt đầu, đang tuyển), từ bậc nào được chọn
+   * phòng ban / nhánh (không sớm hơn mức chung), và bật/tắt nhận đơn.
+   */
+  const renderBands = (ladder: CompanyLadder, hiring: boolean): HTMLElement => {
     const p = s.people;
-    const rows = POSITIONS.map((position) => {
-      const band = bands[position];
-      const open = el('input', {
-        className: 'switch',
-        attrs: {
-          type: 'checkbox',
-          role: 'switch',
-          'aria-label': `${p.bandOpen} ${POSITION_NAMES[position]}`,
-        },
-      });
-      open.checked = band !== null;
-      const num = (value: number, label: string): HTMLInputElement => {
-        const input = el('input', {
-          className: 'band-input',
-          attrs: {
-            type: 'number',
-            min: '1',
-            max: String(HIRING_MAX_LEVEL),
-            step: '1',
-            inputmode: 'numeric',
-            'aria-label': `${POSITION_NAMES[position]} ${label}`,
-          },
-        });
-        input.value = String(value);
-        return input;
-      };
-      const fallback = DEFAULT_HIRING_BANDS[position] ?? { min: 1, max: 1 };
-      const min = num(band?.min ?? fallback.min, p.bandFrom);
-      const max = num(band?.max ?? fallback.max, p.bandTo);
-      let rowEl: HTMLElement | null = null;
-      const sync = (): void => {
-        min.disabled = !open.checked;
-        max.disabled = !open.checked;
-        rowEl?.classList.toggle('is-off', !open.checked);
-      };
-      open.addEventListener('change', sync);
-      rowEl = el('div', {
-        className: 'band-row',
-        children: [
-          open,
-          el('span', {
-            className: `band-chip band-${position}`,
-            text: POSITION_NAMES[position],
-          }),
-          el('span', {
-            className: 'band-range',
-            children: [el('span', { text: p.bandLevel }), min, el('span', { text: '–' }), max],
-          }),
-        ],
-      });
-      sync();
-      const element = rowEl;
-      return {
-        position,
-        read: (): LevelBand | null =>
-          open.checked
-            ? { min: Math.round(Number(min.value)), max: Math.round(Number(max.value)) }
-            : null,
-        element,
-      };
+    const steps: LadderStep[] = ladder.steps.map((step) => ({ ...step }));
+    let departmentStep = ladder.departmentStep;
+    let branchStep = ladder.branchStep;
+    const list = el('div', { className: 'band-list' });
+    const unlocks = el('div', { className: 'ladder-unlocks' });
+    const addButton = el('button', {
+      className: 'button button-soft',
+      text: p.ladderAdd,
+      attrs: { type: 'button' },
     });
+    const stepSelect = (label: string, value: number, set: (i: number) => void): HTMLElement => {
+      const select = el('select', { className: 'ladder-select', attrs: { 'aria-label': label } });
+      steps.forEach((step, i) => {
+        select.append(
+          el('option', {
+            text: `${String(i + 1)}. ${step.name || p.ladderUnnamed} (${p.level(step.minLevel)})`,
+            attrs: { value: String(i) },
+          }),
+        );
+      });
+      select.value = String(Math.min(value, steps.length - 1));
+      select.addEventListener('change', () => {
+        set(Number(select.value));
+      });
+      return el('label', {
+        className: 'ladder-unlock',
+        children: [el('span', { text: label }), select],
+      });
+    };
+    const renderUnlocks = (): void => {
+      unlocks.replaceChildren(
+        stepSelect(p.ladderDepartment(GLOBAL_UNLOCK.department), departmentStep, (i) => {
+          departmentStep = i;
+        }),
+        stepSelect(p.ladderBranch(GLOBAL_UNLOCK.branch), branchStep, (i) => {
+          branchStep = i;
+        }),
+      );
+    };
+    const renderSteps = (): void => {
+      list.replaceChildren(
+        ...steps.map((step, i) => {
+          const name = el('input', {
+            className: 'creator-input ladder-name',
+            attrs: {
+              type: 'text',
+              maxlength: String(LADDER_NAME_MAX),
+              placeholder: p.ladderNamePlaceholder,
+              'aria-label': p.ladderName(i + 1),
+            },
+          });
+          name.value = step.name;
+          name.addEventListener('input', () => {
+            step.name = name.value;
+          });
+          name.addEventListener('change', renderUnlocks);
+          const level = el('input', {
+            className: 'band-input',
+            attrs: {
+              type: 'number',
+              min: '1',
+              max: String(HIRING_MAX_LEVEL),
+              step: '1',
+              inputmode: 'numeric',
+              'aria-label': `${p.ladderName(i + 1)} ${p.bandFrom}`,
+            },
+          });
+          level.value = String(step.minLevel);
+          level.addEventListener('input', () => {
+            step.minLevel = Math.round(Number(level.value));
+          });
+          level.addEventListener('change', renderUnlocks);
+          const open = el('input', {
+            className: 'switch',
+            attrs: {
+              type: 'checkbox',
+              role: 'switch',
+              'aria-label': `${p.bandOpen} ${p.ladderName(i + 1)}`,
+            },
+          });
+          open.checked = step.hiring;
+          const row = el('div', {
+            className: `band-row ladder-row${step.hiring ? '' : ' is-off'}`,
+          });
+          open.addEventListener('change', () => {
+            step.hiring = open.checked;
+            row.classList.toggle('is-off', !open.checked);
+          });
+          const remove = el('button', {
+            className: 'ladder-remove',
+            text: '✕',
+            attrs: { type: 'button', title: p.ladderRemove, 'aria-label': p.ladderRemove },
+          });
+          remove.disabled = steps.length <= 1;
+          remove.addEventListener('click', () => {
+            steps.splice(i, 1);
+            const fix = (n: number): number => (n > i ? n - 1 : Math.min(n, steps.length - 1));
+            departmentStep = fix(departmentStep);
+            branchStep = fix(branchStep);
+            renderAll();
+          });
+          row.append(
+            el('span', { className: 'ladder-index', text: String(i + 1) }),
+            name,
+            el('span', {
+              className: 'band-range',
+              children: [el('span', { text: p.bandFrom }), level],
+            }),
+            open,
+            remove,
+          );
+          return row;
+        }),
+      );
+    };
+    function renderAll(): void {
+      renderSteps();
+      renderUnlocks();
+      addButton.disabled = steps.length >= MAX_LADDER_STEPS;
+    }
+    addButton.addEventListener('click', () => {
+      if (steps.length >= MAX_LADDER_STEPS) return;
+      const last = steps[steps.length - 1]?.minLevel ?? 0;
+      steps.push({ name: '', minLevel: Math.min(HIRING_MAX_LEVEL, last + 10), hiring: true });
+      renderAll();
+      list.querySelector<HTMLInputElement>('.ladder-row:last-child .ladder-name')?.focus();
+    });
+    renderAll();
     const hiringBox = el('input', {
       className: 'switch',
       attrs: { type: 'checkbox', role: 'switch', 'aria-label': p.hiringOpen },
@@ -846,31 +986,34 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
           ],
         }),
         el('p', { className: 'band-hint', text: p.bandsIntro }),
-        el('div', { className: 'band-list', children: rows.map((row) => row.element) }),
+        list,
+        el('div', { className: 'activity-actions', children: [addButton] }),
+        unlocks,
         el('div', {
           className: 'activity-actions',
           children: [
             button(
               p.saveBands,
               () => {
-                const next = Object.fromEntries(
-                  rows.map((row) => [row.position, row.read()]),
-                ) as Record<Position, LevelBand | null>;
-                const invalid = Object.values(next).some(
-                  (b) =>
-                    b &&
-                    (!Number.isFinite(b.min) ||
-                      !Number.isFinite(b.max) ||
-                      b.min < 1 ||
-                      b.max > HIRING_MAX_LEVEL),
+                const next: CompanyLadder = {
+                  steps: steps.map((step) => ({ ...step, name: step.name.trim() })),
+                  departmentStep,
+                  branchStep,
+                };
+                const invalid = next.steps.some(
+                  (step) =>
+                    !step.name ||
+                    !Number.isFinite(step.minLevel) ||
+                    step.minLevel < 1 ||
+                    step.minLevel > HIRING_MAX_LEVEL,
                 )
-                  ? 'order'
-                  : validateBands(next);
+                  ? 'step'
+                  : validateLadder(next);
                 if (invalid) {
                   say(p.bandErrors[invalid] ?? STRINGS.net.actionFailed);
                   return;
                 }
-                void act('/api/company/hiring', { bands: next, hiring: hiringBox.checked }).then(
+                void act('/api/company/hiring', { ladder: next, hiring: hiringBox.checked }).then(
                   (r) => {
                     if (!r) return;
                     void load().then(() => {

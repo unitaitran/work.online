@@ -18,6 +18,8 @@ export const AUDIO_KEY = 'dilam.audio.v1';
 export const COACH_KEYS = {
   office: 'dilam.coach.office.v2',
   lobby: 'dilam.coach.lobby.v1',
+  /** Đã hỏi tên lần đầu (trước hướng dẫn ở màn Ở nhà). */
+  name: 'dilam.coach.name.v1',
 } as const;
 export type CoachName = keyof typeof COACH_KEYS;
 const PROBE_KEY = 'dilam.probe';

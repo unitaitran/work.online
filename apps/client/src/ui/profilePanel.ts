@@ -12,7 +12,12 @@ import {
   titleName,
   TITLE_COUNT,
   UNLOCKS,
+  CEO_TITLE,
+  GLOBAL_UNLOCK,
+  ladderUnlockLevels,
+  stepFor,
   type Branch,
+  type Workplace,
   type ProgressState,
 } from '@dilam/shared';
 import { STRINGS } from '../strings';
@@ -42,6 +47,8 @@ export interface ProfilePanelOptions {
   name: string;
   playerId: string;
   progress: ProfileSource;
+  /** Nơi làm hiện tại (công ty người chơi): lộ trình theo công ty đó. */
+  workplace?: () => Workplace | null;
   initialTab?: ProfileTab;
   account: AccountActions;
 }
@@ -146,26 +153,60 @@ function roadmapTitle(title: number, branch: Branch | null): string {
   return `${titleName(title, 'manager')} / ${titleName(title, 'specialist')}`;
 }
 
-function renderRoadmap(state: ProgressState): HTMLElement {
+/** Lộ trình ở công ty người chơi: các bậc CEO đặt (CEO thì một dòng CEO). */
+function companyTitles(workplace: Workplace, level: number): HTMLElement {
+  if (workplace.owner) {
+    return el('ol', {
+      className: 'roadmap-titles',
+      children: [
+        el('li', { className: 'is-current', text: `${CEO_TITLE} (${s.roadmap.current})` }),
+      ],
+    });
+  }
+  const current = stepFor(workplace.ladder, level);
+  return el('ol', {
+    className: 'roadmap-titles',
+    children: workplace.ladder.steps.map((step, i) =>
+      el('li', {
+        className: i === current ? 'is-current' : i < current ? 'is-done' : '',
+        text: `${step.name} — ${s.roadmap.minLevel(step.minLevel)}${i === current ? ` (${s.roadmap.current})` : ''}`,
+      }),
+    ),
+  });
+}
+
+function renderRoadmap(state: ProgressState, workplace: Workplace | null): HTMLElement {
   const level = levelFor(state.xp);
   const company = canOpenCompany(state);
   const current = titleFor(state.xp);
-  const titles = el('ol', {
-    className: 'roadmap-titles',
-    children: Array.from({ length: TITLE_COUNT }, (_, i) => {
-      const title = i + 1;
-      const item = el('li', {
-        className: title === current ? 'is-current' : title < current ? 'is-done' : '',
-        text: `${roadmapTitle(title, state.branch)} — ${s.roadmap.minLevel(titleMinLevel(title))}${title === current ? ` (${s.roadmap.current})` : ''}`,
+  const unlockAt =
+    workplace && !workplace.owner ? ladderUnlockLevels(workplace.ladder) : GLOBAL_UNLOCK;
+  const titles = workplace
+    ? companyTitles(workplace, level)
+    : el('ol', {
+        className: 'roadmap-titles',
+        children: Array.from({ length: TITLE_COUNT }, (_, i) => {
+          const title = i + 1;
+          const item = el('li', {
+            className: title === current ? 'is-current' : title < current ? 'is-done' : '',
+            text: `${roadmapTitle(title, state.branch)} — ${s.roadmap.minLevel(titleMinLevel(title))}${title === current ? ` (${s.roadmap.current})` : ''}`,
+          });
+          return item;
+        }),
       });
-      return item;
-    }),
-  });
   const unlocks = el('ul', {
     className: 'roadmap-unlocks',
-    children: UNLOCKS.map((unlock) =>
-      el('li', { text: `${s.roadmap.unlockAt(unlock.kind, unlock.at)}: ${unlock.text}` }),
-    ),
+    children: [
+      ...(workplace && !workplace.owner
+        ? [
+            el('li', { text: s.roadmap.companyDepartment(unlockAt.department) }),
+            el('li', { text: s.roadmap.companyBranch(unlockAt.branch) }),
+          ]
+        : []),
+      ...UNLOCKS.map((unlock) =>
+        el('li', { text: `${s.roadmap.unlockAt(unlock.kind, unlock.at)}: ${unlock.text}` }),
+      ),
+    ],
   });
   const companyChecks = el('ul', {
     className: 'check-list',
@@ -183,7 +224,7 @@ function renderRoadmap(state: ProgressState): HTMLElement {
   return el('div', {
     className: 'profile-roadmap',
     children: [
-      el('h3', { text: s.roadmap.titles }),
+      el('h3', { text: workplace ? s.roadmap.companyTitles : s.roadmap.titles }),
       titles,
       el('h3', { text: s.roadmap.unlocks }),
       unlocks,
@@ -330,7 +371,7 @@ export function mountProfilePanel(body: HTMLElement, o: ProfilePanelOptions): { 
         : tab === 'log'
           ? renderLog(state)
           : tab === 'roadmap'
-            ? renderRoadmap(state)
+            ? renderRoadmap(state, o.workplace?.() ?? null)
             : renderAccount(o);
     content.replaceChildren(view);
   };

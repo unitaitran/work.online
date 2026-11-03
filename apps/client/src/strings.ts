@@ -343,14 +343,14 @@ export const STRINGS = {
   },
   coffee: {
     brewing: 'Máy đang pha cà phê…',
-    busy: 'Đang cầm một ly rồi.',
+    busy: 'Tay đang cầm một ly rồi, tham quá đổ bây giờ 😆',
     ready: 'Xong! Tặng đồng nghiệp hoặc tự uống.',
     holding: '1 ly cà phê sữa đá',
     drink: 'Uống luôn',
-    drank: 'Tỉnh cả người!',
+    drank: 'Tỉnh cả người, mắt mở to như deadline 👀',
     giftPrompt: (name: string) => `Tặng cà phê cho ${name}`,
     gifted: (name: string) => `Bạn đã tặng ${name} một ly cà phê.`,
-    thanks: 'Cảm ơn nha ☕',
+    thanks: 'Ôi tâm lý quá, cảm ơn nha ☕💛',
     received: (name: string) => `${name} tặng bạn một ly cà phê ☕`,
   },
   eventsPage: {
@@ -373,8 +373,20 @@ export const STRINGS = {
     xpRising: 'XP đang tăng',
     coins: (coins: number) => `${String(coins)} xu`,
     xpGain: (xp: number) => `+${String(xp)} XP`,
-    xpCapped: 'Quá giới hạn hôm nay: chỉ nhận 25% XP.',
-    levelUp: (level: number) => `Lên cấp ${String(level)}!`,
+    /** Vượt giới hạn mềm trong ngày: chọn ngẫu nhiên một câu. */
+    xpCapped: [
+      (xp: number, pct: number) =>
+        `Oops, hôm nay làm việc hơi quá rồi 😵 chỉ được ${String(pct)}% XP nữa thôi (+${String(xp)} XP)`,
+      (xp: number, pct: number) =>
+        `Sếp bảo: chăm thế này công ty ngại lắm 😅 từ giờ ${String(pct)}% XP thôi (+${String(xp)} XP)`,
+      (xp: number, pct: number) =>
+        `Pin năng lượng đỏ rồi 🔋 làm tiếp vẫn được ${String(pct)}% XP (+${String(xp)} XP)`,
+      (xp: number, pct: number) =>
+        `Ghế bắt đầu than mỏi lưng 🪑 phần thêm chỉ ${String(pct)}% XP (+${String(xp)} XP)`,
+      (xp: number, pct: number) =>
+        `Tăng ca không lương mode 🌙 ${String(pct)}% XP thôi nha (+${String(xp)} XP)`,
+    ],
+    levelUp: (level: number) => `Ting ting! Lên cấp ${String(level)} rồi 🎉`,
     openProfile: 'Xem hồ sơ',
     profileTitle: 'Hồ sơ nhân viên',
     tabs: {
@@ -403,7 +415,7 @@ export const STRINGS = {
     },
     promoted: {
       title: 'Chúc mừng thăng chức!',
-      body: (title: string) => `Bạn giờ là ${title}.`,
+      body: (title: string) => `Từ hôm nay bạn là ${title}. Danh thiếp mới đang in gấp 📇`,
       continue: 'Tiếp tục',
     },
     department: {
@@ -426,7 +438,7 @@ export const STRINGS = {
       },
     },
     log: {
-      empty: 'Chưa có hoạt động nào được tính XP.',
+      empty: 'Sổ còn trắng tinh. Đi pha ly cà phê rồi bắt đầu thôi ☕',
       sources: {
         checkin: 'Chấm công',
         'focus-typing': 'Gõ phím tập trung',
@@ -442,6 +454,9 @@ export const STRINGS = {
     },
     roadmap: {
       titles: 'Các chức danh',
+      companyTitles: 'Lộ trình ở công ty (CEO đặt)',
+      companyDepartment: (level: number) => `Cấp ${String(level)}: chọn phòng ban (theo công ty)`,
+      companyBranch: (level: number) => `Cấp ${String(level)}: chọn nhánh sự nghiệp (theo công ty)`,
       minLevel: (level: number) => `từ cấp ${String(level)}`,
       current: 'hiện tại',
       unlocks: 'Mở khoá',
@@ -467,6 +482,21 @@ export const STRINGS = {
       xpBig: '+5000 XP',
       coins: '+1000 xu',
       failed: 'Chưa bật công cụ dev.',
+      othersTitle: 'Cộng cho người khác',
+      removeTitle: 'Xoá',
+      removePlaceholder: 'tên công ty hoặc tên đăng nhập',
+      removeCompany: 'Xoá công ty',
+      removeUser: 'Xoá tài khoản',
+      confirm: 'Bấm lần nữa để xoá',
+      removed: (name: string) => `Đã xoá: ${name}`,
+      removeNotFound: 'Không tìm thấy.',
+      removeSelf: 'Không xoá được chính mình.',
+      othersPlaceholder: 'tên đăng nhập, cách nhau dấu phẩy',
+      amount: 'Số lượng',
+      plusCoins: '+ xu',
+      plusXp: '+ XP',
+      granted: (ok: string[], missing: string[]) =>
+        `${ok.length > 0 ? `Đã cộng: ${ok.join(', ')}` : 'Không cộng được ai'}${missing.length > 0 ? ` · Không thấy: ${missing.join(', ')}` : ''}`,
     },
   },
   update: {
@@ -540,6 +570,11 @@ export const STRINGS = {
     quickChats: 'Câu nhanh',
     players: 'Đồng nghiệp trong phòng',
     noPlayers: 'Chưa có ai khác trong phòng.',
+    search: 'Tìm đồng nghiệp…',
+    hiddenOnly: 'Đang ẩn',
+    noMatch: 'Không có ai khớp.',
+    count: (shown: number, total: number) =>
+      shown === total ? `${String(total)} người` : `${String(shown)}/${String(total)} người`,
     hide: 'Ẩn',
     unhide: 'Hiện lại',
     hiddenNote: 'Chỉ ẩn với riêng bạn.',
@@ -836,6 +871,7 @@ export const STRINGS = {
       overview: 'Tổng quan',
       projects: 'Dự án',
       people: 'Nhân sự',
+      ladder: 'Lộ trình',
       feed: 'Bảng tin',
     },
     currentJob: 'Đang làm ở',
@@ -953,6 +989,12 @@ export const STRINGS = {
     },
     people: {
       members: 'Thành viên',
+      search: 'Tìm nhân viên theo tên…',
+      filterAll: 'Tất cả',
+      manage: 'Quản lý ▾',
+      noMatch: 'Không có ai khớp.',
+      count: (shown: number, total: number) =>
+        shown === total ? `${String(total)} người` : `${String(shown)}/${String(total)} người`,
       applications: 'Đơn xin việc',
       noApplications: 'Chưa có đơn nào.',
       approve: 'Duyệt',
@@ -972,19 +1014,29 @@ export const STRINGS = {
       owner: 'CEO',
       level: (n: number) => `cấp ${String(n)}`,
       position: (name: string) => `vị trí ${name}`,
-      noPosition: 'ngoài khung tuyển',
-      bandsTitle: 'Khung cấp tuyển dụng',
-      bandsIntro: 'Cấp nằm trong khung nào thì vào vị trí đó.',
+      noPosition: 'chưa có bậc',
+      bandsTitle: 'Lộ trình công ty',
+      bandsIntro:
+        'Đặt tên chức danh và cấp bắt đầu của từng bậc (tối đa 10). Lên cấp là tự lên bậc. Bật "Tuyển" để người ngoài ở cấp đó xin vào được.',
       bandOpen: 'Tuyển',
       bandFrom: 'Từ cấp',
       bandTo: 'đến cấp',
       hiringOpen: 'Đang nhận đơn',
-      saveBands: 'Lưu',
-      bandsSaved: 'Đã lưu khung tuyển dụng.',
+      saveBands: 'Lưu lộ trình',
+      bandsSaved: 'Đã lưu lộ trình công ty.',
+      ladderAdd: '+ Thêm bậc',
+      ladderRemove: 'Xoá bậc',
+      ladderUnnamed: '(chưa đặt tên)',
+      ladderNamePlaceholder: 'Tên chức danh',
+      ladderName: (n: number) => `Bậc ${String(n)}`,
+      ladderDepartment: (min: number) => `Chọn phòng ban từ bậc (sớm nhất cấp ${String(min)})`,
+      ladderBranch: (min: number) => `Chọn nhánh sự nghiệp từ bậc (sớm nhất cấp ${String(min)})`,
       bandErrors: {
-        empty: 'Cần mở ít nhất một vị trí.',
-        order: 'Cấp "từ" phải nhỏ hơn hoặc bằng cấp "đến".',
-        overlap: 'Các khung phải tăng dần, không chồng nhau.',
+        step: 'Bậc nào cũng cần tên và cấp hợp lệ.',
+        empty: 'Cần ít nhất một bậc.',
+        order: 'Cấp bắt đầu phải tăng dần theo từng bậc.',
+        unlock_step: 'Chọn lại bậc mở phòng ban / nhánh.',
+        unlock_early: 'Bậc mở phòng ban / nhánh không được sớm hơn mức chung.',
       } as Record<string, string>,
     },
     event: {
@@ -1041,7 +1093,11 @@ export const STRINGS = {
       not_hiring: 'Công ty đang tạm ngưng tuyển.',
       bad_code: 'Mã mời không đúng hoặc đã hết hạn.',
       self: 'Đây là công ty của bạn.',
-      level_band: 'Cấp của bạn chưa hợp khung tuyển.',
+      level_band: 'Cấp của bạn chưa hợp bậc nào đang tuyển.',
+      ladder_empty: 'Cần ít nhất một bậc.',
+      ladder_order: 'Cấp bắt đầu phải tăng dần theo từng bậc.',
+      ladder_unlock_step: 'Chọn lại bậc mở phòng ban / nhánh.',
+      ladder_unlock_early: 'Bậc mở phòng ban / nhánh không được sớm hơn mức chung.',
     } as Record<string, string>,
   },
   auth: {
@@ -1120,6 +1176,12 @@ export const STRINGS = {
     companyMap: 'Tìm việc',
     help: 'Hướng dẫn',
     accountTitle: 'Tài khoản',
+    rename: 'Đổi tên',
+    welcomeName: {
+      title: 'Bạn tên là gì?',
+      body: 'Tên này hiện trên thẻ nhân viên và trên đầu nhân vật. Đổi lại lúc nào cũng được.',
+      next: 'Tiếp',
+    },
     guestWarn: 'Đang chơi thử: đăng ký để giữ tiến độ.',
     signedInAs: (username: string) => `Đăng nhập: ${username}`,
     legacy: 'Đặt tên đăng nhập để dễ vào lại.',

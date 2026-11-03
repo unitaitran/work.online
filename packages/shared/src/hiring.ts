@@ -1,110 +1,177 @@
-// Khung cấp tuyển dụng do CEO đặt: cấp bao nhiêu đến bao nhiêu thì vào vị trí nào.
-// Người xin việc phải có cấp nằm trong một khung đang mở; vị trí của nhân viên tính theo cấp
-// hiện tại (lên cấp là tự lên vị trí).
+// Lộ trình riêng của công ty người chơi (CEO đặt): tối đa 10 bậc, mỗi bậc có tên chức danh, cấp
+// bắt đầu và có đang tuyển hay không. Nhân viên đứng ở bậc cao nhất có cấp bắt đầu ≤ cấp hiện tại
+// (lên cấp là tự lên bậc). CEO cũng đặt từ bậc nào được chọn phòng ban / nhánh, nhưng không sớm hơn
+// mức chung của trò chơi (giữ cân bằng: phòng ban cho thêm XP).
 import { z } from 'zod';
 import { BALANCE } from './balance';
+import { titleMinLevel } from './levels';
 
-export const POSITIONS = ['intern', 'fresher', 'junior', 'middle', 'senior'] as const;
-export type Position = (typeof POSITIONS)[number];
-
-export const POSITION_NAMES: Readonly<Record<Position, string>> = {
-  intern: 'Intern',
-  fresher: 'Fresher',
-  junior: 'Junior',
-  middle: 'Middle',
-  senior: 'Senior',
-};
-
-export interface LevelBand {
-  min: number;
-  max: number;
+export interface LadderStep {
+  /** Tên chức danh ở công ty này (qua bộ lọc từ cấm ở server). */
+  name: string;
+  /** Cấp bắt đầu của bậc. */
+  minLevel: number;
+  /** Đang tuyển người ngoài vào bậc này. */
+  hiring: boolean;
 }
 
-/** Mỗi vị trí một khung; null = không tuyển vị trí này. */
-export type HiringBands = Readonly<Record<Position, LevelBand | null>>;
+export interface CompanyLadder {
+  steps: LadderStep[];
+  /** Từ bậc thứ mấy (chỉ số trong steps) được chọn phòng ban. */
+  departmentStep: number;
+  /** Từ bậc thứ mấy được chọn nhánh sự nghiệp. */
+  branchStep: number;
+}
 
-/** Người đã đủ cấp mở công ty thì không xin làm nhân viên nữa: khung tối đa tới cấp này. */
+export const MAX_LADDER_STEPS = 10;
+export const LADDER_NAME_MAX = 24;
+
+/** Người đã đủ cấp mở công ty thì không xin làm nhân viên nữa: lộ trình tối đa tới cấp này. */
 export const HIRING_MAX_LEVEL = BALANCE.company.unlockLevel - 1;
 
-export const DEFAULT_HIRING_BANDS: HiringBands = {
-  intern: { min: 1, max: 11 },
-  fresher: { min: 12, max: 34 },
-  junior: { min: 35, max: 64 },
-  middle: { min: 65, max: 109 },
-  senior: { min: 110, max: HIRING_MAX_LEVEL },
+/** Mức chung của trò chơi: cấp tối thiểu để chọn phòng ban / nhánh. */
+export const GLOBAL_UNLOCK = {
+  department: titleMinLevel(BALANCE.departmentFromTitle),
+  branch: titleMinLevel(BALANCE.branchFromTitle),
+} as const;
+
+/** Lộ trình mặc định của công ty mới (giống 5 vị trí cũ). */
+export const DEFAULT_LADDER: CompanyLadder = {
+  steps: [
+    { name: 'Intern', minLevel: 1, hiring: true },
+    { name: 'Fresher', minLevel: 12, hiring: true },
+    { name: 'Junior', minLevel: 35, hiring: true },
+    { name: 'Middle', minLevel: 65, hiring: true },
+    { name: 'Senior', minLevel: 110, hiring: true },
+  ],
+  departmentStep: 1,
+  branchStep: 2,
 };
 
-const bandSchema = z
-  .strictObject({
-    min: z.number().int().min(1).max(HIRING_MAX_LEVEL),
-    max: z.number().int().min(1).max(HIRING_MAX_LEVEL),
-  })
-  .nullable();
+const stepSchema = z.strictObject({
+  name: z.string().trim().min(1).max(LADDER_NAME_MAX),
+  minLevel: z.number().int().min(1).max(HIRING_MAX_LEVEL),
+  hiring: z.boolean(),
+});
 
-/** Khung hợp lệ: min ≤ max, các vị trí tăng dần và không chồng lên nhau, có ít nhất một khung. */
-export const hiringBandsSchema = z
-  .strictObject({
-    intern: bandSchema,
-    fresher: bandSchema,
-    junior: bandSchema,
-    middle: bandSchema,
-    senior: bandSchema,
-  })
-  .refine((bands) => validateBands(bands) === null);
+export const ladderSchema = z.strictObject({
+  steps: z.array(stepSchema).min(1).max(MAX_LADDER_STEPS),
+  departmentStep: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_LADDER_STEPS - 1),
+  branchStep: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_LADDER_STEPS - 1),
+});
 
 export const setHiringSchema = z.strictObject({
-  bands: hiringBandsSchema,
+  ladder: ladderSchema,
   hiring: z.boolean().optional(),
 });
 
-export type BandError = 'empty' | 'order' | 'overlap';
+export type LadderError = 'empty' | 'order' | 'unlock_step' | 'unlock_early';
 
-export function validateBands(bands: HiringBands): BandError | null {
-  let previousMax = 0;
-  let any = false;
-  for (const position of POSITIONS) {
-    const band = bands[position];
-    if (!band) continue;
-    any = true;
-    if (band.min > band.max) return 'order';
-    if (band.min <= previousMax) return 'overlap';
-    previousMax = band.max;
+/**
+ * Lộ trình hợp lệ: có ít nhất một bậc, cấp bắt đầu tăng dần, bậc mở khoá có thật và không mở
+ * khoá phòng ban / nhánh sớm hơn mức chung.
+ */
+export function validateLadder(ladder: CompanyLadder): LadderError | null {
+  const { steps } = ladder;
+  if (steps.length === 0) return 'empty';
+  for (let i = 1; i < steps.length; i += 1) {
+    if ((steps[i]?.minLevel ?? 0) <= (steps[i - 1]?.minLevel ?? 0)) return 'order';
   }
-  return any ? null : 'empty';
-}
-
-/** Vị trí ứng với cấp (null: không thuộc khung nào). */
-export function positionFor(bands: HiringBands, level: number): Position | null {
-  for (const position of POSITIONS) {
-    const band = bands[position];
-    if (band && level >= band.min && level <= band.max) return position;
+  const dept = steps[ladder.departmentStep];
+  const branch = steps[ladder.branchStep];
+  if (!dept || !branch) return 'unlock_step';
+  if (dept.minLevel < GLOBAL_UNLOCK.department || branch.minLevel < GLOBAL_UNLOCK.branch) {
+    return 'unlock_early';
   }
   return null;
 }
 
-/**
- * Vị trí của nhân viên đang làm: nằm giữa hai khung (CEO đổi khung sau khi nhận) thì lấy vị trí
- * cao nhất có min ≤ cấp; thấp hơn mọi khung thì lấy vị trí thấp nhất đang mở.
- */
-export function memberPosition(bands: HiringBands, level: number): Position {
-  let result: Position | null = null;
-  let lowest: Position | null = null;
-  for (const position of POSITIONS) {
-    const band = bands[position];
-    if (!band) continue;
-    lowest ??= position;
-    if (level >= band.min) result = position;
-  }
-  return result ?? lowest ?? 'intern';
+/** Bậc của nhân viên: bậc cao nhất có cấp bắt đầu ≤ cấp hiện tại (thấp hơn mọi bậc thì bậc đầu). */
+export function stepFor(ladder: CompanyLadder, level: number): number {
+  let index = 0;
+  ladder.steps.forEach((step, i) => {
+    if (level >= step.minLevel) index = i;
+  });
+  return index;
 }
 
-/** Đọc khung từ chuỗi JSON lưu DB (sai hoặc trống thì dùng mặc định). */
-export function parseBands(raw: string | null): HiringBands {
-  if (!raw) return DEFAULT_HIRING_BANDS;
+/** Bậc người ngoài vào được (bậc ứng với cấp đang tuyển); null nếu không vào được. */
+export function entryStepFor(ladder: CompanyLadder, level: number): number | null {
+  if (level > HIRING_MAX_LEVEL) return null;
+  const first = ladder.steps[0];
+  if (!first || level < first.minLevel) return null;
+  const index = stepFor(ladder, level);
+  return ladder.steps[index]?.hiring ? index : null;
+}
+
+/** Tên chức danh ở bậc ứng với cấp. */
+export function stepName(ladder: CompanyLadder, level: number): string {
+  return ladder.steps[stepFor(ladder, level)]?.name ?? '';
+}
+
+/** Cấp thực tế mở khoá chọn phòng ban / nhánh ở công ty này (không sớm hơn mức chung). */
+export function ladderUnlockLevels(ladder: CompanyLadder): { department: number; branch: number } {
+  return {
+    department: Math.max(
+      GLOBAL_UNLOCK.department,
+      ladder.steps[ladder.departmentStep]?.minLevel ?? GLOBAL_UNLOCK.department,
+    ),
+    branch: Math.max(
+      GLOBAL_UNLOCK.branch,
+      ladder.steps[ladder.branchStep]?.minLevel ?? GLOBAL_UNLOCK.branch,
+    ),
+  };
+}
+
+/** Khung tuyển dụng kiểu cũ (5 vị trí cố định) còn lưu trong DB: đổi sang lộ trình. */
+const legacyBandsSchema = z.object({
+  intern: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
+  fresher: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
+  junior: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
+  middle: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
+  senior: z.object({ min: z.number(), max: z.number() }).nullable().optional(),
+});
+
+function fromLegacy(bands: z.infer<typeof legacyBandsSchema>): CompanyLadder | null {
+  const names = ['Intern', 'Fresher', 'Junior', 'Middle', 'Senior'] as const;
+  const keys = ['intern', 'fresher', 'junior', 'middle', 'senior'] as const;
+  const steps: LadderStep[] = [];
+  keys.forEach((key, i) => {
+    const band = bands[key];
+    if (band) steps.push({ name: names[i] ?? key, minLevel: band.min, hiring: true });
+  });
+  if (steps.length === 0) return null;
+  const at = (level: number): number =>
+    Math.max(
+      0,
+      steps.findIndex((s) => s.minLevel >= level),
+    );
+  const ladder: CompanyLadder = {
+    steps,
+    departmentStep: at(GLOBAL_UNLOCK.department),
+    branchStep: at(GLOBAL_UNLOCK.branch),
+  };
+  return validateLadder(ladder) === null ? ladder : null;
+}
+
+/** Đọc lộ trình từ chuỗi JSON lưu DB (khung kiểu cũ thì đổi sang; sai hoặc trống thì mặc định). */
+export function parseLadder(raw: string | null): CompanyLadder {
+  if (!raw) return DEFAULT_LADDER;
   try {
-    const parsed = hiringBandsSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : DEFAULT_HIRING_BANDS;
+    const data = JSON.parse(raw) as unknown;
+    const ladder = ladderSchema.safeParse(data);
+    if (ladder.success && validateLadder(ladder.data) === null) return ladder.data;
+    const legacy = legacyBandsSchema.safeParse(data);
+    return (legacy.success ? fromLegacy(legacy.data) : null) ?? DEFAULT_LADDER;
   } catch {
-    return DEFAULT_HIRING_BANDS;
+    return DEFAULT_LADDER;
   }
 }
