@@ -1,7 +1,7 @@
-// "Kinh công sở": các dòng thư công sở hài, mỗi lần gõ phím hiện thêm một dòng.
+// "Thư công sở": các dòng thư công sở hài, mỗi lần gõ phím hiện thêm một dòng.
 // Tự viết cho dự án, không lấy từ nguồn nào. Giọng nhẹ nhàng, không chê bai ai.
 
-export const KINH_CONG_SO: readonly string[] = [
+export const THU_CONG_SO: readonly string[] = [
   'Dạ em chào anh chị, em xin phép làm phiền anh chị một chút ạ.',
   'Nhờ anh chị check giúp em file đính kèm, em gửi bản cuối cùng thật sự rồi ạ.',
   'Em xin gửi lại bản cuối cùng (bản này cuối hơn bản lúc nãy ạ).',

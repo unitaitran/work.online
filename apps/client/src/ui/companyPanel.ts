@@ -128,8 +128,46 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
   // ---------- Không thuộc công ty người chơi nào ----------
 
   const renderOutside = (my: MyCompanyResponse): HTMLElement[] => {
+    const card = (className: string, children: HTMLElement[]): HTMLElement =>
+      el('section', { className: `company-card ${className}`, children });
+
+    // Nơi đang làm (+ nút rời / quay lại Mây Hồng).
+    const action =
+      my.employer === null
+        ? button(s.rejoin, () => {
+            void act('/api/company/rejoin-default').then(load);
+          })
+        : my.employer.startsWith('company:')
+          ? null
+          : button(leaveArmed ? s.leaveConfirm : s.leave, () => {
+              if (!leaveArmed) {
+                leaveArmed = true;
+                void load();
+                return;
+              }
+              leaveArmed = false;
+              void act('/api/company/leave').then((done) => {
+                if (done && api.onLeft) api.onLeft();
+                else void load();
+              });
+            });
+    if (action) action.classList.add('company-card-action');
     const parts: HTMLElement[] = [
-      el('p', { className: 'activity-intro', text: employerText(my.employer) }),
+      card('company-card-job', [
+        el('span', {
+          className: 'company-card-icon',
+          text: '🏢',
+          attrs: { 'aria-hidden': 'true' },
+        }),
+        el('div', {
+          className: 'company-card-text',
+          children: [
+            el('small', { text: s.currentJob }),
+            el('strong', { text: employerText(my.employer) }),
+          ],
+        }),
+        ...(action ? [action] : []),
+      ]),
     ];
     if (my.badges.length > 0) {
       parts.push(
@@ -142,110 +180,75 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     // Lời mời làm việc từ công ty NPC.
     for (const offer of my.offers) {
       parts.push(
-        el('div', {
-          className: 'company-offer',
-          children: [
-            el('strong', { text: s.offers }),
-            el('p', { text: s.offerText(offer.companyName) }),
-            el('div', {
-              className: 'activity-actions',
-              children: [
-                button(s.decline, () => {
-                  void act('/api/company/offer', { offerId: offer.id, accept: false }).then(load);
-                }),
-                button(
-                  s.accept,
-                  () => {
-                    void act('/api/company/offer', { offerId: offer.id, accept: true }).then(load);
-                  },
-                  true,
-                ),
-              ],
-            }),
-          ],
-        }),
-      );
-    }
-    if (my.employer !== null && !my.employer.startsWith('company:')) {
-      parts.push(
-        el('div', {
-          className: 'activity-actions',
-          children: [
-            button(leaveArmed ? s.leaveConfirm : s.leave, () => {
-              if (!leaveArmed) {
-                leaveArmed = true;
-                void load();
-                return;
-              }
-              leaveArmed = false;
-              void act('/api/company/leave').then((done) => {
-                if (done && api.onLeft) api.onLeft();
-                else void load();
-              });
-            }),
-          ],
-        }),
-      );
-    } else if (my.employer === null) {
-      parts.push(
-        el('div', {
-          className: 'activity-actions',
-          children: [
-            button(s.rejoin, () => {
-              void act('/api/company/rejoin-default').then(load);
-            }),
-          ],
-        }),
-      );
-    }
-
-    // Mở công ty riêng.
-    parts.push(el('h3', { text: s.found.title }));
-    const needs = s.found.needs;
-    parts.push(
-      el('ul', {
-        className: 'check-list',
-        children: (['level', 'employed', 'capital', 'owner'] as const).map((id) =>
-          el('li', {
-            className: my.found.missing.includes(id) ? 'is-missing' : 'is-met',
-            text: id === 'capital' ? needs.capital(my.found.capital) : needs[id],
-          }),
-        ),
-      }),
-    );
-    if (my.found.ok) parts.push(renderFoundForm(my.found.capital));
-
-    // Danh bạ và mã mời.
-    parts.push(el('h3', { text: s.directory }));
-    const list = el('ul', { className: 'company-list' });
-    void api.get<{ companies: CompanyPublic[] }>('/api/company/directory').then((data) => {
-      const companies = data?.companies ?? [];
-      if (companies.length === 0) {
-        list.replaceChildren(el('li', { className: 'activity-intro', text: s.directoryEmpty }));
-        return;
-      }
-      list.replaceChildren(
-        ...companies.map((c) =>
-          el('li', {
+        card('company-offer', [
+          el('div', {
+            className: 'company-card-text',
             children: [
-              companyBadge(c),
-              c.hiring
-                ? button(s.apply, () => {
-                    void act<{ applicationId: number }>('/api/company/apply', {
-                      companyId: c.id,
-                    }).then((r) => {
-                      if (r) say(s.applied, 'ok');
-                    });
-                  })
-                : el('span', { className: 'fortune-note', text: '' }),
+              el('strong', { text: s.offers }),
+              el('p', { text: s.offerText(offer.companyName) }),
             ],
           }),
-        ),
+          el('div', {
+            className: 'activity-actions',
+            children: [
+              button(s.decline, () => {
+                void act('/api/company/offer', { offerId: offer.id, accept: false }).then(load);
+              }),
+              button(
+                s.accept,
+                () => {
+                  void act('/api/company/offer', { offerId: offer.id, accept: true }).then(load);
+                },
+                true,
+              ),
+            ],
+          }),
+        ]),
       );
-    });
-    parts.push(list);
+    }
+
+    // Mở công ty riêng: điều kiện dạng ô ✓ / ○ và số đã đạt.
+    const needs = s.found.needs;
+    const ids = ['level', 'employed', 'capital', 'owner'] as const;
+    const met = ids.filter((id) => !my.found.missing.includes(id)).length;
+    parts.push(
+      card('company-card-found', [
+        el('div', {
+          className: 'company-card-title',
+          children: [
+            el('span', { text: `🚀 ${s.found.title}` }),
+            el('span', {
+              className: 'company-card-count',
+              text: s.found.progress(met, ids.length),
+            }),
+          ],
+        }),
+        el('ul', {
+          className: 'need-grid',
+          children: ids.map((id) => {
+            const ok = !my.found.missing.includes(id);
+            return el('li', {
+              className: ok ? 'need is-met' : 'need',
+              children: [
+                el('span', {
+                  className: 'need-mark',
+                  text: ok ? '✓' : '○',
+                  attrs: { 'aria-hidden': 'true' },
+                }),
+                el('span', {
+                  text: id === 'capital' ? needs.capital(my.found.capital) : needs[id],
+                }),
+              ],
+            });
+          }),
+        }),
+        ...(my.found.ok ? [renderFoundForm(my.found.capital)] : []),
+      ]),
+    );
+
+    // Vào bằng mã mời (danh sách công ty nằm ở "Tìm việc").
     const codeInput = el('input', {
-      className: 'save-code',
+      className: 'creator-input',
       attrs: {
         type: 'text',
         placeholder: s.joinCodePlaceholder,
@@ -254,16 +257,18 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       },
     });
     parts.push(
-      el('p', { className: 'activity-intro', text: s.joinCode }),
-      codeInput,
-      el('div', {
-        className: 'activity-actions',
-        children: [
-          button(s.join, () => {
-            void act('/api/company/join', { code: codeInput.value }).then(load);
-          }),
-        ],
-      }),
+      card('company-card-code', [
+        el('span', { className: 'company-card-label', text: s.joinCode }),
+        el('div', {
+          className: 'creator-name-row',
+          children: [
+            codeInput,
+            button(s.join, () => {
+              void act('/api/company/join', { code: codeInput.value }).then(load);
+            }),
+          ],
+        }),
+      ]),
     );
     return parts;
   };

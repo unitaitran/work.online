@@ -24,6 +24,7 @@ import {
   type RoomEventView,
   type Workplace,
   type ServerMessage,
+  type UsernameCheckResponse,
 } from '@dilam/shared';
 import { ActivityBus } from './activities/events';
 import { OfficeActivities } from './activities/officeActivities';
@@ -65,12 +66,11 @@ import {
   saveQualityMode,
 } from './storage';
 import { STRINGS } from './strings';
-import { showAuthScreen } from './ui/authScreen';
 import { mountCreatorPanel } from './ui/creatorPanel';
 import { mountLobbyPanel } from './ui/lobbyPanel';
 import { mountViewPanel } from './ui/viewPanel';
 import { el } from './ui/dom';
-import { showCoachMarks } from './ui/coachMarks';
+import { showCoachMarks, type CoachCard } from './ui/coachMarks';
 import { openModal, type Modal } from './ui/modal';
 import type { CallResult, CompanyApi } from './ui/companyPanel';
 
@@ -130,23 +130,14 @@ const stores: SessionStores = { local: store, tab: openSessionStorage() };
 type Session = Extract<SignInResult, { ok: true }>;
 
 /**
- * Vào lại phiên đã lưu; chưa có thì hiện màn chơi khách / đăng nhập / đăng ký.
- * Mất mạng thì hiện nút thử lại.
+ * Vào lại phiên đã lưu; chưa có thì vào thẳng bằng tài khoản chơi thử (đăng ký / đăng nhập nằm ở
+ * màn "Ở nhà"). Mất mạng thì hiện nút thử lại.
  */
 async function bootSession(): Promise<Session> {
   const status = el('p', { className: 'notice notice-center', text: STRINGS.net.bootTitle });
   hudRoot.append(status);
   for (;;) {
-    const result = await resumeSession(api, stores);
-    if (result === null) {
-      status.remove();
-      return (await showAuthScreen(hudRoot, {
-        guest: () => startGuest(api, stores),
-        login: (username, password) => login(api, stores, username, password),
-        register: (username, password) => register(api, stores, username, password),
-        recover: (code) => recoverAccount(api, stores, code),
-      })) as Session;
-    }
+    const result = (await resumeSession(api, stores)) ?? (await startGuest(api, stores));
     if (result.ok) {
       status.remove();
       return result;
@@ -321,7 +312,28 @@ function start(): void {
   let office: OfficeScene | null = null;
   let lastInteraction: string | null = null;
 
-  const showCreator = (profile: Profile, notice: string | null): void => {
+  /** Lưu nhân vật lên server (tên qua bộ lọc); bản trên máy chỉ để mở nhanh lần sau. */
+  const saveCharacter = async (
+    finished: Profile,
+  ): Promise<{ ok: true; profile: Profile } | { ok: false; notice: string }> => {
+    const saved = await api.saveCharacter(finished);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        notice: saved.error === 'rejected' ? STRINGS.net.nameRejected : STRINGS.net.saveFailed,
+      };
+    }
+    const profile = saved.value.character ?? finished;
+    saveProfile(store, profile);
+    return { ok: true, profile };
+  };
+
+  /** Màn "Sửa nhân vật" (từ Ở nhà): Lưu hoặc X đều quay về `back`. */
+  const showCreator = (
+    profile: Profile,
+    notice: string | null,
+    back: (profile: Profile) => void,
+  ): void => {
     teardown?.();
     const scene = new CreatorScene(canvas, profile.appearance);
     engine.setController(scene);
@@ -334,20 +346,14 @@ function start(): void {
       onPoseChange: (pose) => {
         scene.setPose(pose);
       },
-      onEnter: (finished) => {
-        // Nhân vật lưu ở server (tên qua bộ lọc); bản trên máy chỉ để mở nhanh lần sau.
-        void api.saveCharacter(finished).then((saved) => {
-          if (!saved.ok) {
-            showCreator(
-              finished,
-              saved.error === 'rejected' ? STRINGS.net.nameRejected : STRINGS.net.saveFailed,
-            );
-            return;
-          }
-          const profile = saved.value.character ?? finished;
-          const local = saveProfile(store, profile);
-          showOffice(profile, local ? null : (storageNotice ?? STRINGS.storage.saveFailed));
+      onSave: (finished) => {
+        void saveCharacter(finished).then((result) => {
+          if (result.ok) back(result.profile);
+          else showCreator(finished, result.notice, back);
         });
+      },
+      onClose: () => {
+        back(profile);
       },
     });
     const updateInset = (): void => {
@@ -444,11 +450,23 @@ function start(): void {
   const showLobby = (profile: Profile, notice: string | null): void => {
     teardown?.();
     const scene = new CreatorScene(canvas, profile.appearance);
+    scene.setAutoRotate(true);
     engine.setController(scene);
     let disposed = false;
     let panel: ReturnType<typeof mountLobbyPanel> | null = null;
     let observer: ResizeObserver | null = null;
     let modal: Modal | null = null;
+    let coach: { dispose(): void } | null = null;
+    const startCoach = (): void => {
+      coach?.dispose();
+      coach = showCoachMarks(hudRoot, {
+        cards: STRINGS.coach.lobby,
+        onDone: () => {
+          coach = null;
+          saveCoachDone(store, 'lobby');
+        },
+      });
+    };
     const updateInset = (): void => {
       if (panel) scene.setViewInset(panel.getInset());
     };
@@ -493,15 +511,38 @@ function start(): void {
           modal = openModal(hudRoot, { title: STRINGS.companyMap.title });
           mountCompanyMap(modal);
         },
-        onWardrobe: () => {
-          showCreator(profile, storageNotice);
+        onEdit: () => {
+          showCreator(profile, storageNotice, (saved) => {
+            showLobby(saved, null);
+          });
         },
+        onHelp: startCoach,
         onRegister: async (username, password) => {
           const result = await register(api, stores, username, password);
           if (!result.ok) return result.error;
           account.guest = false;
           account.username = result.me.username;
           return null;
+        },
+        // Đăng nhập / khôi phục tài khoản khác: tải lại trang để vào bằng phiên mới.
+        onLogin: async (username, password) => {
+          const result = await login(api, stores, username, password);
+          if (!result.ok) return result.error;
+          window.location.reload();
+          return null;
+        },
+        onRecover: async (code) => {
+          const result = await recoverAccount(api, stores, code);
+          if (!result.ok) return result.error;
+          window.location.reload();
+          return null;
+        },
+        checkUsername: async (username) => {
+          const r = await api.request<UsernameCheckResponse>(
+            'GET',
+            `/api/accounts/available?username=${encodeURIComponent(username)}`,
+          );
+          return r.ok ? r.value : null;
         },
         onLogout: () => {
           void logout(api, stores).then(() => {
@@ -512,10 +553,12 @@ function start(): void {
       observer = new ResizeObserver(updateInset);
       observer.observe(panel.element);
       updateInset();
+      if (!loadCoachDone(store, 'lobby')) startCoach();
     });
     window.addEventListener('resize', updateInset);
     teardown = () => {
       disposed = true;
+      coach?.dispose();
       modal?.close();
       observer?.disconnect();
       window.removeEventListener('resize', updateInset);
@@ -603,7 +646,7 @@ function start(): void {
       notice,
       showStats: debug,
       onEdit: () => {
-        showCreator(profile, storageNotice);
+        editCard();
       },
       onGoHome: () => {
         showLobby(profile, null);
@@ -644,7 +687,7 @@ function start(): void {
       },
     });
     officeHud = hud;
-    const viewPanel = mountViewPanel(hudRoot, scene);
+    const viewPanel = mountViewPanel(hudRoot, scene, hud.menu);
     const officeActivities = new OfficeActivities({
       root: hudRoot,
       store,
@@ -1268,14 +1311,74 @@ function start(): void {
       scene.setPeriod(currentPeriod());
     }, 60_000);
 
-    const coach = loadCoachDone(store)
+    const officeCards: CoachCard[] = STRINGS.coach.office.map((card) => ({
+      icon: card.icon,
+      title: card.title,
+      body: coarsePointer ? card.touch : card.body,
+      target: coarsePointer ? card.touchTarget : card.target,
+    }));
+    const coach = loadCoachDone(store, 'office')
       ? null
       : showCoachMarks(hudRoot, {
-          touch: coarsePointer,
+          cards: officeCards,
           onDone: () => {
-            saveCoachDone(store);
+            saveCoachDone(store, 'office');
           },
         });
+
+    // "Sửa thẻ" ngay trong văn phòng: tạm đổi sang cảnh xem nhân vật (văn phòng vẫn chạy ngầm,
+    // giữ kết nối và vị trí). X hoặc Lưu đều quay lại đúng chỗ đang đứng.
+    let editor: { close(): void } | null = null;
+    const editCard = (): void => {
+      if (editor) return;
+      const preview = new CreatorScene(canvas, profile.appearance);
+      engine.swapController(preview);
+      scene.setInputLocked(true);
+      hudRoot.classList.add('is-editing');
+      const panel = mountCreatorPanel(hudRoot, {
+        profile,
+        notice: null,
+        onAppearanceChange: (appearance) => {
+          preview.setAppearance(appearance);
+        },
+        onPoseChange: (pose) => {
+          preview.setPose(pose);
+        },
+        onSave: (finished) => {
+          void saveCharacter(finished).then((result) => {
+            if (!result.ok) {
+              officeHudView.showToast(result.notice);
+              return;
+            }
+            profile = result.profile;
+            scene.setGear(profile.appearance, equipped);
+            officeHudView.setName(profile.name);
+            room.send({ type: 'profile_changed' });
+            close();
+          });
+        },
+        onClose: () => {
+          close();
+        },
+      });
+      const updateInset = (): void => {
+        preview.setViewInset(panel.getInset());
+      };
+      const observer = new ResizeObserver(updateInset);
+      observer.observe(panel.element);
+      updateInset();
+      function close(): void {
+        if (editor === null) return;
+        editor = null;
+        observer.disconnect();
+        panel.dispose();
+        hudRoot.classList.remove('is-editing');
+        engine.swapController(scene);
+        preview.dispose();
+        scene.setInputLocked(false);
+      }
+      editor = { close };
+    };
 
     const officeHudRef = hud;
     teardown = () => {
@@ -1290,6 +1393,7 @@ function start(): void {
       toastReject = () => undefined;
       offProgress();
       devPanel?.dispose();
+      editor?.close();
       officeActivities.dispose();
       activities = null;
       coach?.dispose();
@@ -1301,21 +1405,26 @@ function start(): void {
     };
   };
 
-  // Nhân vật trên server; tài khoản mới mà máy có nhân vật cũ (Phase 1-3) thì đưa lên server.
-  const local = loadProfile(store);
+  // Mở game là vào màn "Ở nhà". Người mới được tạo sẵn nhân vật ngẫu nhiên (sửa ngay ở Ở nhà);
+  // máy có nhân vật cũ (Phase 1-3) thì đưa lên server.
   if (session.me.character) {
     saveProfile(store, session.me.character);
-    showOffice(session.me.character, startNotice);
-  } else if (local) {
-    void api.saveCharacter(local).then((saved) => {
-      if (saved.ok) showOffice(saved.value.character ?? local, startNotice);
-      else showCreator(local, STRINGS.net.nameRejected);
-    });
+    showLobby(session.me.character, startNotice);
   } else {
-    showCreator(
-      { name: randomVietnameseName(), appearance: { ...DEFAULT_APPEARANCE } },
-      storageNotice,
-    );
+    const local = loadProfile(store);
+    const fresh: Profile = local ?? {
+      name: randomVietnameseName(),
+      appearance: { ...DEFAULT_APPEARANCE },
+    };
+    void saveCharacter(fresh).then(async (first) => {
+      if (first.ok) {
+        showLobby(first.profile, startNotice);
+        return;
+      }
+      // Tên cũ không qua bộ lọc: thử tên ngẫu nhiên.
+      const retry = await saveCharacter({ ...fresh, name: randomVietnameseName() });
+      showLobby(retry.ok ? retry.profile : fresh, retry.ok ? startNotice : retry.notice);
+    });
   }
 
   // ?debug: hiện fps/draw call và mở cổng cho kịch bản kiểm thử tự động (đo PERF.md).

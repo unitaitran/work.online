@@ -374,6 +374,21 @@ describe('đăng ký, đăng nhập, chơi khách', () => {
     ).toBe(200);
   });
 
+  it('kiểm tra tên đăng nhập: tên đã có (không phân biệt hoa thường) báo taken, sai định dạng báo invalid', async () => {
+    const app = makeApp();
+    const check = async (name: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/accounts/available?username=${encodeURIComponent(name)}`,
+        })
+      ).json<{ available: boolean; reason?: string }>();
+    expect(await check('minhtu')).toEqual({ available: true });
+    await post(app, '/api/accounts/register', { username: 'minhtu', password: '12345678' });
+    expect(await check('MinhTu')).toEqual({ available: false, reason: 'taken' });
+    expect(await check('ab')).toEqual({ available: false, reason: 'invalid' });
+  });
+
   it('đăng ký mới: tên trùng, tên xấu, mật khẩu ngắn bị từ chối; đăng ký lần hai bị chặn', async () => {
     const app = makeApp();
     const first = await post(app, '/api/accounts/register', {

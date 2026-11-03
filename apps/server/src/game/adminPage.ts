@@ -7,7 +7,7 @@ export const ADMIN_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Quản trị · Đi làm Online</title>
+<title>Quản trị · Công sở Online</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0 auto; padding: 16px; max-width: 860px; background: #fdf8f2; color: #3b3241; }
   h1 { font-size: 1.3rem; }

@@ -54,7 +54,7 @@ export interface FocusWindowOptions {
 const VISIBLE_LINES = 7;
 
 /**
- * Cửa sổ "kinh công sở": bắt mọi phím (trừ Esc = dừng) trong lúc chơi để nhân vật
+ * Cửa sổ "thư công sở": bắt mọi phím (trừ Esc = dừng) trong lúc chơi để nhân vật
  * không đi lung tung; trên màn cảm ứng thì chạm vào ô gõ.
  */
 export function openFocusWindow(root: HTMLElement, options: FocusWindowOptions): { stop(): void } {

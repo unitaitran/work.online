@@ -4,7 +4,7 @@ import { parseClientMessage, parseServerMessage, poseAt, poseIndex, QUICK_CHATS 
 
 describe('GAME_NAME', () => {
   it('là tên game tiếng Việt', () => {
-    expect(GAME_NAME).toBe('Đi làm Online');
+    expect(GAME_NAME).toBe('Công sở Online');
   });
 });
 

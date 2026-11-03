@@ -1,5 +1,5 @@
-// Gõ phím tập trung: phiên 1/3/5 phút, mỗi lần gõ (được tính) hiện thêm một dòng "kinh công sở".
-import { KINH_CONG_SO } from '../../data/kinh-cong-so';
+// Gõ phím tập trung: phiên 1/3/5 phút, mỗi lần gõ (được tính) hiện thêm một dòng "thư công sở".
+import { THU_CONG_SO } from '../../data/thu-cong-so';
 import { seededRng } from '../../npc/schedule';
 
 export const FOCUS_MINUTES = [1, 3, 5] as const;
@@ -88,7 +88,7 @@ export function finishTypingSession(session: TypingSession, now: number): Typing
 export function lineAt(
   index: number,
   seed: number,
-  lines: readonly string[] = KINH_CONG_SO,
+  lines: readonly string[] = THU_CONG_SO,
 ): string {
   const round = Math.floor(index / lines.length);
   const order = lines.map((_, i) => i);

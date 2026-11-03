@@ -8,7 +8,7 @@ Mọi hằng số nằm trong `packages/shared/src/balance.ts`; đây là giá t
 | ---------------------------- | ---------------------------------------- | ------------------ |
 | Chấm công                    | 20 + 5 × min(chuỗi, 7)                   | 1 lần              |
 | Gõ phím tập trung 1/3/5 phút | 10 / 35 / 70 (dừng sớm: 5 mỗi phút trọn) | không              |
-| Kinh công sở                 | 10 mỗi 50 dòng (cộng dồn)                | không              |
+| Thư công sở                  | 10 mỗi 50 dòng (cộng dồn)                | không              |
 | Hoàn thành task              | 15                                       | 5 lần              |
 | Tặng cà phê                  | 8                                        | 5 lần              |
 | Công quả                     | 12                                       | 6 lần              |
@@ -56,5 +56,5 @@ Mục tiêu "khoảng 2 tháng từ lúc mở công ty đến IPO" đạt ở nh
 - **Level cần nhiều XP hơn**: chơi đều đủ 190 XP/ngày thì cấp 150 (Senior, mở công ty) sau **40 ngày** (trước là 5), cấp 500 sau khoảng 400 ngày. Ví dụ: cấp 5 cần 69 XP, cấp 12 cần ~257, cấp 35 ~1 110, cấp 70 ~2 800, cấp 150 = 7 600.
 - **XP nhỏ giọt khi ngồi** (server đo mỗi 15 giây, tính theo phút trọn): ngồi máy 2 XP/phút, đang phiên gõ phím tập trung 4 XP/phút, ngồi họp 2 XP/phút. Tối đa 180 phút ngồi máy và 60 phút họp được tính mỗi ngày. Treo máy vẫn tăng từ từ, nhưng giới hạn mềm 190 XP/ngày vẫn áp dụng.
 - **Thưởng hết phiên tập trung** trọn vẹn: 1/3/5 phút = 3/10/20 XP (thêm vào phần đã nhỏ giọt). Dừng sớm thì không có thưởng hết phiên.
-- **Việc sếp giao** 25 XP (trước 40), **kinh công sở** 5 XP mỗi 50 dòng (trước 10).
+- **Việc sếp giao** 25 XP (trước 40), **thư công sở** 5 XP mỗi 50 dòng (trước 10).
 - Người đang ngồi (máy, ghế họp) không bị hỏi "Bạn còn ở đó không?" nên treo máy được.

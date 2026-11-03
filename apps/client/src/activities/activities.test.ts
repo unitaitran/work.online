@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KINH_CONG_SO } from '../data/kinh-cong-so';
+import { THU_CONG_SO } from '../data/thu-cong-so';
 import { KPI_FORTUNES } from '../data/kpi-fortunes';
 import { MICRO_TASKS } from '../data/micro-tasks';
 import { seededRng } from '../npc/schedule';
@@ -39,9 +39,9 @@ class MemoryStore implements KeyValueStore {
 }
 
 describe('nội dung tự viết', () => {
-  it('ít nhất 40 dòng kinh công sở, không trùng', () => {
-    expect(KINH_CONG_SO.length).toBeGreaterThanOrEqual(40);
-    expect(new Set(KINH_CONG_SO).size).toBe(KINH_CONG_SO.length);
+  it('ít nhất 40 dòng thư công sở, không trùng', () => {
+    expect(THU_CONG_SO.length).toBeGreaterThanOrEqual(40);
+    expect(new Set(THU_CONG_SO).size).toBe(THU_CONG_SO.length);
   });
 
   it('đúng 60 quẻ, quẻ nào cũng đủ 4 khía cạnh và lời khuyên, tên không trùng', () => {
@@ -145,10 +145,10 @@ describe('gõ phím tập trung', () => {
   });
 
   it('thứ tự dòng: đi hết các dòng rồi mới lặp, cùng hạt giống cùng thứ tự', () => {
-    const first = Array.from({ length: KINH_CONG_SO.length }, (_, i) => lineAt(i, 42));
-    expect(new Set(first).size).toBe(KINH_CONG_SO.length);
+    const first = Array.from({ length: THU_CONG_SO.length }, (_, i) => lineAt(i, 42));
+    expect(new Set(first).size).toBe(THU_CONG_SO.length);
     expect(lineAt(3, 42)).toBe(first[3]);
-    expect(KINH_CONG_SO).toContain(lineAt(KINH_CONG_SO.length + 5, 42));
+    expect(THU_CONG_SO).toContain(lineAt(THU_CONG_SO.length + 5, 42));
   });
 });
 

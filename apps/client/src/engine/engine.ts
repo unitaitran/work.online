@@ -115,6 +115,19 @@ export class Engine {
     }
   }
 
+  /**
+   * Đổi cảnh tạm thời mà KHÔNG huỷ cảnh đang chạy (ví dụ mở "Sửa nhân vật" ngay trong văn phòng,
+   * đóng lại thì quay về đúng chỗ cũ). Trả cảnh cũ để đổi lại sau.
+   */
+  swapController(controller: SceneController): SceneController | null {
+    const previous = this.controller;
+    this.controller = controller;
+    this.accumulator = 0;
+    controller.applyQuality(QUALITY_PRESETS[this.level], this.level);
+    this.resize();
+    return previous;
+  }
+
   setQualityMode(mode: QualityMode): void {
     this.mode = mode;
     if (mode !== 'auto') this.level = mode;

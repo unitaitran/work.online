@@ -54,13 +54,13 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   {
     id: 'lines-20',
     text: 'Sếp nhắn: "Viết giúp anh mấy cái mail chào hỏi đối tác, lễ phép vào nha."',
-    goalText: 'Gõ 20 dòng kinh công sở',
+    goalText: 'Gõ 20 dòng thư công sở',
     goal: { kind: 'lines', amount: 20 },
   },
   {
     id: 'lines-40',
     text: 'Sếp nhắn: "Hộp thư khách đầy rồi, em trả lời giúp chị một loạt nhé."',
-    goalText: 'Gõ 40 dòng kinh công sở',
+    goalText: 'Gõ 40 dòng thư công sở',
     goal: { kind: 'lines', amount: 40 },
   },
   {

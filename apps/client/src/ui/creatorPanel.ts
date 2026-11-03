@@ -20,7 +20,10 @@ export interface CreatorPanelOptions {
   notice: string | null;
   onAppearanceChange(appearance: Appearance): void;
   onPoseChange(pose: PoseName): void;
-  onEnter(profile: Profile): void;
+  /** Bấm "Lưu". */
+  onSave(profile: Profile): void;
+  /** Bấm X: đóng không lưu, quay lại chỗ cũ (văn phòng hoặc Ở nhà). */
+  onClose(): void;
 }
 
 export interface CreatorPanel {
@@ -129,18 +132,31 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
     nameInput.value = randomVietnameseName(Math.random, nameInput.value);
   });
 
-  const enterButton = el('button', {
+  const saveButton = el('button', {
     className: 'button button-primary creator-enter',
-    text: s.enter,
+    text: s.save,
     attrs: { type: 'submit' },
+  });
+  const closeButton = el('button', {
+    className: 'panel-close',
+    text: '✕',
+    attrs: { type: 'button', title: s.close, 'aria-label': s.close },
+  });
+  closeButton.addEventListener('click', () => {
+    options.onClose();
   });
 
   const form = el('form', {
     className: 'creator-panel',
     attrs: { 'aria-labelledby': 'creator-title' },
     children: [
-      el('h1', { className: 'creator-title', text: s.title, attrs: { id: 'creator-title' } }),
-      el('p', { className: 'creator-subtitle', text: s.subtitle }),
+      el('div', {
+        className: 'panel-head',
+        children: [
+          el('h1', { className: 'creator-title', text: s.title, attrs: { id: 'creator-title' } }),
+          closeButton,
+        ],
+      }),
       ...(options.notice
         ? [el('p', { className: 'notice', text: options.notice, attrs: { role: 'status' } })]
         : []),
@@ -203,8 +219,7 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
           options.onPoseChange(pose);
         },
       ),
-      el('p', { className: 'creator-hint', text: s.rotateHint }),
-      enterButton,
+      saveButton,
     ],
   });
 
@@ -215,7 +230,10 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
       name = randomVietnameseName();
       nameInput.value = name;
     }
-    options.onEnter({ name, appearance });
+    options.onSave({ name, appearance });
+  });
+  form.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') options.onClose();
   });
 
   root.append(form);

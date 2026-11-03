@@ -181,7 +181,7 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - **8 loại sự kiện**: `checkin`, `focus-typing`, `kpi-fortune`, `task-flip`, `vent`, `coffee-brew`, `coffee-gift`, `coffee-drink`.
 - **Chưa tính XP.** Sự kiện chỉ được ghi lại: trong bộ nhớ, và trong localStorage `dilam.events.v1` (tối đa 300 sự kiện gần nhất). Khi đọc lại, dữ liệu được kiểm tra bằng zod.
 - **Trang debug `events.html`** (trang thứ hai của Vite): bảng sự kiện, lọc theo loại, xoá nhật ký. Trang tự cập nhật khi tab văn phòng phát thêm sự kiện (qua sự kiện `storage`). Ở `?debug` có link "Nhật ký sự kiện".
-- **Nội dung tự viết** nằm trong `apps/client/src/data/`: `kinh-cong-so.ts` (45 dòng), `kpi-fortunes.ts` (60 quẻ), `micro-tasks.ts` (30 việc nhỏ). Đây là _nội dung trò chơi_, nên được tách khỏi `strings.ts` (chỉ chứa nhãn giao diện), theo đúng yêu cầu của prompt 2B.
+- **Nội dung tự viết** nằm trong `apps/client/src/data/`: `thu-cong-so.ts` (45 dòng, trước tên `kinh-cong-so.ts`), `kpi-fortunes.ts` (60 quẻ), `micro-tasks.ts` (30 việc nhỏ). Đây là _nội dung trò chơi_, nên được tách khỏi `strings.ts` (chỉ chứa nhãn giao diện), theo đúng yêu cầu của prompt 2B.
 - **Mã nhân viên** `NV-XXXXXX` sinh ngẫu nhiên (crypto) và lưu trong `dilam.player.v1`. Mã dùng để chọn quẻ theo người và in trên thẻ. Phase 4 sẽ thay bằng mã do server cấp.
 
 ### Vật mới trong văn phòng
@@ -204,9 +204,9 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 ### Gõ phím tập trung
 
 - **Chỉ mở được khi đang ngồi ở bàn làm việc** (nút "Gõ phím tập trung"). Chọn 1, 3 hoặc 5 phút.
-- **Trong lúc gõ, mọi phím bị cửa sổ "Kinh công sở" bắt lại** (pha capture), nên WASD hay E không làm nhân vật đứng dậy. Esc hoặc nút "Dừng" để kết thúc sớm. Trên màn cảm ứng thì chạm vào ô gõ.
+- **Trong lúc gõ, mọi phím bị cửa sổ "Soạn thư" bắt lại** (pha capture), nên WASD hay E không làm nhân vật đứng dậy. Esc hoặc nút "Dừng" để kết thúc sớm. Trên màn cảm ứng thì chạm vào ô gõ.
 - **Chống gian lận cơ bản**: hai lần gõ được tính phải cách nhau ít nhất 120 ms (khoảng 8 phím/giây). Gõ nhanh hơn vẫn có tiếng nhưng không được tính, kèm lời nhắc. Phím giữ lặp (`repeat`) không tính.
-- **Mỗi lần gõ được tính = một dòng kinh công sở mới**; thứ tự các dòng xáo theo hạt giống của phiên.
+- **Mỗi lần gõ được tính = một dòng thư công sở mới**; thứ tự các dòng xáo theo hạt giống của phiên.
 - **Hết giờ hoặc dừng thì có màn tổng kết** (thời gian, số lần gõ, số phím được tính, số dòng) và sự kiện `focus-typing`.
 
 ### Tường than thở
@@ -370,3 +370,13 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Deploy chỉ chạy khi CI trên `main` đạt; health lỗi thì tự quay về image trước.
 - Tạm dùng user root qua khoá SSH riêng cho Actions (thu hồi được độc lập); có thể chuyển sang user `deploy` thuộc nhóm docker sau.
 - Gỡ file SQLite local (`apps/server/data/*`) khỏi git; thêm vào `.gitignore`.
+
+## Màn Ở nhà là màn đầu tiên, logo, menu điện thoại (2026-11-03)
+
+- Bỏ màn "chơi khách / đăng nhập / đăng ký" riêng. Chưa có phiên thì tự tạo tài khoản chơi thử (sessionStorage) và vào thẳng màn Ở nhà; đăng ký (giữ tiến độ), đăng nhập tài khoản khác, mã khôi phục nằm trong khung Tài khoản ở Ở nhà. Người mới được tạo sẵn nhân vật tên ngẫu nhiên, sửa ngay bằng ô "Sửa nhân vật".
+- Kiểm tra tên đăng nhập ngay khi gõ: `GET /api/accounts/available?username=` (giới hạn 40 lượt rồi 1 lượt/2 giây mỗi IP). Server vẫn chặn trùng khi đăng ký (chỉ mục UNIQUE).
+- "Sửa thẻ" trong văn phòng không rời phòng: engine tạm đổi cảnh (`swapController`), văn phòng giữ kết nối và vị trí; X hoặc Lưu đều quay lại chỗ cũ.
+- **Ngoại lệ quy tắc "không dùng file ảnh"**: logo `CongSoOnline.png` do người chơi cung cấp, dùng làm logo góc trên màn Ở nhà, icon tab và icon cài đặt (bản thu nhỏ 48/128/192/512 px trong `apps/client/public/`; bản gốc 1,3 MB giữ ở `docs/brand/`, không đưa vào bản build). Tên hiển thị đổi thành "Công sở Online" theo logo và tên miền.
+- Điện thoại: cần gạt bên phải, các chức năng gom vào menu ☰ góc trái (bấm mới bật lên), bỏ dòng hướng dẫn phím.
+- "Kinh công sở" đổi thành "thư công sở" (cửa sổ "Soạn thư"); file dữ liệu `thu-cong-so.ts`.
+- Bảng Công ty (khi chưa thuộc công ty người chơi) bỏ danh bạ, vì đã có ở "Tìm việc".

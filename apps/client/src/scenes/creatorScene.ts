@@ -30,6 +30,9 @@ export interface ViewInset {
 
 const BACKGROUND = 0xfdf3e7;
 const ROTATE_PER_PIXEL = 0.012;
+/** Tự xoay (rad/giây) và thời gian chờ sau lần kéo tay cuối trước khi xoay lại. */
+const AUTO_ROTATE_SPEED = 0.45;
+const AUTO_ROTATE_PAUSE_S = 2.5;
 
 export class CreatorScene implements SceneController {
   readonly scene = new Scene();
@@ -47,6 +50,8 @@ export class CreatorScene implements SceneController {
   private targetYaw = -0.35;
   private inset: ViewInset = { right: 0, bottom: 0 };
   private size = { width: 1, height: 1 };
+  private autoRotate = false;
+  private sinceDrag = AUTO_ROTATE_PAUSE_S;
 
   constructor(canvas: HTMLElement, appearance: Appearance) {
     this.scene.background = new Color(BACKGROUND);
@@ -97,6 +102,7 @@ export class CreatorScene implements SceneController {
     this.controls = new PointerControls(canvas, {
       onDrag: (dx) => {
         this.targetYaw += dx * ROTATE_PER_PIXEL;
+        this.sinceDrag = 0;
       },
     });
   }
@@ -108,6 +114,12 @@ export class CreatorScene implements SceneController {
     this.avatar.setPose(pose);
     this.avatar.setShadows(this.shadows);
     this.turntable.add(this.avatar.root);
+  }
+
+  /** Tự xoay chậm để xem nhân vật mọi phía (tắt khi người dùng chọn giảm chuyển động). */
+  setAutoRotate(on: boolean): void {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.autoRotate = on && !reduced;
   }
 
   setPose(pose: PoseName): void {
@@ -125,6 +137,10 @@ export class CreatorScene implements SceneController {
   }
 
   frameUpdate(frameSeconds: number): void {
+    this.sinceDrag += frameSeconds;
+    if (this.autoRotate && this.sinceDrag >= AUTO_ROTATE_PAUSE_S) {
+      this.targetYaw += AUTO_ROTATE_SPEED * frameSeconds;
+    }
     this.yaw = damp(this.yaw, this.targetYaw, 10, frameSeconds);
     this.turntable.rotation.y = this.yaw;
   }

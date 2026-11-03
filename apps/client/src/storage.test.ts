@@ -95,7 +95,7 @@ describe('lưu mức đồ họa', () => {
 describe('cài đặt âm thanh và hướng dẫn', () => {
   it('mặc định: bật âm thanh, chưa xem hướng dẫn', () => {
     expect(loadAudioSettings(new MemoryStore()).enabled).toBe(true);
-    expect(loadCoachDone(new MemoryStore())).toBe(false);
+    expect(loadCoachDone(new MemoryStore(), 'office')).toBe(false);
     expect(loadAudioSettings(blockedStore).enabled).toBe(true);
   });
 
@@ -103,8 +103,10 @@ describe('cài đặt âm thanh và hướng dẫn', () => {
     const store = new MemoryStore();
     saveAudioSettings(store, { enabled: false, volume: 0.25 });
     expect(loadAudioSettings(store)).toEqual({ enabled: false, volume: 0.25 });
-    saveCoachDone(store);
-    expect(loadCoachDone(store)).toBe(true);
+    saveCoachDone(store, 'lobby');
+    expect(loadCoachDone(store, 'lobby')).toBe(true);
+    // Hướng dẫn văn phòng lưu riêng.
+    expect(loadCoachDone(store, 'office')).toBe(false);
   });
 
   it('âm lượng ngoài khoảng 0..1 thì về mặc định', () => {

@@ -1330,7 +1330,8 @@ function decorPieces(layout: OfficeLayout): Piece[] {
       ),
     );
   }
-  // Bục gấu đen viền thép.
+  // Bục gấu đen viền thép. Viền chỉ bọc quanh thân (thấp hơn mặt bục), không có mặt trên
+  // trùng độ cao với mặt bục, nếu không hai mặt tranh nhau và nhấp nháy (z-fighting).
   pieces.push(boxPiece(bear, 0, 0.14, BLACK));
   pieces.push(
     boxPiece(
@@ -1340,8 +1341,8 @@ function decorPieces(layout: OfficeLayout): Piece[] {
         minZ: bear.minZ - 0.005,
         maxZ: bear.maxZ + 0.005,
       },
-      0.12,
-      0.14,
+      0.112,
+      0.13,
       METAL,
     ),
   );

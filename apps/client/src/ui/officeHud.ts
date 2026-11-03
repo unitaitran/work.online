@@ -67,6 +67,9 @@ export interface OfficeHud {
   setXpRising(rising: boolean): void;
   /** Trạng thái kết nối (số người online, đang kết nối lại...). */
   setNetStatus(text: string, tone: 'ok' | 'warn'): void;
+  setName(name: string): void;
+  /** Menu ☰ (chỉ có trên màn cảm ứng): nơi gắn thêm nút (ví dụ "Góc nhìn"). */
+  readonly menu: HTMLElement | null;
   dispose(): void;
 }
 
@@ -132,6 +135,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   renderSound();
 
   // Thẻ tên + cấp/chức danh + thanh XP; bấm vào để mở hồ sơ.
+  const badgeName = el('span', { className: 'office-badge-name', text: options.name });
   const levelText = el('span', { className: 'office-badge-floor' });
   const xpFill = el('span', { className: 'xp-bar-fill' });
   const xpText = el('span', { className: 'xp-bar-text' });
@@ -159,7 +163,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       el('span', {
         className: 'office-badge-text',
         children: [
-          el('span', { className: 'office-badge-name', text: options.name }),
+          badgeName,
           levelText,
           el('span', { className: 'xp-row', children: [xpBar, xpRising] }),
         ],
@@ -274,31 +278,66 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   });
   eventsLink.hidden = !options.showStats;
 
+  const soundGroup = el('div', { className: 'sound-group', children: [soundButton, volume] });
+  const qualityLabel = el('label', {
+    className: 'quality-label',
+    children: [el('span', { text: s.qualityLabel }), select],
+  });
+
+  // Màn cảm ứng: thanh trên chỉ giữ thẻ tên, xu và "Đi về"; các nút khác gom vào menu ☰ góc trái
+  // dưới (bấm mới bật lên), cần gạt nằm bên phải.
+  let menu: HTMLElement | null = null;
+  let menuButton: HTMLButtonElement | null = null;
+  if (options.touch) {
+    const sheet = el('div', {
+      className: 'menu-sheet',
+      attrs: { id: 'office-menu', role: 'menu' },
+      children: [moreButton, shopButton, socialButton, editButton, soundGroup, qualityLabel],
+    });
+    sheet.hidden = true;
+    const toggle = el('button', {
+      className: 'menu-button',
+      text: '☰',
+      attrs: {
+        type: 'button',
+        'aria-label': s.menu,
+        'aria-expanded': 'false',
+        'aria-controls': 'office-menu',
+      },
+    });
+    let isOpen = false;
+    const setOpen = (open: boolean): void => {
+      isOpen = open;
+      sheet.hidden = !open;
+      toggle.textContent = open ? '✕' : '☰';
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.setAttribute('aria-label', open ? s.menuClose : s.menu);
+    };
+    toggle.addEventListener('click', () => {
+      setOpen(!isOpen);
+    });
+    // Chọn một mục (trừ âm thanh, đồ họa) thì menu tự đóng.
+    sheet.addEventListener('click', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('.menu-sheet > .button')) setOpen(false);
+    });
+    menu = sheet;
+    menuButton = toggle;
+  }
+
   const bar = el('div', {
     className: 'office-bar',
     children: [
       el('div', { className: 'office-badge-group', children: [badge, coinChip] }),
       el('div', {
         className: 'office-actions',
-        children: [
-          el('div', { className: 'sound-group', children: [soundButton, volume] }),
-          el('label', {
-            className: 'quality-label',
-            children: [el('span', { text: s.qualityLabel }), select],
-          }),
-          editButton,
-          homeButton,
-        ],
+        children: options.touch ? [homeButton] : [soundGroup, qualityLabel, editButton, homeButton],
       }),
     ],
   });
 
-  const hint = el('p', {
-    className: 'office-hint',
-    text: options.touch ? s.hintTouch : s.hintDesktop,
-  });
   const layer = el('div', {
-    className: 'office-hud',
+    className: options.touch ? 'office-hud is-touch' : 'office-hud',
     children: [
       bar,
       missionCard,
@@ -306,14 +345,14 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       stats,
       eventsLink,
       netStatus,
-      socialButton,
-      shopButton,
-      moreButton,
+      ...(options.touch ? [] : [socialButton, shopButton, moreButton]),
       wipeButton,
       coffeeChip,
       focusButton,
       interact,
-      hint,
+      ...(menu && menuButton ? [menu, menuButton] : []),
+      // Dòng hướng dẫn phím chỉ có trên máy tính.
+      ...(options.touch ? [] : [el('p', { className: 'office-hint', text: s.hintDesktop })]),
     ],
   });
   root.append(layer);
@@ -388,6 +427,10 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       netStatus.textContent = text;
       netStatus.dataset.tone = tone;
     },
+    setName(name) {
+      badgeName.textContent = name;
+    },
+    menu,
     setFocusAvailable(available) {
       focusButton.hidden = !available;
     },

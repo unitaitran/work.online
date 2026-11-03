@@ -64,7 +64,7 @@ export interface ProgressState {
   employer: string | null;
   checkIn: CheckInState;
   daily: DailyState;
-  /** Số dòng kinh công sở chưa đủ mốc để quy ra XP. */
+  /** Số dòng thư công sở chưa đủ mốc để quy ra XP. */
   linesCarry: number;
   log: LogEntry[];
   createdAt: number;

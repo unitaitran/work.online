@@ -17,7 +17,7 @@ export const BALANCE = {
    * hoặc ngồi phòng họp (`meeting`). Treo máy vẫn tăng từ từ, có giới hạn phút mỗi ngày.
    */
   work: { desk: 2, focus: 4, meeting: 2 },
-  /** Mỗi `per` dòng kinh công sở (cộng dồn qua các phiên) được `xp`. */
+  /** Mỗi `per` dòng thư công sở (cộng dồn qua các phiên) được `xp`. */
   lines: { per: 50, xp: 5 },
   taskDone: 15,
   coffeeGift: 8,

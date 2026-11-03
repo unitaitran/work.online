@@ -1,9 +1,9 @@
-// Màn "Ở nhà": ra khỏi văn phòng (nút Đi về, hoặc vừa nghỉ việc). Từ đây đi làm lại, mở công ty,
-// xem bản đồ công ty, đổi nhân vật, lưu tài khoản (khách) hoặc đăng xuất.
-import { STRINGS } from '../strings';
+// Màn "Ở nhà": màn đầu tiên khi mở game và khi rời văn phòng. Một nút Đi làm lớn, ba ô to
+// (Sửa nhân vật, Công ty, Tìm việc) và khung tài khoản (đăng ký / đăng nhập / đăng xuất).
+import { GAME_NAME, type UsernameCheckResponse } from '@dilam/shared';
 import type { SessionError } from '../net/session';
-import { validateCredentials } from '../net/session';
-import { credentialFields, errorText } from './authScreen';
+import { STRINGS } from '../strings';
+import { mountAccountForm } from './accountForm';
 import { el } from './dom';
 
 export interface LobbyOptions {
@@ -13,13 +13,17 @@ export interface LobbyOptions {
   workplace: string | null;
   notice: string | null;
   account: { guest: boolean; username: string | null };
-  onWork(): void;
-  onCompany(): void;
-  onCompanyMap(): void;
-  onWardrobe(): void;
-  /** Lưu tài khoản (khách / tài khoản cũ): null là thành công. */
-  onRegister(username: string, password: string): Promise<SessionError | null>;
-  onLogout(): void;
+  onWork: () => void;
+  onCompany: () => void;
+  onCompanyMap: () => void;
+  onEdit: () => void;
+  onHelp: () => void;
+  /** Đăng ký cho tài khoản đang chơi: null là thành công. */
+  onRegister: (username: string, password: string) => Promise<SessionError | null>;
+  onLogin: (username: string, password: string) => Promise<SessionError | null>;
+  onRecover: (code: string) => Promise<SessionError | null>;
+  checkUsername: (username: string) => Promise<UsernameCheckResponse | null>;
+  onLogout: () => void;
 }
 
 const s = STRINGS.lobby;
@@ -28,109 +32,146 @@ export function mountLobbyPanel(
   root: HTMLElement,
   options: LobbyOptions,
 ): { element: HTMLElement; getInset(): { right: number; bottom: number }; dispose(): void } {
-  const button = (text: string, onClick: () => void, primary = false): HTMLButtonElement => {
+  const tile = (icon: string, text: string, className: string, onClick: () => void) => {
     const b = el('button', {
-      className: primary ? 'button button-primary' : 'button button-soft',
-      text,
+      className: `lobby-tile ${className}`,
       attrs: { type: 'button' },
+      children: [
+        el('span', { className: 'lobby-tile-icon', text: icon, attrs: { 'aria-hidden': 'true' } }),
+        el('span', { className: 'lobby-tile-text', text }),
+      ],
     });
     b.addEventListener('click', onClick);
     return b;
   };
 
-  const account = el('div', { className: 'lobby-account' });
-  const renderAccount = (): void => {
-    const { guest, username } = options.account;
-    if (username && !guest) {
-      account.replaceChildren(el('p', { className: 'fortune-note', text: s.signedInAs(username) }));
-    } else {
-      const fields = credentialFields('register');
-      const message = el('p', { className: 'activity-message', attrs: { role: 'status' } });
-      const save = el('button', {
-        className: 'button button-primary',
-        text: s.saveAccount,
-        attrs: { type: 'submit' },
-      });
-      const form = el('form', { className: 'auth-form', children: [fields.element, save] });
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const { username: name, password } = fields.read();
-        const invalid = validateCredentials(name, password);
-        if (invalid) {
-          message.textContent = errorText(invalid);
-          message.dataset.tone = 'error';
-          return;
-        }
-        save.disabled = true;
-        void options.onRegister(name, password).then((error) => {
-          save.disabled = false;
-          if (error) {
-            message.textContent = errorText(error);
-            message.dataset.tone = 'error';
-            return;
-          }
-          options.account = { guest: false, username: name };
-          renderAccount();
-          account.append(el('p', { className: 'activity-message', text: s.saved }));
-        });
-      });
-      account.replaceChildren(
-        el('p', {
-          className: `notice${guest ? ' notice-warn' : ''}`,
-          text: guest ? s.guestWarn : s.legacy,
-        }),
-        form,
-        message,
-      );
-    }
-  };
-  renderAccount();
+  const work = el('button', {
+    className: 'button button-primary lobby-work',
+    attrs: { type: 'button' },
+    children: [
+      el('span', { className: 'lobby-work-icon', text: '🏢', attrs: { 'aria-hidden': 'true' } }),
+      el('span', {
+        className: 'lobby-work-text',
+        children: [
+          el('strong', { text: s.work }),
+          el('small', {
+            text: options.workplace ? s.workAt(options.workplace) : s.workBack,
+          }),
+        ],
+      }),
+    ],
+  });
+  work.addEventListener('click', () => {
+    options.onWork();
+  });
 
+  const help = el('button', {
+    className: 'lobby-help',
+    text: '?',
+    attrs: { type: 'button', title: s.help, 'aria-label': s.help },
+  });
+  help.addEventListener('click', () => {
+    options.onHelp();
+  });
+
+  // ---------- Tài khoản ----------
+  const account = el('section', { className: 'lobby-account' });
+  let form: { dispose(): void } | null = null;
   let logoutArmed = false;
-  const logout = button(s.logout, () => {
-    if (options.account.guest && !logoutArmed) {
-      logoutArmed = true;
-      logout.textContent = s.logoutGuestConfirm;
-      logout.classList.add('button-danger');
+  const renderAccount = (): void => {
+    form?.dispose();
+    form = null;
+    const { guest, username } = options.account;
+    const logout = el('button', {
+      className: 'button button-soft lobby-logout',
+      text: s.logout,
+      attrs: { type: 'button' },
+    });
+    logout.addEventListener('click', () => {
+      if (options.account.guest && !logoutArmed) {
+        logoutArmed = true;
+        logout.textContent = s.logoutGuestConfirm;
+        logout.classList.add('button-danger');
+        return;
+      }
+      options.onLogout();
+    });
+    if (username && !guest) {
+      account.replaceChildren(
+        el('div', {
+          className: 'lobby-signed-in',
+          children: [el('span', { text: s.signedInAs(username) }), logout],
+        }),
+      );
       return;
     }
-    options.onLogout();
-  });
+    account.replaceChildren(
+      el('h2', { className: 'lobby-section-title', text: s.accountTitle }),
+      el('p', {
+        className: guest ? 'notice notice-warn' : 'notice',
+        text: guest ? s.guestWarn : s.legacy,
+      }),
+    );
+    form = mountAccountForm(account, {
+      register: options.onRegister,
+      login: options.onLogin,
+      recover: options.onRecover,
+      checkUsername: options.checkUsername,
+      onRegistered: (name) => {
+        options.account = { guest: false, username: name };
+        renderAccount();
+        account.append(el('p', { className: 'activity-message', text: s.saved }));
+      },
+    });
+    if (guest) account.append(el('div', { className: 'lobby-actions', children: [logout] }));
+  };
+  renderAccount();
 
   const panel = el('section', {
     className: 'creator-panel lobby-panel',
     attrs: { 'aria-labelledby': 'lobby-title' },
     children: [
-      el('h1', { className: 'creator-title', text: s.title, attrs: { id: 'lobby-title' } }),
-      el('p', { className: 'creator-subtitle', text: `${s.hello(options.name)} ${options.stats}` }),
+      el('div', {
+        className: 'lobby-head',
+        children: [
+          el('div', {
+            children: [
+              el('h1', {
+                className: 'creator-title',
+                text: s.hello(options.name),
+                attrs: { id: 'lobby-title' },
+              }),
+              el('p', { className: 'lobby-stats', text: options.stats }),
+            ],
+          }),
+          help,
+        ],
+      }),
       ...(options.notice ? [el('p', { className: 'notice', text: options.notice })] : []),
       ...(options.workplace === null ? [el('p', { className: 'notice', text: s.unemployed })] : []),
+      work,
       el('div', {
-        className: 'lobby-actions',
+        className: 'lobby-tiles',
         children: [
-          button(
-            options.workplace ? s.workAt(options.workplace) : s.workDefault,
-            () => {
-              options.onWork();
-            },
-            true,
-          ),
-          button(s.company, () => {
-            options.onCompany();
-          }),
-          button(s.companyMap, () => {
-            options.onCompanyMap();
-          }),
-          button(s.wardrobe, () => {
-            options.onWardrobe();
-          }),
+          tile('✏️', s.edit, 'lobby-tile-edit', options.onEdit),
+          tile('💼', s.company, 'lobby-tile-company', options.onCompany),
+          tile('🗺️', s.companyMap, 'lobby-tile-map', options.onCompanyMap),
         ],
       }),
       account,
-      el('div', { className: 'lobby-actions', children: [logout] }),
     ],
   });
-  root.append(panel);
+
+  // Logo nhỏ góc trên bên trái.
+  const logo = el('div', {
+    className: 'home-logo',
+    children: [
+      el('img', { attrs: { src: '/logo-128.png', alt: '', width: '44', height: '44' } }),
+      el('span', { className: 'home-logo-text', text: GAME_NAME }),
+    ],
+  });
+
+  root.append(logo, panel);
   return {
     element: panel,
     getInset: () => {
@@ -141,6 +182,8 @@ export function mountLobbyPanel(
         : { right: 0, bottom: window.innerHeight - rect.top };
     },
     dispose: () => {
+      form?.dispose();
+      logo.remove();
       panel.remove();
     },
   };

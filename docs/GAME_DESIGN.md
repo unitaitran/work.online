@@ -38,7 +38,7 @@ Số liệu ở `packages/shared/src/balance.ts`, xem `docs/BALANCE.md`.
 - Chấm công mỗi ngày (chuỗi ngày tăng thưởng).
 - Phiên gõ phím tập trung 1/3/5 phút.
 - Tick xong task.
-- Tụng kinh công sở.
+- Soạn thư công sở.
 - Pha cà phê tặng đồng nghiệp.
 - Công quả (lau bàn, tưới cây).
 - Việc sếp giao: ngẫu nhiên, tối đa 3 mỗi ngày, xong mỗi việc +40 XP.
@@ -65,7 +65,7 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 
 - Chấm công.
 - Gõ phím.
-- Kinh công sở (mỗi tiếng gõ ra một dòng mail mẫu).
+- Thư công sở (mỗi tiếng gõ ra một dòng mail mẫu).
 - Xin quẻ KPI mỗi ngày một lần.
 - Lật 1 trong 3 task.
 - Tường than thở ẩn danh.

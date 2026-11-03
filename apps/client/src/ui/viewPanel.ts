@@ -11,7 +11,12 @@ export interface ViewControls {
   resetView(): void;
 }
 
-export function mountViewPanel(root: HTMLElement, controls: ViewControls): { dispose(): void } {
+/** `menu`: nếu có (màn cảm ứng) thì nút "Góc nhìn" nằm trong menu ☰ thay vì nổi bên phải. */
+export function mountViewPanel(
+  root: HTMLElement,
+  controls: ViewControls,
+  menu: HTMLElement | null = null,
+): { dispose(): void } {
   const s = STRINGS.view;
   const state = { xray: false, rotate: false, top: false, labels: true };
   const toggle = el('button', {
@@ -73,14 +78,20 @@ export function mountViewPanel(root: HTMLElement, controls: ViewControls): { dis
       className: 'view-grid',
       children: [xray.element, rotate.element, top.element, labels.element, reset],
     }),
-    el('p', { className: 'view-info', text: s.info }),
     el('p', { className: 'view-hint', text: s.hint }),
   );
   toggle.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
     toggle.setAttribute('aria-expanded', String(!panel.hidden));
   });
-  root.append(toggle, panel);
+  if (menu) {
+    toggle.classList.add('in-menu');
+    panel.classList.add('is-touch');
+    menu.prepend(toggle);
+    root.append(panel);
+  } else {
+    root.append(toggle, panel);
+  }
   return {
     dispose() {
       toggle.remove();

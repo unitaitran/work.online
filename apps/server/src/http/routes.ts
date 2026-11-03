@@ -11,6 +11,7 @@ import {
   importRequestSchema,
   loginRequestSchema,
   registerRequestSchema,
+  usernameSchema,
   MAX_LEVEL,
   NAME_MAX_LENGTH,
   PROTOCOL_VERSION,
@@ -28,6 +29,7 @@ import {
   type MeResponse,
   type MetaResponse,
   type RecoverResponse,
+  type UsernameCheckResponse,
 } from '@dilam/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
@@ -88,6 +90,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
   const logins = new KeyedLimiter({ capacity: 10, refillPerSecond: 1 / 60 }, now);
   const loginsPerName = new KeyedLimiter({ capacity: 6, refillPerSecond: 1 / 120 }, now);
   // Khách: mỗi lần mở tab là một tài khoản, nhiều người chung mạng văn phòng nên nới hơn.
+  const nameChecks = new KeyedLimiter({ capacity: 40, refillPerSecond: 0.5 }, now);
   const guestCreates = new KeyedLimiter({ capacity: 20, refillPerSecond: 1 / 60 }, now);
 
   const tooMany = (reply: FastifyReply): FastifyReply => {
@@ -184,6 +187,18 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext): Authed
   /** Tên đăng nhập không được chứa từ cấm. */
   const usernameOk = (username: string): boolean =>
     checkText(username, { maxLength: 20, blockBrands: false }).ok;
+
+  // Tên đăng nhập còn trống không (để báo ngay khi gõ; đăng ký vẫn kiểm tra lại).
+  app.get('/api/accounts/available', (request, reply) => {
+    if (!nameChecks.consume(request.ip)) return tooMany(reply);
+    const parsed = usernameSchema.safeParse((request.query as { username?: unknown }).username);
+    let response: UsernameCheckResponse;
+    if (!parsed.success) response = { available: false, reason: 'invalid' };
+    else if (!usernameOk(parsed.data)) response = { available: false, reason: 'rejected' };
+    else if (repos.users.byUsername(parsed.data)) response = { available: false, reason: 'taken' };
+    else response = { available: true };
+    return reply.send(response);
+  });
 
   // Đăng ký: có token (tài khoản khách / ẩn danh) thì nâng cấp tài khoản đó, giữ tiến độ.
   app.post('/api/accounts/register', (request, reply) => {

@@ -96,7 +96,7 @@ export interface XpContext {
 
 export interface XpResult {
   xp: number;
-  /** Dòng kinh công sở còn dư sau khi quy đổi. */
+  /** Dòng thư công sở còn dư sau khi quy đổi. */
   linesCarry: number;
   /** Các phần cộng lại (để ghi nhật ký / kiểm tra). `minutes`: số phút ngồi được tính (giới hạn ngày). */
   parts: { category: XpCategory; xp: number; minutes?: number }[];
@@ -138,7 +138,7 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       if (completed && event.durationMs >= plannedMs) {
         add('focus', BALANCE.focus.completed[minutes] ?? 0);
       }
-      // Dòng kinh công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
+      // Dòng thư công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
       linesCarry += Math.max(0, Math.floor(lines));
       const chunks = Math.floor(linesCarry / BALANCE.lines.per);
       linesCarry -= chunks * BALANCE.lines.per;

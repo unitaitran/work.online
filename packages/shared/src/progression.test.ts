@@ -168,7 +168,7 @@ describe('xpFor', () => {
     expect(xpFor(tick('meeting', 5), ctx()).xp).toBe(10);
   });
 
-  it('mỗi 50 dòng kinh công sở = 5 XP, phần dư cộng dồn', () => {
+  it('mỗi 50 dòng thư công sở = 5 XP, phần dư cộng dồn', () => {
     const a = xpFor(focus(1, true, 70), ctx());
     expect(a.xp).toBe(3 + 5);
     expect(a.linesCarry).toBe(20);

@@ -14,7 +14,12 @@ export interface KeyValueStore {
 export const PROFILE_KEY = 'dilam.profile.v1';
 export const QUALITY_KEY = 'dilam.quality.v1';
 export const AUDIO_KEY = 'dilam.audio.v1';
-export const COACH_KEY = 'dilam.coach.v1';
+/** Hướng dẫn đã xem: văn phòng và màn Ở nhà (đổi số phiên bản khi nội dung đổi nhiều). */
+export const COACH_KEYS = {
+  office: 'dilam.coach.office.v2',
+  lobby: 'dilam.coach.lobby.v1',
+} as const;
+export type CoachName = keyof typeof COACH_KEYS;
 const PROBE_KEY = 'dilam.probe';
 
 /** Trả về localStorage nếu đọc ghi được, null nếu bị chặn hoặc không có. */
@@ -96,10 +101,10 @@ export function saveAudioSettings(store: KeyValueStore | null, settings: AudioSe
 }
 
 /** Đã xem (hoặc bỏ qua) hướng dẫn lần đầu chưa. */
-export function loadCoachDone(store: KeyValueStore | null): boolean {
-  return readJson(store, COACH_KEY) === true;
+export function loadCoachDone(store: KeyValueStore | null, name: CoachName): boolean {
+  return readJson(store, COACH_KEYS[name]) === true;
 }
 
-export function saveCoachDone(store: KeyValueStore | null): boolean {
-  return write(store, COACH_KEY, 'true');
+export function saveCoachDone(store: KeyValueStore | null, name: CoachName): boolean {
+  return write(store, COACH_KEYS[name], 'true');
 }

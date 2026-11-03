@@ -96,6 +96,13 @@ export interface AccountCreatedResponse {
   recoveryCode: string;
 }
 
+/** Kiểm tra tên đăng nhập trước khi đăng ký (hiện ngay khi gõ). */
+export interface UsernameCheckResponse {
+  available: boolean;
+  /** Lý do không dùng được: sai định dạng, có từ cấm, hoặc đã có người dùng. */
+  reason?: 'invalid' | 'rejected' | 'taken';
+}
+
 export interface LoginResponse {
   userId: string;
   token: string;

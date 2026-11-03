@@ -399,7 +399,8 @@ body {
 
 .joystick {
   position: fixed;
-  left: max(20px, env(safe-area-inset-left));
+  /* Bên phải: tay phải đi lại, tay trái mở menu. */
+  right: max(20px, env(safe-area-inset-right));
   bottom: calc(max(12px, env(safe-area-inset-bottom)) + 48px);
   width: 120px;
   height: 120px;
@@ -472,11 +473,11 @@ body {
 }
 
 @media (pointer: coarse) {
-  /* Màn cảm ứng: đặt bên phải để không đè lên cần gạt bên trái. */
+  /* Màn cảm ứng: bên phải, ngay trên cần gạt. */
   .interact-button {
     left: auto;
     right: max(16px, env(safe-area-inset-right));
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 84px);
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 184px);
     transform: none;
     white-space: normal;
     max-width: 52vw;
@@ -530,42 +531,107 @@ body {
   color: var(--accent-dark);
 }
 
-/* ---------- Hướng dẫn lần đầu ---------- */
+/* ---------- Hướng dẫn từng bước ---------- */
+
+/* Lớp phủ chặn bấm phía sau; vùng sáng là một khung có bóng đổ rất lớn làm tối phần còn lại. */
+.coach-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.coach-spot {
+  position: fixed;
+  border-radius: 16px;
+  outline: 3px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgb(28 22 32 / 55%);
+  transition:
+    left 220ms ease,
+    top 220ms ease,
+    width 220ms ease,
+    height 220ms ease;
+  pointer-events: none;
+}
+
+.coach-spot.is-empty {
+  left: 50% !important;
+  top: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  outline: 0;
+}
 
 .coach {
   position: fixed;
-  left: 50%;
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 110px);
-  width: min(380px, calc(100% - 32px));
-  transform: translateX(-50%);
-  padding: 18px 20px 16px;
-  border-radius: 18px;
+  padding: 18px 18px 14px;
+  border-radius: 20px;
   background: #fff;
-  box-shadow: 0 10px 30px rgb(59 50 65 / 22%);
+  box-shadow: 0 14px 36px rgb(28 22 32 / 30%);
+  transition:
+    left 220ms ease,
+    top 220ms ease;
 }
 
-.coach-step {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--accent-dark);
+.coach-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coach-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 1.35rem;
 }
 
 .coach-title {
-  margin: 4px 0 6px;
+  margin: 0;
   font-size: 1.15rem;
 }
 
 .coach-body {
-  margin: 0 0 14px;
+  margin: 10px 0 14px;
   color: var(--ink-soft);
   line-height: 1.45;
 }
 
 .coach-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+}
+
+.coach-dots {
+  display: flex;
+  gap: 5px;
+  margin-right: auto;
+}
+
+.coach-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: width 200ms ease;
+}
+
+.coach-dot.is-on {
+  width: 18px;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach,
+  .coach-spot,
+  .coach-dot {
+    transition: none;
+  }
 }
 
 /* Màn hẹp: thu gọn thanh trên cùng cho vừa hai dòng. */
@@ -2439,62 +2505,196 @@ button.office-badge:focus-visible {
   }
 }
 
-/* ---------- Màn mở đầu: chơi khách / đăng nhập / đăng ký ---------- */
+/* ---------- Màn "Ở nhà" ---------- */
 
-.auth-screen {
+/* Logo nhỏ góc trên bên trái. */
+.home-logo {
   position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
-  padding: 16px;
-  pointer-events: auto;
-  background:
-    radial-gradient(circle at 20% 15%, #ffe3d6 0, transparent 45%),
-    radial-gradient(circle at 85% 80%, #dff1e4 0, transparent 40%), var(--paper);
-}
-
-.auth-card {
-  width: min(420px, 100%);
-  padding: 24px 22px;
-  border-radius: 22px;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
   background: var(--card);
-  box-shadow: 0 8px 28px rgb(59 50 65 / 14%);
-}
-
-.auth-card.is-busy {
-  opacity: 0.75;
+  box-shadow: 0 4px 14px rgb(59 50 65 / 10%);
+  font-weight: 800;
+  font-size: 1.05rem;
   pointer-events: none;
 }
 
-.auth-title {
-  margin: 0;
-  font-size: 1.8rem;
+.home-logo img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
 }
 
-.auth-guest {
+.lobby-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.lobby-stats {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.lobby-help {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lobby-help:hover {
+  background: #ffd3c1;
+}
+
+/* Nút Đi làm: to, nổi nhất. */
+.lobby-work {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
   padding: 14px 18px;
-  font-size: 1.05rem;
+  border-radius: 18px;
+  text-align: left;
+  box-shadow: 0 6px 18px rgb(232 112 75 / 30%);
 }
 
-.auth-divider {
-  margin: 18px 0 12px;
+.lobby-work-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.lobby-work-text {
+  display: grid;
+  min-width: 0;
+}
+
+.lobby-work-text strong {
+  font-size: 1.15rem;
+}
+
+.lobby-work-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.lobby-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.lobby-tile {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px 6px 12px;
   border: 0;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.lobby-tile:hover {
+  background: #ffd3c1;
+  transform: translateY(-1px);
+}
+
+.lobby-tile:focus-visible,
+.lobby-help:focus-visible,
+.panel-close:focus-visible,
+.menu-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lobby-tile-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.lobby-actions {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.lobby-account {
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 2px dashed var(--line);
 }
 
+.lobby-section-title {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lobby-signed-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.lobby-logout {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
+.notice-warn {
+  background: #ffe1dc;
+  color: #7a2a1c;
+}
+
+.home-button {
+  white-space: nowrap;
+}
+
+/* ---------- Đăng ký / đăng nhập (trong màn Ở nhà) ---------- */
+
 .auth-tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
 }
 
 .auth-tab {
+  flex: 1;
   font: inherit;
   font-weight: 600;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border: 2px solid var(--line);
   border-radius: 999px;
   background: #fff;
@@ -2508,29 +2708,31 @@ button.office-badge:focus-visible {
   color: var(--ink);
 }
 
-.auth-form {
-  display: grid;
-  gap: 10px;
-}
-
+.auth-form,
 .auth-fields {
   display: grid;
-  gap: 10px;
-}
-
-.auth-field {
-  display: grid;
-  gap: 4px;
+  gap: 8px;
 }
 
 .auth-hint {
+  margin-top: -4px;
   color: var(--ink-soft);
   font-size: 0.8rem;
 }
 
+.auth-hint[data-tone='ok'] {
+  color: #2e7d4f;
+  font-weight: 600;
+}
+
+.auth-hint[data-tone='error'] {
+  color: #c0392b;
+  font-weight: 600;
+}
+
 .auth-recover {
-  margin-top: 12px;
-  font-size: 0.9rem;
+  margin-top: 10px;
+  font-size: 0.85rem;
 }
 
 .auth-recover summary {
@@ -2539,24 +2741,45 @@ button.office-badge:focus-visible {
   margin-bottom: 8px;
 }
 
-/* ---------- Màn "Ở nhà" ---------- */
+/* ---------- Tiêu đề bảng có nút X ---------- */
 
-.lobby-actions {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.lobby-account {
-  margin-top: 8px;
+.panel-close {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.notice-warn {
-  background: #ffe1dc;
-  color: #7a2a1c;
+.panel-close:hover {
+  background: #ffd3c1;
 }
 
-.home-button {
+/* Đang sửa nhân vật trong văn phòng: chỉ hiện bảng sửa. */
+#hud.is-editing > :not(.creator-panel) {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
@@ -2776,5 +2999,242 @@ button.office-badge:focus-visible {
 
   .view-panel {
     bottom: calc(max(12px, env(safe-area-inset-bottom)) + 330px);
+  }
+}
+
+/* ---------- Màn cảm ứng: menu ☰ góc trái, cần gạt bên phải ---------- */
+
+.menu-button {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 8px);
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgb(232 112 75 / 40%);
+  cursor: pointer;
+}
+
+/* Bảng bật lên phía trên nút ☰. */
+.menu-sheet {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 76px);
+  display: grid;
+  gap: 8px;
+  width: min(240px, calc(100% - 28px));
+  max-height: calc(100% - 180px);
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 20px;
+  background: var(--card);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgb(59 50 65 / 22%);
+  z-index: 5;
+}
+
+.menu-sheet > * {
+  position: static !important;
+  transform: none !important;
+  box-shadow: none !important;
+  width: 100%;
+}
+
+.menu-sheet > .button {
+  text-align: left;
+  padding: 11px 16px;
+}
+
+.menu-sheet .sound-group,
+.menu-sheet .quality-label {
+  justify-content: space-between;
+  background: #fff;
+}
+
+.menu-sheet .volume-slider {
+  flex: 1;
+  width: auto;
+}
+
+.view-panel.is-touch {
+  left: max(14px, env(safe-area-inset-left));
+  right: auto;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 76px);
+}
+
+/* Nút khi ngồi ở bàn: bên trái, trên nút ☰ (bên phải là cần gạt). */
+.office-hud.is-touch .focus-button,
+.office-hud.is-touch .wipe-button {
+  left: max(14px, env(safe-area-inset-left));
+  transform: none;
+}
+
+.office-hud.is-touch .focus-button {
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 80px);
+}
+
+.office-hud.is-touch .wipe-button {
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 130px);
+}
+
+.office-hud.is-touch .net-status {
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  bottom: auto;
+}
+
+.office-hud.is-touch .office-bar {
+  flex-wrap: nowrap;
+}
+
+@media (pointer: coarse) {
+  /* Công cụ dev nằm trên các nút bên trái, không đè nút ☰. */
+  .dev-panel {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 180px);
+  }
+}
+
+/* Âm thanh và đồ họa trong menu ☰: một dòng, hiện nhãn. */
+.menu-sheet .sound-group {
+  gap: 10px;
+  padding: 4px 12px 4px 4px;
+}
+
+.menu-sheet .sound-toggle {
+  white-space: nowrap;
+}
+
+.menu-sheet .quality-label {
+  padding: 4px 4px 4px 14px;
+}
+
+.menu-sheet .quality-label > span:first-child {
+  display: inline !important;
+}
+
+@media (pointer: coarse) {
+  /* Công cụ dev (chỉ tài khoản quản trị): góc phải trên, không đè menu ☰. */
+  .dev-panel {
+    left: auto;
+    right: 12px;
+    bottom: auto;
+    top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+  }
+}
+
+.activity-message:empty {
+  display: none;
+}
+
+/* ---------- Bảng Công ty (chưa thuộc công ty người chơi): các thẻ gọn ---------- */
+
+.company-card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fffaf5;
+}
+
+.company-card-job {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.company-card-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  font-size: 1.4rem;
+}
+
+.company-card-text {
+  display: grid;
+  min-width: 0;
+}
+
+.company-card-text small,
+.company-card-label {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.company-card-text strong {
+  font-size: 1.05rem;
+}
+
+.company-card-text p {
+  margin: 4px 0 0;
+}
+
+.company-card-action {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.company-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.company-card-count {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.85rem;
+}
+
+.need-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.need {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.need.is-met {
+  border-color: #bfe3cc;
+  background: #eef8f1;
+  color: #2e6b45;
+  font-weight: 600;
+}
+
+.need-mark {
+  font-weight: 800;
+}
+
+@media (max-width: 420px) {
+  .need-grid {
+    grid-template-columns: 1fr;
   }
 }
