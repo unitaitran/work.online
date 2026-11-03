@@ -629,6 +629,10 @@ function start(): void {
       canGiftCoffee: () => activities?.canGiftCoffee() ?? false,
       onSeatChange: (item) => {
         activities?.onSeatChange(item);
+        // Họp đột xuất: ngồi vào ghế phòng họp là xong phần mình, tắt banner.
+        if (item?.kind === 'meeting' && eventState?.kind === 'surprise_meeting') {
+          banner.dismiss(eventState.id, STRINGS.events.joinedMeeting);
+        }
         // Ngồi máy hoặc ghế họp: XP nhỏ giọt mỗi phút (server tính), hiện mũi tên ▲.
         hud?.setXpRising(
           item?.kind === 'desk' || item?.kind === 'meeting' || item?.kind === 'ceodesk',
@@ -868,6 +872,9 @@ function start(): void {
         case 'room_event':
           eventState = message.event;
           banner.show(message.event, serverOffset);
+          if (message.event.kind === 'surprise_meeting' && seatedKind() === 'meeting') {
+            banner.dismiss(message.event.id, STRINGS.events.joinedMeeting);
+          }
           audio.play('alert');
           break;
         case 'room_event_progress':
@@ -876,10 +883,14 @@ function start(): void {
         case 'room_event_end': {
           const texts = STRINGS.events[message.kind];
           if (eventState?.id === message.id) eventState = null;
-          banner.end(message.id, message.success ? texts.win : texts.lose);
+          const result = message.success ? texts.win : texts.lose;
+          // Banner đã tắt (ví dụ đã ngồi họp): báo kết quả bằng một thông báo nhỏ.
+          const shown = banner.end(message.id, result);
           if (message.rewarded) {
             audio.play('ting');
-            officeHudView.showToast(STRINGS.events.rewarded(''));
+            officeHudView.showToast(STRINGS.events.rewarded(shown ? '' : result));
+          } else if (!shown) {
+            officeHudView.showToast(result);
           }
           break;
         }
@@ -1063,6 +1074,11 @@ function start(): void {
     const banner = mountRoomEventBanner(hudRoot, () => {
       respondEvent();
     });
+    /** Loại chỗ đang ngồi (bàn, ghế họp...) hoặc null nếu đang đứng. */
+    const seatedKind = (): string | null => {
+      const id = scene.getSeatedId();
+      return id === null ? null : (scene.getInteractables().find((i) => i.id === id)?.kind ?? null);
+    };
 
     // ---------- Xếp hạng, tường chung, bản đồ toà nhà, thẻ khoe (Phase 5B) ----------
     const openWall = (): void => {

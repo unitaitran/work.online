@@ -3238,3 +3238,26 @@ button.office-badge:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Có banner sự kiện phòng: thông báo nhỏ dời xuống ngay dưới banner, không đè nhau. */
+#hud.has-room-event .toast {
+  top: calc(var(--room-event-bottom, 170px) + 10px);
+}
+
+/* Màn hẹp: thẻ việc sếp giao bên trái, thông báo nhỏ nằm dưới thẻ đó (không chồng lên nhau). */
+@media (max-width: 600px) {
+  .toast {
+    top: 200px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Có banner sự kiện: thẻ việc sếp giao xuống dưới banner, thông báo nhỏ xuống dưới thẻ. */
+  #hud.has-room-event .mission-card {
+    top: calc(var(--room-event-bottom, 190px) + 10px);
+  }
+
+  #hud.has-room-event .toast {
+    top: calc(var(--room-event-bottom, 190px) + 90px);
+  }
+}

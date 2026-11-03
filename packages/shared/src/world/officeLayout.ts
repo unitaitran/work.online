@@ -273,14 +273,15 @@ export const OFFICE_FLOOR: OfficeLayout = {
     cabinet: { minX: -1.62, maxX: -1.08, minZ: 4.4, maxZ: 5.9 },
     reader: box(-6.13, 3.95, 0.16, 0.26),
   },
-  // Khu dịch vụ gọn: quầy 3 m sát tường đông (cà phê, lò vi sóng, cây nước), tủ lạnh, một bàn đứng.
+  // Khu dịch vụ gọn sát tường đông: cây nước đứng dưới sàn ngay đầu bắc của quầy, quầy ngắn
+  // (máy pha cà phê, lò vi sóng), tủ lạnh sát cuối quầy; chừa trống khoảng cạnh phòng nghỉ.
   pantry: {
-    floor: { minX: 7.4, maxX: 10, minZ: -3.2, maxZ: 1.2 },
-    counter: { minX: 9.35, maxX: 10, minZ: -2.9, maxZ: 0.1 },
+    floor: { minX: 7.4, maxX: 10, minZ: -3.7, maxZ: 0.6 },
+    counter: { minX: 9.35, maxX: 10, minZ: -2.9, maxZ: -0.8 },
     coffee: { x: 9.68, z: -2.35 },
     microwave: { x: 9.66, z: -1.35 },
-    water: { x: 9.68, z: -0.35 },
-    fridge: { minX: 9.25, maxX: 10, minZ: 0.2, maxZ: 1.0 },
+    water: { x: 9.7, z: -3.35 },
+    fridge: { minX: 9.25, maxX: 10, minZ: -0.75, maxZ: 0.05 },
     tables: [box(8.0, -1.2, 0.7, 0.7)],
   },
   lounge: {
@@ -330,6 +331,11 @@ export const OFFICE_FLOOR: OfficeLayout = {
   ],
 };
 
+/** Chỗ cây nước đứng dưới sàn (vật cản). */
+export function waterCoolerBox(layout: OfficeLayout): Aabb {
+  return box(layout.pantry.water.x, layout.pantry.water.z, 0.36, 0.36);
+}
+
 export function deskBox(layout: OfficeLayout, desk: Desk): Aabb {
   // Bàn xoay 90°: chiều rộng nằm theo trục Z, chiều sâu theo trục X.
   return box(desk.x, desk.z, layout.desk.depth, layout.desk.width);
@@ -371,6 +377,7 @@ export function officeObstacles(layout: OfficeLayout, options: { ceo?: boolean }
     ceoRoom.reader,
     layout.meeting.table,
     pantry.counter,
+    waterCoolerBox(layout),
     pantry.fridge,
     ...pantry.tables,
     lounge.sofa,

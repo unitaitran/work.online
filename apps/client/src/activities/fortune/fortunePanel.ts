@@ -40,7 +40,6 @@ function renderFortune(fortune: KpiFortune): HTMLElement {
           document.createTextNode(fortune.advice),
         ],
       }),
-      el('p', { className: 'fortune-note', text: s.note }),
     ],
   });
 }

@@ -6,7 +6,10 @@ import { el } from './dom';
 export interface RoomEventBanner {
   show(event: RoomEventView, serverOffsetMs: number): void;
   progress(id: number, progress: number): void;
-  end(id: number, text: string): void;
+  /** Người chơi đã làm xong phần của mình (ví dụ đã ngồi vào phòng họp): báo ngắn rồi ẩn. */
+  dismiss(id: number, text: string): void;
+  /** Sự kiện kết thúc. Trả false nếu banner đã ẩn từ trước (khi đó tự báo kết quả bằng toast). */
+  end(id: number, text: string): boolean;
   dispose(): void;
 }
 
@@ -32,9 +35,29 @@ export function mountRoomEventBanner(
   banner.hidden = true;
   root.append(banner);
   let current: RoomEventView | null = null;
+  let dismissedId: number | null = null;
   let endsAtLocal = 0;
   let tick: number | undefined;
   let hideTimer: number | undefined;
+
+  // Đánh dấu trên lớp HUD để thông báo nhỏ (toast) dời xuống dưới banner, không đè nhau.
+  const setVisible = (visible: boolean): void => {
+    banner.hidden = !visible;
+    root.classList.toggle('has-room-event', visible);
+    if (visible) {
+      window.requestAnimationFrame(() => {
+        // offsetTop/offsetHeight không bị hiệu ứng phóng to lúc hiện làm sai kích thước.
+        const bottom = banner.offsetTop + banner.offsetHeight;
+        root.style.setProperty('--room-event-bottom', `${String(bottom)}px`);
+      });
+    }
+  };
+  const hideLater = (ms: number): void => {
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      setVisible(false);
+    }, ms);
+  };
 
   action.addEventListener('click', () => {
     if (current) onRespond(current);
@@ -58,7 +81,8 @@ export function mountRoomEventBanner(
       progressText.textContent =
         event.goal !== undefined ? STRINGS.events.progress(event.progress ?? 0, event.goal) : '';
       endsAtLocal = event.endsAt - serverOffsetMs;
-      banner.hidden = false;
+      dismissedId = null;
+      setVisible(true);
       stopTick();
       const update = (): void => {
         const left = Math.max(0, Math.ceil((endsAtLocal - Date.now()) / 1000));
@@ -72,21 +96,32 @@ export function mountRoomEventBanner(
       if (current?.id !== id || current.goal === undefined) return;
       progressText.textContent = STRINGS.events.progress(progress, current.goal);
     },
-    end(id, message) {
-      if (current?.id !== id) return;
-      current = null;
+    dismiss(id, message) {
+      if (current?.id !== id || dismissedId === id) return;
+      dismissedId = id;
       stopTick();
       text.textContent = message;
       action.hidden = true;
       progressText.textContent = '';
       timer.textContent = '';
-      hideTimer = window.setTimeout(() => {
-        banner.hidden = true;
-      }, 3500);
+      hideLater(2000);
+    },
+    end(id, message) {
+      if (current?.id !== id) return false;
+      current = null;
+      stopTick();
+      if (dismissedId === id) return false;
+      text.textContent = message;
+      action.hidden = true;
+      progressText.textContent = '';
+      timer.textContent = '';
+      hideLater(3500);
+      return true;
     },
     dispose() {
       stopTick();
       window.clearTimeout(hideTimer);
+      root.classList.remove('has-room-event');
       banner.remove();
     },
   };

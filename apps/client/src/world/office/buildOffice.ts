@@ -71,6 +71,9 @@ const STEEL = 0xa7abb2;
 const RED = 0xc62828;
 const RED_DARK = 0x8e1b1f;
 const RED_SOFT = 0xe0524f;
+/** Đỏ thẫm cho chao đèn và tủ sách; bản sẫm hơn cho viền và tấm lưng. */
+const CRIMSON = 0x7a1418;
+const CRIMSON_DEEP = 0x4e0c0f;
 const WOOD = 0x6b4a33;
 const WOOD_DARK = 0x3b2618;
 const CREAM = 0xf1ece3;
@@ -302,10 +305,11 @@ function pendantGeometry(ceiling: number): BufferGeometry {
     piece(new CylinderGeometry(0.006, 0.006, ceiling - PENDANT_Y, 4), FRAME, {
       position: [0, (ceiling + PENDANT_Y) / 2, 0],
     }),
-    piece(new CylinderGeometry(0.06, 0.2, 0.2, 18, 1, true), BLACK, {
+    // Chao đèn đỏ thẫm, viền sẫm hơn.
+    piece(new CylinderGeometry(0.06, 0.2, 0.2, 18, 1, true), CRIMSON, {
       position: [0, PENDANT_Y - 0.1, 0],
     }),
-    piece(new TorusGeometry(0.2, 0.008, 6, 24), METAL, {
+    piece(new TorusGeometry(0.2, 0.008, 6, 24), CRIMSON_DEEP, {
       position: [0, PENDANT_Y - 0.2, 0],
       rotation: [Math.PI / 2, 0, 0],
     }),
@@ -931,18 +935,27 @@ function pantryPieces(layout: OfficeLayout): Piece[] {
       position: [microwave.x - 0.215, top + 0.22, microwave.z + 0.19],
     }),
   );
-  // Cây nước: thân trắng, bình xanh.
+  // Cây nước đứng dưới sàn: thân trắng cao, bình xanh trên đỉnh, hai vòi nóng/lạnh quay ra lối đi.
+  const body = 0.95;
   pieces.push(
-    piece(new BoxGeometry(0.32, 0.5, 0.32), CREAM, { position: [water.x, top + 0.25, water.z] }),
+    piece(new BoxGeometry(0.34, body, 0.34), CREAM, { position: [water.x, body / 2, water.z] }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.36, 0.04, 0.36), GRAY_LIGHT, { position: [water.x, 0.02, water.z] }),
   );
   pieces.push(
     piece(new CylinderGeometry(0.13, 0.13, 0.36, 16), 0x5aa6d6, {
-      position: [water.x, top + 0.68, water.z],
+      position: [water.x, body + 0.2, water.z],
     }),
   );
   pieces.push(
     piece(new CylinderGeometry(0.06, 0.13, 0.08, 16), 0x5aa6d6, {
-      position: [water.x, top + 0.9, water.z],
+      position: [water.x, body + 0.42, water.z],
+    }),
+  );
+  pieces.push(
+    piece(new BoxGeometry(0.02, 0.18, 0.26), GRAY_LIGHT, {
+      position: [water.x - 0.18, body - 0.32, water.z],
     }),
   );
   for (const [dz, color] of [
@@ -951,7 +964,7 @@ function pantryPieces(layout: OfficeLayout): Piece[] {
   ] as const) {
     pieces.push(
       piece(new BoxGeometry(0.04, 0.05, 0.04), color, {
-        position: [water.x - 0.17, top + 0.3, water.z + dz],
+        position: [water.x - 0.19, body - 0.2, water.z + dz],
       }),
     );
   }
@@ -1052,12 +1065,12 @@ function shelfPieces(layout: OfficeLayout): Piece[] {
   const rng = seededRng(31);
   const height = 2.0;
   const levels = 5;
-  const SHELF = 0x111114;
+  const SHELF = CRIMSON;
   layout.shelves.forEach((s, shelfIndex) => {
-    // Khung đen: hai vách, nóc, đế, các tầng, tấm lưng xám than.
+    // Khung đỏ thẫm: hai vách, nóc, đế, các tầng; tấm lưng sẫm hơn cho có chiều sâu.
     pieces.push(boxPiece({ ...s, maxX: s.minX + 0.04 }, 0, height, SHELF));
     pieces.push(boxPiece({ ...s, minX: s.maxX - 0.04 }, 0, height, SHELF));
-    pieces.push(boxPiece({ ...s, maxZ: s.minZ + 0.02 }, 0, height, 0x1c1c21));
+    pieces.push(boxPiece({ ...s, maxZ: s.minZ + 0.02 }, 0, height, CRIMSON_DEEP));
     pieces.push(boxPiece(s, height - 0.04, height, SHELF));
     pieces.push(boxPiece(s, 0, 0.08, SHELF));
     for (let level = 0; level < levels; level += 1) {
@@ -1291,25 +1304,28 @@ function decorPieces(layout: OfficeLayout): Piece[] {
       0x1c1c21,
     ),
   );
-  const coatColors = [BLACK, GRAY_LIGHT, CREAM, 0x2b3a4f, RED, 0x55555e, BLACK, 0x6b5a44, GRAY];
-  const coatCount = coatColors.length;
-  coatColors.forEach((color, i) => {
-    const z = c.minZ + 0.2 + (i * (c.maxZ - c.minZ - 0.4)) / (coatCount - 1);
-    // Móc + áo (khối dẹt bo tròn, quay mặt ra phòng).
-    pieces.push(
-      piece(new TorusGeometry(0.03, 0.006, 4, 10), STEEL, {
-        position: [railX, 1.6, z],
-        rotation: [0, Math.PI / 2, 0],
-      }),
-    );
-    pieces.push(piece(new BoxGeometry(0.02, 0.04, 0.34), METAL, { position: [railX, 1.55, z] }));
-    pieces.push(
-      piece(new CapsuleGeometry(0.15, 0.5 + (i % 3) * 0.08, 4, 10), color, {
-        position: [railX, 1.12 - (i % 3) * 0.04, z],
-        scale: [0.45, 1, 1],
-      }),
-    );
-  });
+  // Áo phông treo dày như giá treo thật: móc ôm thanh, mặt áo vuông góc với thanh, các áo
+  // song song nhau và lệch góc một chút. Trắng, đen là chính, xen vài chiếc đỏ.
+  const teeRng = seededRng(73);
+  const teeCount = 28;
+  const first = c.minZ + 0.12;
+  const step = (c.maxZ - c.minZ - 0.24) / (teeCount - 1);
+  let run = 0;
+  let runColor = TEE_WHITE;
+  for (let i = 0; i < teeCount; i += 1) {
+    // Màu theo từng cụm 2-5 chiếc như người ta hay xếp.
+    if (run === 0) {
+      const roll = teeRng();
+      runColor = roll < 0.45 ? TEE_WHITE : roll < 0.85 ? TEE_BLACK : RED;
+      run = 2 + Math.floor(teeRng() * 4);
+    }
+    run -= 1;
+    const z = first + i * step + (teeRng() - 0.5) * 0.015;
+    const yaw = (teeRng() - 0.5) * 0.24;
+    const print =
+      runColor === TEE_WHITE && teeRng() < 0.4 ? (teeRng() < 0.5 ? RED : TEE_BLACK) : null;
+    pieces.push(...teePieces(railX, z, yaw, runColor, print, 0.9 + teeRng() * 0.05));
+  }
   // Vài hộp giày / túi trên kệ dưới.
   for (const [dz, color] of [
     [0.35, CREAM],
@@ -1384,6 +1400,87 @@ function decorPieces(layout: OfficeLayout): Piece[] {
  * Tượng gấu đỏ cách điệu (~1,2 m cả bục), dựng bằng khối tròn: thân, đầu, tai, mõm, tay chân.
  * Không có chữ hay logo thương hiệu nào.
  */
+const TEE_WHITE = 0xf2efe8;
+const TEE_BLACK = 0x1c1c21;
+
+/** Pha sáng / tối một màu (nhân từng kênh), dùng cho cổ áo. */
+function shade(color: number, factor: number): number {
+  const ch = (shift: number): number =>
+    Math.min(255, Math.round(((color >> shift) & 0xff) * factor)) << shift;
+  return ch(16) | ch(8) | ch(0);
+}
+
+/**
+ * Một áo phông trên móc. Dựng theo toạ độ riêng (rộng theo x, mỏng theo z, móc ôm thanh chạy
+ * theo z) rồi xoay `yaw` và đặt vào thanh treo tại (railX, z). `print`: hình in nhỏ trước ngực.
+ */
+function teePieces(
+  railX: number,
+  z: number,
+  yaw: number,
+  color: number,
+  print: number | null,
+  hem: number,
+): Piece[] {
+  const local: Piece[] = [];
+  const top = 1.47;
+  const bodyW = 0.34;
+  const thick = 0.034;
+  const bodyH = top - hem;
+  // Móc: nửa vòng ôm thanh, cổ móc, hai cánh vai.
+  local.push(
+    piece(new TorusGeometry(0.02, 0.004, 3, 6, Math.PI), METAL, { position: [0, 1.6, 0] }),
+    piece(new CylinderGeometry(0.004, 0.004, 0.05, 4), METAL, { position: [0, 1.555, 0] }),
+  );
+  for (const side of [-1, 1]) {
+    local.push(
+      piece(new BoxGeometry(0.2, 0.012, 0.012), 0x2a2a30, {
+        position: [side * 0.09, 1.505, 0],
+        rotation: [0, 0, -side * 0.42],
+      }),
+    );
+  }
+  // Thân, vai dốc, tay ngắn xoè ra.
+  local.push(
+    piece(new BoxGeometry(bodyW, bodyH, thick), color, { position: [0, hem + bodyH / 2, 0] }),
+  );
+  for (const side of [-1, 1]) {
+    local.push(
+      piece(new BoxGeometry(bodyW / 2 + 0.03, 0.07, thick), color, {
+        position: [side * (bodyW / 4 + 0.015), top - 0.01, 0],
+        rotation: [0, 0, -side * 0.32],
+      }),
+      piece(new BoxGeometry(0.11, 0.17, thick * 0.95), color, {
+        position: [side * (bodyW / 2 + 0.05), top - 0.1, 0],
+        rotation: [0, 0, side * 0.45],
+      }),
+    );
+  }
+  // Cổ tròn (hai mặt) và hình in trước ngực.
+  for (const face of [-1, 1]) {
+    local.push(
+      piece(
+        new TorusGeometry(0.05, 0.008, 3, 8, Math.PI),
+        shade(color, color === TEE_BLACK ? 1.6 : 0.85),
+        {
+          position: [0, top - 0.005, face * (thick / 2)],
+          rotation: [0, 0, Math.PI],
+        },
+      ),
+    );
+  }
+  if (print !== null) {
+    local.push(
+      piece(new BoxGeometry(0.13, 0.1, 0.004), print, {
+        position: [0, top - 0.17, thick / 2 + 0.002],
+      }),
+    );
+  }
+  const place = new Matrix4().makeRotationY(yaw).setPosition(railX, 0, z);
+  for (const p of local) p.geometry.applyMatrix4(place);
+  return local;
+}
+
 function bearGeometry(): BufferGeometry {
   const R = 0xd71f27;
   const RD = 0xa3161d;
@@ -1936,9 +2033,10 @@ export function buildOffice(
   group.add(led);
 
   // Nhãn thiết bị pantry trên tường đông (một tấm, ba chữ).
-  const { counter, coffee, water } = layout.pantry;
-  const labelZ0 = coffee.z - 0.6;
-  const labelZ1 = water.z + 0.6;
+  const { counter, microwave, water } = layout.pantry;
+  // Thứ tự từ bắc xuống nam: cây nước (dưới sàn), máy pha cà phê, lò vi sóng; cách đều nhau.
+  const labelZ0 = water.z - 0.5;
+  const labelZ1 = microwave.z + 0.5;
   const labels = STRINGS.pantryLabels;
   const labelTexture = createLabelTexture(labels, { width: 1536, height: 110, font: 44 });
   const labelMesh = new Mesh(
@@ -1947,7 +2045,7 @@ export function buildOffice(
   );
   labelMesh.position.set(counter.maxX - 0.02, 1.55, (labelZ0 + labelZ1) / 2);
   labelMesh.rotation.y = -Math.PI / 2;
-  // Ba nhãn chia đều theo chiều dài; vị trí thiết bị cũng xếp đều (cà phê, lò, nước).
+  // Ba nhãn chia đều theo chiều dài; vị trí thiết bị cũng xếp đều (nước, cà phê, lò).
   group.add(labelMesh);
 
   // Đèn thật (tuỳ mức đồ họa): đèn rọi ấm trên khu bàn, đèn cây phòng nghỉ, đèn phòng sếp,

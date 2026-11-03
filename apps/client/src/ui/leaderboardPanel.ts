@@ -90,7 +90,6 @@ export function mountLeaderboardPanel(body: HTMLElement, api: LeaderboardApi): v
     list,
     mine,
     el('label', { className: 'vent-check', children: [hide, el('span', { text: s.hideMe })] }),
-    el('p', { className: 'fortune-note', text: s.note }),
   );
   load();
 }

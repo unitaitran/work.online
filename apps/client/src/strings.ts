@@ -281,7 +281,6 @@ export const STRINGS = {
       health: 'Sức khỏe',
     },
     advice: 'Lời khuyên',
-    note: 'Chỉ để vui thôi.',
   },
   taskFlip: {
     title: 'Lật 1 trong 3 task',
@@ -618,6 +617,7 @@ export const STRINGS = {
     },
     rewarded: (xp: string) => `Bạn được thưởng! ${xp}`,
     progress: (now: number, goal: number) => `${String(now)}/${String(goal)}`,
+    joinedMeeting: 'Đã vào họp ✓',
     needCoffee: 'Lại gần máy pha để đổ hạt.',
     coffeeOut: 'Máy pha đang hết hạt.',
   },
@@ -632,7 +632,6 @@ export const STRINGS = {
     empty: 'Chưa ai có XP kỳ này.',
     mine: (rank: number) => `Hạng của bạn: #${String(rank)}`,
     hideMe: 'Ẩn mình khỏi bảng xếp hạng',
-    note: 'Chỉ để vui thôi.',
   },
   wall: {
     title: 'Tường than thở chung',
@@ -1001,7 +1000,7 @@ export const STRINGS = {
     pantry: 'KHU DỊCH VỤ',
     entrance: 'LỐI VÀO',
   },
-  pantryLabels: ['MÁY PHA CÀ PHÊ', 'LÒ VI SÓNG', 'CÂY NƯỚC'] as readonly string[],
+  pantryLabels: ['CÂY NƯỚC', 'MÁY PHA CÀ PHÊ', 'LÒ VI SÓNG'] as readonly string[],
   view: {
     open: 'Góc nhìn',
     title: 'Góc nhìn văn phòng',
