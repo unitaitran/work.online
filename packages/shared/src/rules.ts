@@ -164,6 +164,12 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
         add('event', BALANCE.companyPromotion);
       }
       break;
+    case 'company-project':
+      if (ctx.countToday('companyProject') < limits.companyProject) {
+        const d = Math.max(1, Math.min(5, Math.round(event.detail.difficulty)));
+        add('event', BALANCE.companyProject.base + BALANCE.companyProject.perDifficulty * d);
+      }
+      break;
     case 'room-event':
       if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
       break;
@@ -306,7 +312,9 @@ export function applyEvent(
           ? 'companyPromotion'
           : event.type === 'milk-tea'
             ? 'milkTea'
-            : 'roomEvent',
+            : event.type === 'company-project'
+              ? 'companyProject'
+              : 'roomEvent',
       );
     }
     if (part.minutes !== undefined) {
@@ -348,7 +356,8 @@ export function applyEvent(
 
   // Xu: một phần XP thực nhận + thưởng việc sếp giao. XP uống trà sữa không sinh xu
   // (cốc trà sữa thật sự tốn 5 xu, chỉ được XP).
-  const coinXp = event.type === 'milk-tea' ? granted - grantedEvent : granted;
+  const noCoins = event.type === 'milk-tea' || event.type === 'company-project';
+  const coinXp = noCoins ? granted - grantedEvent : granted;
   const coins =
     Math.floor(coinXp * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
 

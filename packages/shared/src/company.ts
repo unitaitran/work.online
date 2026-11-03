@@ -1,6 +1,7 @@
 // Công ty (Phase 6): điều kiện mở, các giai đoạn, dự án, nhân viên NPC, sự kiện công ty, IPO.
 // Mọi hằng số cân bằng ở COMPANY; server tính, client chỉ hiển thị. Không có kết cục thua cứng:
 // tiền quỹ không bao giờ âm, offline lâu chỉ không tăng.
+import type { CompanyPerk } from './companyShop';
 import { z } from 'zod';
 import { BALANCE } from './balance';
 import { checkText, foldText } from './filter';
@@ -96,7 +97,8 @@ export const COMPANY = {
   playerWorkPerXp: 1,
   /** Thưởng IPO tối đa (tỉ lệ quỹ chuyển cho chủ). */
   ipoBonusShare: 0.05,
-  offersPerDay: 3,
+  /** Số dự án mời thầu mỗi ngày; mỗi dự án chỉ làm được một lần trong ngày. */
+  offersPerDay: 5,
   /** Chống lạm dụng. */
   applicationsPerDay: 5,
   invitesPerDay: 10,
@@ -206,6 +208,21 @@ export function projectReward(difficulty: number): number {
   return Math.round(150 * difficulty ** 1.5);
 }
 
+/**
+ * Thưởng xu cho nhân viên khi công ty xong dự án, trừ từ quỹ công ty (không tự sinh xu): theo độ
+ * khó (1–5) và vai trò. Thực tập sinh (vai trò 0) không được thưởng.
+ */
+export const PROJECT_BONUS_COINS: Readonly<Record<number, readonly number[]>> = {
+  1: [3, 4, 5, 6, 7],
+  2: [5, 6, 8, 9, 10],
+};
+
+export function projectBonusCoins(difficulty: number, role: number): number {
+  const table = PROJECT_BONUS_COINS[Math.min(2, role)];
+  if (!table) return 0;
+  return table[Math.max(1, Math.min(5, Math.round(difficulty))) - 1] ?? 0;
+}
+
 /** Ba dự án mời thầu mỗi ngày, theo hạt giống (công ty, ngày) nên server tái tạo được. */
 export function projectOffers(companyId: string, day: string, stage: number): ProjectOffer[] {
   const rng = seededRng(hashString(`projects|${companyId}|${day}`));
@@ -245,6 +262,19 @@ export interface CompanyEconomy {
   /** Dự án đang làm. */
   project: (ProjectOffer & { progress: number }) | null;
   lastSettle: number;
+  /** Đồ đã mua ở cửa hàng công ty. */
+  perks?: CompanyPerk[];
+  /** Màu đồng phục (chỉ số COMPANY_COLORS). */
+  uniformColor?: number;
+  /** Mã nhân viên công khai của những người đang chọn mặc đồng phục. */
+  uniformOn?: string[];
+  /** Mã các dự án mời thầu đã xong (mã có ngày, chỉ giữ của hôm nay). Bản lưu cũ không có. */
+  doneOffers?: string[];
+}
+
+/** Dự án mời thầu này đã làm xong hôm nay chưa. */
+export function offerDone(economy: CompanyEconomy, offerId: string): boolean {
+  return economy.doneOffers?.includes(offerId) ?? false;
 }
 
 export interface SettleResult {
@@ -253,6 +283,10 @@ export interface SettleResult {
   completed: ProjectOffer | null;
   workAdded: number;
   salaryPaid: number;
+}
+
+function sameOfferDay(a: string, b: string): boolean {
+  return a.slice(0, a.lastIndexOf('-')) === b.slice(0, b.lastIndexOf('-'));
 }
 
 /** Cộng điểm công việc vào dự án đang làm; xong thì nhận thưởng. */
@@ -277,6 +311,11 @@ export function addWork(economy: CompanyEconomy, points: number): SettleResult {
       treasury: economy.treasury + project.reward,
       reputation: economy.reputation + project.reputation,
       projectsDone: economy.projectsDone + 1,
+      // Chỉ giữ mã của cùng ngày với dự án vừa xong (mã dạng "ngày-số").
+      doneOffers: [
+        ...(economy.doneOffers ?? []).filter((id) => sameOfferDay(id, project.id)),
+        project.id,
+      ],
     },
     completed: project,
     workAdded: points,

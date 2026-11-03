@@ -4,13 +4,14 @@
 import {
   COMPANY,
   COMPANY_COLORS,
+  COMPANY_PERKS,
+  COMPANY_SHOP,
   COMPANY_ICONS,
   INDUSTRIES,
   MISSION_TEMPLATES,
   PROVINCES,
   provinceOf,
   REGION_NAMES,
-  seededRng,
   validateLadder,
   HIRING_MAX_LEVEL,
   DEFAULT_PROVINCE,
@@ -20,11 +21,13 @@ import {
   type CompanyLadder,
   type LadderStep,
   stageConfig,
+  offerDone,
   type CompanyDetail,
   type CompanyPublic,
   type MyCompanyResponse,
 } from '@dilam/shared';
-import { randomVietnameseName } from '../avatar/names';
+import { projectNameOf } from './projectName';
+import { staffName } from '../npc/roster';
 import { STRINGS } from '../strings';
 import { el } from './dom';
 
@@ -39,6 +42,8 @@ export interface CompanyApi {
   currentCompanyRoom(): string | null;
   /** Vừa nghỉ việc: ra hẳn khỏi văn phòng (về sảnh) để mở công ty hoặc tìm việc khác. */
   onLeft?(): void;
+  /** Vừa mua đồ / đổi tên / mặc hoặc thay đồng phục: cảnh tải lại phòng và áo của mình. */
+  onChanged?(): void;
 }
 
 const s = STRINGS.company;
@@ -50,7 +55,7 @@ function positionText(position: string | null): string {
 }
 
 export function npcName(nameIndex: number): string {
-  return randomVietnameseName(seededRng(nameIndex + 17));
+  return staffName(nameIndex);
 }
 
 function employerText(employer: string | null): string {
@@ -86,7 +91,7 @@ function companyBadge(c: CompanyPublic): HTMLElement {
 export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh(): void } {
   const message = el('p', { className: 'activity-message', attrs: { role: 'status' } });
   const content = el('div', { className: 'company-content' });
-  let tab: 'overview' | 'projects' | 'people' | 'ladder' | 'feed' = 'overview';
+  let tab: 'overview' | 'projects' | 'people' | 'ladder' | 'feed' | 'shop' = 'overview';
   let inviteCode: string | null = null;
   let leaveArmed = false;
   /** Tìm / lọc danh sách nhân viên (giữ qua các lần tải lại). */
@@ -391,7 +396,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       }),
     );
     const tabs: (typeof tab)[] = d.isOwner
-      ? ['overview', 'projects', 'people', 'ladder', 'feed']
+      ? ['overview', 'projects', 'people', 'ladder', 'shop', 'feed']
       : ['overview', 'feed'];
     if (!tabs.includes(tab)) tab = 'overview';
     parts.push(
@@ -412,7 +417,8 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
         }),
       }),
     );
-    if (tab === 'overview') parts.push(...renderOverview(d));
+    if (tab === 'overview') parts.push(...renderOverview(d), ...renderUniform(d));
+    if (tab === 'shop') parts.push(...renderShop(d));
     if (tab === 'projects') parts.push(...renderProjects(d));
     if (tab === 'people') parts.push(...renderPeople(d));
     if (tab === 'ladder') parts.push(renderBands(d.company.hiringBands, d.company.hiring));
@@ -425,6 +431,136 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       className: 'profile-row',
       children: [el('dt', { text: label }), el('dd', { text: value })],
     });
+
+  /** Gọi API rồi tải lại bảng và báo cảnh đổi đồ / áo. */
+  const change = (path: string, payload?: unknown): void => {
+    void act(path, payload).then((r) => {
+      if (r) api.onChanged?.();
+      void load();
+    });
+  };
+
+  // Đồng phục: ai trong công ty cũng tự chọn mặc hay không (khi công ty đã mua).
+  const renderUniform = (d: CompanyDetail): HTMLElement[] => {
+    if (!d.company.perks.includes('uniform')) return [];
+    return [
+      el('h3', { text: s.uniform.title }),
+      el('p', {
+        className: 'fortune-note',
+        text: d.wearingUniform ? s.uniform.wearing : s.uniform.notWearing,
+      }),
+      button(
+        d.wearingUniform ? s.uniform.takeOff : s.uniform.wear,
+        () => {
+          change('/api/company/uniform', { wear: !d.wearingUniform });
+        },
+        !d.wearingUniform,
+      ),
+    ];
+  };
+
+  // Cửa hàng công ty (CEO): tiêu quỹ cho đồ phòng nghỉ, decor bàn, đồng phục, đổi tên.
+  const renderShop = (d: CompanyDetail): HTMLElement[] => {
+    const treasury = d.economy.treasury;
+    const owned = d.company.perks;
+    const parts: HTMLElement[] = [
+      el('p', { className: 'activity-intro', text: s.shop.intro }),
+      el('p', { className: 'fortune-note', text: s.shop.treasury(Math.floor(treasury)) }),
+    ];
+    let uniformPick = d.economy.uniformColor ?? d.company.color;
+    const swatches = (onPick: (i: number) => void): HTMLElement =>
+      el('div', {
+        className: 'uniform-swatches',
+        children: COMPANY_COLORS.map((color, i) => {
+          const b = el('button', {
+            className: `uniform-swatch${i === uniformPick ? ' is-active' : ''}`,
+            attrs: { type: 'button', 'aria-label': `${s.shop.uniformColor} ${String(i + 1)}` },
+          });
+          b.style.background = hex(color);
+          b.addEventListener('click', () => {
+            uniformPick = i;
+            b.parentElement
+              ?.querySelectorAll('.uniform-swatch')
+              .forEach((x) => x.classList.toggle('is-active', x === b));
+            onPick(i);
+          });
+          return b;
+        }),
+      });
+    parts.push(
+      el('ul', {
+        className: 'company-list',
+        children: COMPANY_PERKS.map((perk) => {
+          const info = s.shop.perks[perk];
+          const cost = COMPANY_SHOP.perks[perk];
+          const has = owned.includes(perk);
+          const extra: HTMLElement[] = [];
+          if (perk === 'uniform') {
+            extra.push(el('p', { className: 'fortune-note', text: s.shop.uniformColor }));
+            extra.push(swatches(() => undefined));
+          }
+          return el('li', {
+            className: has ? 'is-done' : '',
+            children: [
+              el('div', {
+                children: [
+                  el('strong', { text: info?.name ?? perk }),
+                  el('p', { className: 'fortune-note', text: info?.desc ?? '' }),
+                  ...extra,
+                ],
+              }),
+              has
+                ? perk === 'uniform'
+                  ? button(
+                      s.shop.recolor(COMPANY_SHOP.uniformRecolor),
+                      () => {
+                        change('/api/company/shop/uniform-color', { color: uniformPick });
+                      },
+                      false,
+                      treasury < COMPANY_SHOP.uniformRecolor,
+                    )
+                  : el('span', { className: 'project-status', text: s.shop.owned })
+                : button(
+                    s.shop.buy(cost),
+                    () => {
+                      change(
+                        '/api/company/shop/buy',
+                        perk === 'uniform' ? { perk, color: uniformPick } : { perk },
+                      );
+                    },
+                    true,
+                    treasury < cost,
+                  ),
+            ],
+          });
+        }),
+      }),
+    );
+    // Đổi tên.
+    const input = el('input', {
+      className: 'creator-input',
+      attrs: {
+        type: 'text',
+        maxlength: String(COMPANY.nameMax),
+        placeholder: s.shop.renamePlaceholder,
+        'aria-label': s.shop.rename,
+      },
+    });
+    input.value = d.company.name;
+    parts.push(
+      el('h3', { text: s.shop.rename }),
+      input,
+      button(
+        s.shop.renameButton(COMPANY_SHOP.rename),
+        () => {
+          change('/api/company/shop/rename', { name: input.value });
+        },
+        false,
+        treasury < COMPANY_SHOP.rename,
+      ),
+    );
+    return parts;
+  };
 
   const renderOverview = (d: CompanyDetail): HTMLElement[] => {
     const e = d.economy;
@@ -518,10 +654,8 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     return parts;
   };
 
-  const projectName = (d: CompanyDetail, nameIndex: number): string => {
-    const names = s.project.names[d.company.industry] ?? [];
-    return names[nameIndex % Math.max(1, names.length)] ?? '';
-  };
+  const projectName = (d: CompanyDetail, nameIndex: number): string =>
+    projectNameOf(d.company.industry, nameIndex);
 
   const renderProjects = (d: CompanyDetail): HTMLElement[] => {
     const p = d.economy.project;
@@ -550,11 +684,24 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
       el('p', { className: 'fortune-note', text: s.project.hint }),
       el('h3', { text: s.project.offers }),
     );
+    const doneCount = d.offers.filter((o) => offerDone(d.economy, o.id)).length;
+    parts.push(
+      el('p', {
+        className: 'fortune-note',
+        text:
+          doneCount >= d.offers.length && d.offers.length > 0
+            ? s.project.allDone
+            : s.project.doneCount(doneCount, d.offers.length),
+      }),
+    );
     parts.push(
       el('ul', {
         className: 'company-list',
-        children: d.offers.map((o) =>
-          el('li', {
+        children: d.offers.map((o) => {
+          const done = offerDone(d.economy, o.id);
+          const active = p?.id === o.id;
+          return el('li', {
+            className: done ? 'is-done' : active ? 'is-current' : '',
             children: [
               el('div', {
                 children: [
@@ -567,15 +714,20 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                   }),
                 ],
               }),
-              button(
-                s.project.take,
-                () => void act('/api/company/project', { offerId: o.id }).then(load),
-                true,
-                p !== null,
-              ),
+              done || active
+                ? el('span', {
+                    className: 'project-status',
+                    text: done ? s.project.statusDone : s.project.statusActive,
+                  })
+                : button(
+                    s.project.take,
+                    () => void act('/api/company/project', { offerId: o.id }).then(load),
+                    true,
+                    p !== null,
+                  ),
             ],
-          }),
-        ),
+          });
+        }),
       }),
     );
     // Nhân viên NPC.

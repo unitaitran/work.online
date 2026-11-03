@@ -28,6 +28,8 @@ export interface ActivityEventDetails {
   'milk-tea': Record<string, never>;
   /** Chủ công ty xét thăng chức (giới hạn một lần mỗi ngày). */
   'company-promotion': { role: number };
+  /** Công ty nơi mình làm vừa xong một dự án (server cấp; vai trò ≥ 1). */
+  'company-project': { difficulty: number };
   /** Một phút trọn đang ngồi máy / trong phiên tập trung / ngồi họp (server đo). */
   'work-tick': { kind: 'desk' | 'focus' | 'meeting'; minutes: number };
 }
@@ -49,6 +51,7 @@ export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
   'room-event',
   'milk-tea',
   'company-promotion',
+  'company-project',
   'work-tick',
 ];
 

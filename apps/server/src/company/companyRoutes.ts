@@ -1,5 +1,9 @@
 // REST công ty (Phase 6). Mọi endpoint ghi có giới hạn tần suất; dữ liệu qua zod.
 import {
+  companyBuySchema,
+  companyRenameSchema,
+  uniformColorSchema,
+  uniformWearSchema,
   applySchema,
   assignTaskSchema,
   decideApplicationSchema,
@@ -84,6 +88,14 @@ export function registerCompanyRoutes(
   );
   write('/api/company/event', eventChoiceSchema, (u, b) => service.resolveEvent(u.id, b.choice));
   write('/api/company/upgrade', null, (u) => service.upgrade(u.id));
+  write('/api/company/shop/buy', companyBuySchema, (u, b) =>
+    service.buyPerk(u.id, b.perk, b.color),
+  );
+  write('/api/company/shop/rename', companyRenameSchema, (u, b) => service.rename(u.id, b.name));
+  write('/api/company/shop/uniform-color', uniformColorSchema, (u, b) =>
+    service.recolorUniform(u.id, b.color),
+  );
+  write('/api/company/uniform', uniformWearSchema, (u, b) => service.wearUniform(u.id, b.wear));
   write('/api/company/ipo', ipoSchema, (u, b) => service.ipo(u.id, b.industry));
   write('/api/company/apply', applySchema, (u, b) => {
     const r = service.apply(u.id, b.companyId);

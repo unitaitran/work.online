@@ -51,7 +51,10 @@ export interface CompanyRepo {
   update(
     id: string,
     fields: Partial<
-      Pick<CompanyRow, 'industry' | 'ipoCount' | 'eventDay' | 'hiring' | 'hiringBands'>
+      Pick<
+        CompanyRow,
+        'industry' | 'ipoCount' | 'eventDay' | 'hiring' | 'hiringBands' | 'name' | 'nameKey'
+      >
     >,
   ): void;
   /** Tầng còn trống đầu tiên: toà nhà mỗi toà tối đa `perBuilding` công ty. */
@@ -261,6 +264,14 @@ export function createCompanyRepo(db: Db): CompanyRepo {
     update(id, fields) {
       const sets: string[] = [];
       const values: (string | number | null)[] = [];
+      if (fields.name !== undefined) {
+        sets.push('name = ?');
+        values.push(fields.name);
+      }
+      if (fields.nameKey !== undefined) {
+        sets.push('name_key = ?');
+        values.push(fields.nameKey);
+      }
       if (fields.industry !== undefined) {
         sets.push('industry = ?');
         values.push(fields.industry);

@@ -1,4 +1,4 @@
-import { CEO_MEETING_SEAT_PREFIX } from '@dilam/shared';
+import { CEO_MEETING_SEAT_PREFIX, type CompanyPerk } from '@dilam/shared';
 // Tầng văn phòng Phase 2A: đi lại, chạm để dùng đồ vật, ngồi làm việc, đồng nghiệp NPC.
 import {
   Box3,
@@ -44,6 +44,10 @@ import { RemotePlayers } from './remotePlayers';
 import { RoomPlants } from './roomPlants';
 import { buildLanterns } from './lanterns';
 import { CompanySign, type SignInfo } from './companySign';
+import { CompanyPerks } from './companyPerks';
+
+/** Mã vật dụng do công ty mua (thêm / bỏ khi đổi đồ). */
+const PERK_ITEM_PREFIX = 'perk-';
 import { WallClock } from './wallClock';
 import { ZoneLabels } from './zoneLabels';
 import type { BufferGeometry, Group } from 'three';
@@ -102,6 +106,7 @@ export type OfficeEvent =
   | { type: 'interact'; item: Interactable }
   | { type: 'gift'; npcId: string; name: string }
   | { type: 'seatTaken'; name: string }
+  | { type: 'ceoSeatDenied' }
   /** Bấm vào máy tính ở chỗ đang ngồi. */
   | { type: 'screen'; item: Interactable };
 
@@ -145,12 +150,26 @@ export class OfficeScene implements SceneController {
   /** Vật cản của người chơi (đổi khi có / mất thẻ CEO; sửa tại chỗ để mọi nơi giữ tham chiếu). */
   private readonly obstacles: Aabb[];
   private ceoAccess = false;
+  private ceoRevokePending = false;
+  /** Là chủ công ty của phòng này (mới được ngồi ghế CEO). */
+  private ceoOwner = false;
+
+  setCeoOwner(owner: boolean): void {
+    this.ceoOwner = owner;
+  }
+
+  /** Đứng dậy khỏi ghế đang ngồi (ví dụ họp đủ giờ). */
+  leaveSeat(): void {
+    if (this.seated) this.standUp();
+  }
   private readonly layout: OfficeLayout;
   private readonly bounds: Aabb;
   private readonly items: Interactable[];
   private readonly pickBoxes: { item: Interactable; box: Box3 }[];
   private readonly seats = new SeatRegistry();
-  private readonly npcs: NpcAgent[];
+  private npcs: NpcAgent[];
+  private npcWorld!: ConstructorParameters<typeof NpcAgent>[2];
+  private npcKey = '';
   /** Người chơi khác trong phòng (Phase 4B). */
   readonly remotes: RemotePlayers;
   /** Hoa người chơi đã tưới (Phase 5A). */
@@ -229,6 +248,7 @@ export class OfficeScene implements SceneController {
     this.scene.add(this.marker);
 
     this.avatar = new AvatarModel(options.appearance, this.material);
+    this.lastLook = { appearance: options.appearance, equipped: [] };
     this.scene.add(this.avatar.root);
 
     // Đồng nghiệp NPC.
@@ -253,6 +273,8 @@ export class OfficeScene implements SceneController {
       strollSpots: layout.strollSpots,
     };
     this.bubbles = new BubbleLayer(options.hudLayer);
+    this.npcWorld = world;
+    this.npcKey = options.npcs.map((spec) => spec.id).join('|');
     this.npcs = options.npcs.map((spec, i) => {
       const npc = new NpcAgent(spec, this.material, world, seededRng(1000 + i), i);
       this.scene.add(npc.avatar.root);
@@ -358,15 +380,62 @@ export class OfficeScene implements SceneController {
   /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
   /** Có thẻ vào phòng CEO (chủ công ty, trong phòng công ty của mình) hay không. */
   setCeoAccess(on: boolean): void {
-    if (on === this.ceoAccess) return;
+    // Mất thẻ khi đang ở trong phòng (vừa họp xong): cửa còn mở tới khi bước ra mới đóng.
+    this.ceoRevokePending = !on && this.ceoAccess && insideCeoRoom(this.layout, this.position);
+    if (this.ceoRevokePending || on === this.ceoAccess) return;
     this.ceoAccess = on;
-    this.obstacles.splice(0, this.obstacles.length, ...officeObstacles(this.layout, { ceo: on }));
+    this.rebuildObstacles();
     this.office.setCeoDoorOpen(on);
-    // Mất thẻ khi đang ở trong phòng (chuyển phòng): đưa ra trước cửa.
-    if (!on && insideCeoRoom(this.layout, this.position)) {
-      const door = this.items.find((item) => item.kind === 'ceodoor');
-      if (door) this.correctPosition(door.approach.x, door.approach.z);
+  }
+
+  /** Gọi mỗi khung hình: đã ra khỏi phòng sếp thì đóng cửa. */
+  private checkCeoRevoke(): void {
+    if (!this.ceoRevokePending || insideCeoRoom(this.layout, this.position)) return;
+    this.ceoRevokePending = false;
+    this.ceoAccess = false;
+    this.rebuildObstacles();
+    this.office.setCeoDoorOpen(false);
+  }
+
+  private rebuildObstacles(): void {
+    this.obstacles.splice(
+      0,
+      this.obstacles.length,
+      ...officeObstacles(this.layout, { ceo: this.ceoAccess }),
+      ...(this.perks?.obstacles ?? []),
+    );
+  }
+
+  private perks: CompanyPerks | null = null;
+  private perkKey = '';
+
+  /** Đồ công ty đã mua (phòng công ty): ghế massage, máy chơi game, decor bàn. */
+  setCompanyPerks(perks: readonly CompanyPerk[]): void {
+    const key = [...perks].sort().join(',');
+    if (key === this.perkKey) return;
+    this.perkKey = key;
+    if (this.seated?.id.startsWith(PERK_ITEM_PREFIX)) this.standUp();
+    for (let i = this.items.length - 1; i >= 0; i -= 1) {
+      if (this.items[i]?.id.startsWith(PERK_ITEM_PREFIX)) this.items.splice(i, 1);
     }
+    this.perks?.dispose();
+    this.perks = null;
+    if (perks.length > 0) {
+      this.perks = new CompanyPerks(this.layout, this.material, perks);
+      this.scene.add(this.perks.group);
+      this.items.push(...this.perks.items);
+    }
+    this.rebuildObstacles();
+  }
+
+  private uniform: number | null = null;
+  private lastLook: { appearance: Appearance; equipped: readonly string[] } | null = null;
+
+  /** Đồng phục công ty (màu hex) hoặc null: dựng lại nhân vật nếu đổi. */
+  setUniform(color: number | null): void {
+    if (color === this.uniform) return;
+    this.uniform = color;
+    if (this.lastLook) this.setGear(this.lastLook.appearance, this.lastLook.equipped);
   }
 
   hasCeoAccess(): boolean {
@@ -507,11 +576,33 @@ export class OfficeScene implements SceneController {
     return { ...this.position };
   }
 
+  /** Thay danh sách NPC (văn phòng chung: 3 đồng nghiệp; công ty: theo số nhân viên NPC). */
+  setNpcs(specs: readonly NpcSpec[]): void {
+    const key = specs.map((spec) => `${spec.id}:${spec.name}`).join('|');
+    if (key === this.npcKey) return;
+    this.npcKey = key;
+    for (const npc of this.npcs) {
+      this.scene.remove(npc.avatar.root);
+      this.bubbles.remove(npc.spec.id);
+      npc.dispose();
+    }
+    this.npcs = specs.map((spec, i) => {
+      const npc = new NpcAgent(spec, this.material, this.npcWorld, seededRng(1000 + i), i);
+      npc.avatar.setShadows(this.shadows);
+      this.scene.add(npc.avatar.root);
+      this.bubbles.ensure(spec.id, spec.name);
+      return npc;
+    });
+  }
+
   /** Đổi đồ đang mặc / thú cưng (từ cửa hàng): dựng lại nhân vật. */
   setGear(appearance: Appearance, equipped: readonly string[]): void {
     const pose = this.avatar.pose;
     this.avatar.dispose();
-    this.avatar = new AvatarModel(appearance, this.material, gearFromEquipped(equipped));
+    this.lastLook = { appearance, equipped };
+    const gear = gearFromEquipped(equipped);
+    if (this.uniform !== null) gear.topTint = this.uniform;
+    this.avatar = new AvatarModel(appearance, this.material, gear);
     this.avatar.setPose(pose);
     this.avatar.setShadows(this.shadows);
     this.scene.add(this.avatar.root);
@@ -555,8 +646,9 @@ export class OfficeScene implements SceneController {
     return this.seated?.id ?? null;
   }
 
-  getNpcStatuses(): { name: string; status: string; position: Vec2 }[] {
+  getNpcStatuses(): { id: string; name: string; status: string; position: Vec2 }[] {
     return this.npcs.map((npc) => ({
+      id: npc.spec.id,
       name: npc.name,
       status: npc.status(),
       position: npc.getPosition(),
@@ -591,6 +683,7 @@ export class OfficeScene implements SceneController {
     }
 
     if (!this.seated) this.movePlayer(dt, hasInput ? input : null);
+    this.checkCeoRevoke();
 
     this.avatar.update(dt);
     for (const npc of this.npcs) npc.update(dt);
@@ -673,6 +766,7 @@ export class OfficeScene implements SceneController {
         (z > rooms - 0.2 || (this.camera.position.z > rooms - 0.5 && this.camera.position.y < 6)),
     );
     this.office.update(frameSeconds);
+    this.perks?.update(frameSeconds);
     this.dust.update(frameSeconds);
     this.clock.update(Date.now());
     this.updateBubbles(frameSeconds);
@@ -709,6 +803,7 @@ export class OfficeScene implements SceneController {
     this.joystick.dispose();
     this.pointer.dispose();
     this.remotes.dispose();
+    this.perks?.dispose();
     this.plants.dispose();
     this.sign?.dispose();
     this.clock.dispose();
@@ -809,6 +904,12 @@ export class OfficeScene implements SceneController {
   }
 
   private use(item: Interactable): void {
+    // Ghế CEO chỉ cho chủ công ty (người vào họp có thẻ vào phòng nhưng không được ngồi).
+    if (item.kind === 'ceodesk' && !this.ceoOwner) {
+      this.facing = item.facing;
+      this.options.onEvent({ type: 'ceoSeatDenied' });
+      return;
+    }
     if (item.seat) {
       if (!this.seats.claim(item.id, PLAYER_ID)) {
         const who = this.seats.occupant(item.id);

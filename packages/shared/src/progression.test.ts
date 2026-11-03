@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeEvent, type ActivityEvent } from './activityEvents';
 import { BALANCE } from './balance';
-import { canOpenCompany, leaveCompany, buildingHasRoom } from './company';
+import { buildingHasRoom, canOpenCompany, leaveCompany, projectBonusCoins } from './company';
 import {
   levelFor,
   levelProgress,
@@ -508,5 +508,24 @@ describe('uống trà sữa', () => {
     }
     const extra = applyEvent(s, cup(), { today: DAY, now: T0 });
     expect(extra.granted).toBe(0);
+  });
+});
+
+describe('thưởng dự án công ty', () => {
+  it('XP theo độ khó, không sinh xu, tối đa 2 lần mỗi ngày', () => {
+    let s = createProgress(T0);
+    const done = (difficulty: number) => makeEvent('company-project', T0, 0, { difficulty });
+    const first = applyEvent(s, done(5), { today: DAY, now: T0 });
+    expect(first.granted).toBe(14);
+    expect(first.coins).toBe(0);
+    s = applyEvent(first.state, done(1), { today: DAY, now: T0 }).state;
+    expect(applyEvent(s, done(3), { today: DAY, now: T0 }).granted).toBe(0);
+  });
+
+  it('xu 3–10 theo độ khó và vai trò; thực tập sinh không có', () => {
+    expect(projectBonusCoins(5, 0)).toBe(0);
+    expect(projectBonusCoins(1, 1)).toBe(3);
+    expect(projectBonusCoins(5, 1)).toBe(7);
+    expect(projectBonusCoins(5, 2)).toBe(10);
   });
 });

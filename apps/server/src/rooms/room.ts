@@ -1,6 +1,7 @@
 // Một phòng (văn phòng chung, hoặc phòng riêng của công ty ở Phase 6): danh sách người, vị trí,
 // phát thay đổi theo vùng quan tâm, giữ chỗ khi mất kết nối, kiểm tra người đứng yên quá lâu.
 import {
+  insideCeoRoom,
   IDLE_CHECK_MS,
   IDLE_GRACE_MS,
   INTEREST_RADIUS,
@@ -50,6 +51,8 @@ interface Member {
   sent: Map<number, string>;
   /** Có thẻ CEO (tính lúc vào phòng). */
   ceo: boolean;
+  /** Đã mất thẻ phòng sếp nhưng còn ở trong phòng: thu thẻ khi bước ra. */
+  ceoPending?: boolean;
 }
 
 export interface RoomOptions {
@@ -199,6 +202,10 @@ export class Room {
       member.z = check.z;
       member.conn.send({ type: 'correct', x: round2(check.x), z: round2(check.z) });
     }
+    if (member.ceoPending && !insideCeoRoom(this.layout, member)) {
+      member.ceoPending = false;
+      member.ceo = this.options.isCeo?.(userId) ?? false;
+    }
     member.facing = facing;
     member.pose = pose;
     member.stateAt = now;
@@ -250,7 +257,11 @@ export class Room {
   /** Tính lại quyền vào phòng CEO (ví dụ vừa nhận / vừa xong việc "Họp với sếp"). */
   refreshCeo(userId: string): void {
     const member = this.members.get(userId);
-    if (member) member.ceo = this.options.isCeo?.(userId) ?? false;
+    if (!member) return;
+    const ceo = this.options.isCeo?.(userId) ?? false;
+    // Đang ở trong phòng sếp (vừa họp xong): giữ thẻ tới khi bước ra, rồi mới đóng cửa.
+    member.ceo = ceo || (member.ceo && insideCeoRoom(this.layout, member));
+    member.ceoPending = !ceo && member.ceo;
   }
 
   /** Hồ sơ công khai của một người đang trong phòng (sid, tên...). */

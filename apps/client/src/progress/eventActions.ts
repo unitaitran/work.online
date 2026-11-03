@@ -34,6 +34,7 @@ export function actionForEvent(event: ActivityEvent): Action | null {
     case 'room-event':
     case 'milk-tea':
     case 'company-promotion':
+    case 'company-project':
     case 'work-tick':
       return null;
   }

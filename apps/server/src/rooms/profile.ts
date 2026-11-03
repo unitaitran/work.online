@@ -9,6 +9,7 @@ import {
   type CareerUnlock,
   type JobTag,
   type PlayerProfile,
+  uniformHex,
 } from '@dilam/shared';
 import { playerCodeOf } from '../auth/secrets';
 import type { Repositories } from '../db/repositories';
@@ -25,7 +26,18 @@ export function publicProfile(repos: Repositories, userId: string): Omit<PlayerP
     branch: progress?.state.branch ?? null,
     job: jobOf(repos, userId, progress ? levelFor(progress.state.xp) : 1),
     equipped: repos.inventory.equipped(userId),
+    ...uniformOf(repos, userId, code),
   };
+}
+
+/** Đồng phục công ty: chỉ khi công ty đã mua và người này tự chọn mặc. */
+function uniformOf(repos: Repositories, userId: string, code: string): { uniform?: number } {
+  const owned = repos.companies.byOwner(userId);
+  const member = owned ? null : repos.companies.member(userId);
+  const company = owned ?? (member ? repos.companies.get(member.companyId) : null);
+  if (!company || !(company.economy.uniformOn ?? []).includes(code)) return {};
+  const hex = uniformHex(company.economy);
+  return hex === null ? {} : { uniform: hex };
 }
 
 /** Chức danh theo nơi làm: chủ công ty là CEO, nhân viên theo bậc trong lộ trình công ty. */

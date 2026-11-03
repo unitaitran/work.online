@@ -60,6 +60,13 @@ interface Remote {
   emote?: string | undefined;
 }
 
+/** Đồ đang mặc; đồng phục công ty (nếu chọn mặc) đè màu áo. */
+function gearOf(profile: PlayerProfile): ReturnType<typeof gearFromEquipped> {
+  const gear = gearFromEquipped(profile.equipped);
+  if (profile.uniform !== undefined) gear.topTint = profile.uniform;
+  return gear;
+}
+
 /** Người khác ngồi trong bán kính này quanh mình (khi mình đang ngồi) coi như cùng ghế. */
 const SAME_SEAT_RADIUS = 0.35;
 
@@ -144,8 +151,11 @@ export class RemotePlayers {
     const player = this.players.get(profile.sid);
     if (!player) return;
     const looksChanged =
-      JSON.stringify([player.profile.appearance, player.profile.equipped]) !==
-      JSON.stringify([profile.appearance, profile.equipped]);
+      JSON.stringify([
+        player.profile.appearance,
+        player.profile.equipped,
+        player.profile.uniform,
+      ]) !== JSON.stringify([profile.appearance, profile.equipped, profile.uniform]);
     player.profile = profile;
     if (looksChanged) this.dropModel(player);
     this.bubbles.remove(bubbleId(profile.sid));
@@ -266,7 +276,7 @@ export class RemotePlayers {
           player.avatar = new AvatarModel(
             player.profile.appearance,
             this.material,
-            gearFromEquipped(player.profile.equipped),
+            gearOf(player.profile),
           );
           player.avatar.setShadows(this.shadows);
           this.scene.add(player.avatar.root);
