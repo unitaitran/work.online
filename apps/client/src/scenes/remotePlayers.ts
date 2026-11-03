@@ -239,9 +239,15 @@ export class RemotePlayers {
       // Hai người ngồi cùng một ghế: trên màn của mình chỉ thấy mình (không vẽ người kia chồng lên).
       const remoteSeated = player.pose === 'sit' || player.pose === 'type';
       const sameSeat =
-        viewer.seated === true &&
         remoteSeated &&
-        Math.hypot(player.x - viewer.x, player.z - viewer.z) < SAME_SEAT_RADIUS;
+        ((viewer.seated === true &&
+          Math.hypot(player.x - viewer.x, player.z - viewer.z) < SAME_SEAT_RADIUS) ||
+          // Hai người khác cùng ngồi một ghế: chỉ vẽ người đầu tiên.
+          visible.some(
+            (other) =>
+              (other.pose === 'sit' || other.pose === 'type') &&
+              Math.hypot(player.x - other.x, player.z - other.z) < SAME_SEAT_RADIUS,
+          ));
       if (sameSeat || this.hiddenCodes.has(player.profile.code)) {
         this.hide(player);
         continue;

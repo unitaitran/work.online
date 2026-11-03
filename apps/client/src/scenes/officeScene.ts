@@ -676,7 +676,9 @@ export class OfficeScene implements SceneController {
     this.dust.update(frameSeconds);
     this.clock.update(Date.now());
     this.updateBubbles(frameSeconds);
-    this.remotes.update(frameSeconds, { x, z, seated: this.seated !== null }, (px, py, pz) => this.bubbleScreen(px, py, pz));
+    this.remotes.update(frameSeconds, { x, z, seated: this.seated !== null }, (px, py, pz) =>
+      this.bubbleScreen(px, py, pz),
+    );
     this.companions?.update(frameSeconds, { x, z, facing: this.facing, pose: this.avatar.pose });
     this.updateHint();
   }
