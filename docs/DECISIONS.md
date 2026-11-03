@@ -390,3 +390,16 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 ## Dropdown tự vẽ (2026-11-03)
 
 - Danh sách của `<select>` mặc định (xám) gần như không đổi màu được, nên mọi `<select>` trong HUD được tự thay bằng dropdown tự vẽ (`ui/prettySelect.ts`): `<select>` gốc vẫn giữ giá trị và phát `change`, code cũ không phải sửa. Có bàn phím (mũi tên/Enter/Esc), role listbox, tôn trọng "giảm chuyển động".
+
+## Cửa hàng công ty (tiêu quỹ)
+
+- CEO tiêu quỹ công ty (xu trong game) cho: đổi tên (600 xu, mỗi lần), ghế massage (1.500), máy chơi game (1.200), decor bàn cho mọi người (900), đồng phục (2.000, đổi màu 300). Giá nằm ở `COMPANY_SHOP` trong `packages/shared/src/companyShop.ts`.
+- Đồ mua một lần dùng mãi, giữ lại sau IPO.
+- Đồng phục: mặc định không mặc; mỗi người (cả CEO) tự bật/tắt ở tab Tổng quan của bảng công ty. Server lưu danh sách mã nhân viên đang mặc trong `economy.uniformOn` và đưa màu áo vào hồ sơ công khai (`PlayerProfile.uniform`), nên người khác thấy được. Mặc ở mọi phòng, không chỉ phòng công ty.
+- Ghế massage và máy chơi game chỉ là chỗ ngồi thư giãn (không cho XP), đặt trong phòng nghỉ, chỉ có ở phòng công ty đã mua. Vật cản của chúng chỉ có ở client; server không cần biết vì chỗ ngồi nằm trên sàn trống.
+
+## Thưởng nhân viên khi công ty xong dự án
+
+- Xu: 3–10 theo độ khó và vai trò (Nhân viên 3–7, Chuyên viên cao cấp 5–10), trừ từ quỹ công ty; quỹ hết thì không trả. Thực tập sinh không được.
+- XP: 4 + 2 × độ khó (6–14), không sinh xu, tối đa 2 lần/ngày vì công ty đông người xong dự án rất nhanh.
+- Không thưởng tài khoản nghi là phụ (cùng IP với chủ) (người mới vào vẫn được thưởng).

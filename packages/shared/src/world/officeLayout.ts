@@ -18,7 +18,10 @@ export type InteractableKind =
   | 'taskboard'
   | 'ventwall'
   | 'ceodesk'
-  | 'ceodoor';
+  | 'ceodoor'
+  /** Đồ công ty mua (chỉ có trong phòng công ty đã mua). */
+  | 'massage'
+  | 'console';
 
 /** Tư thế khi dùng vật: ngồi gõ phím, ngồi thường, hoặc đứng. */
 export type UsePose = 'type' | 'sit' | 'stand';
@@ -274,7 +277,7 @@ export const OFFICE_FLOOR: OfficeLayout = {
     door: wallZ(-6, 2.6, 3.6, G),
     desk: box(-3.6, 3.9, 2.6, 1),
     cabinet: { minX: -1.62, maxX: -1.08, minZ: 4.4, maxZ: 5.9 },
-    reader: box(-6.13, 3.95, 0.16, 0.26),
+    reader: box(-6.13, 4.4, 0.16, 0.26),
     display: box(-3.6, 6.325, 2.4, 0.35),
     sofa: { minX: -1.92, maxX: -1.15, minZ: 2.2, maxZ: 3.4 },
   },

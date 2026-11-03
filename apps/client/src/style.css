@@ -4342,3 +4342,37 @@ button.office-badge:focus-visible {
     grid-column: 2;
   }
 }
+
+/* Dự án mời thầu: đã xong thì mờ đi, đang làm thì viền nổi. */
+.company-list li.is-done {
+  opacity: 0.55;
+}
+.company-list li.is-current {
+  outline: 2px solid var(--accent, #ff8a65);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.project-status {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Cửa hàng công ty: chọn màu đồng phục. */
+.uniform-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+.uniform-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  padding: 0;
+}
+.uniform-swatch.is-active {
+  border-color: #2b2b31;
+  box-shadow: 0 0 0 2px #fff inset;
+}

@@ -244,9 +244,8 @@ export function attachGameService(
   });
 
   // XP nhỏ giọt: mỗi 15 giây xem ai đang ngồi máy / ngồi họp (server tự xác định từ vị trí + tư thế).
-  const deskSeats = officeInteractables(OFFICE_FLOOR).filter(
-    (i) => (i.kind === 'desk' || i.kind === 'ceodesk') && i.seat,
-  );
+  const deskSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'desk' && i.seat);
+  const ceoSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'ceodesk' && i.seat);
   const meetingSeats = officeInteractables(OFFICE_FLOOR).filter(
     (i) => i.kind === 'meeting' && i.seat,
   );
@@ -257,6 +256,14 @@ export function attachGameService(
     const p = session.room.positionOf(session.userId);
     if (!p || (pose !== 'type' && pose !== 'sit')) return null;
     if (near(p, deskSeats)) return 'desk';
+    // Ghế CEO: chỉ chủ công ty (trong phòng công ty của mình) mới tính là ngồi làm việc.
+    if (near(p, ceoSeats)) {
+      const kind = session.room.kind;
+      const owner =
+        kind.startsWith('company:') &&
+        ctx.repos.companies.get(kind.slice('company:'.length))?.ownerId === session.userId;
+      return owner ? 'desk' : null;
+    }
     if (near(p, meetingSeats)) return 'meeting';
     return null;
   };
@@ -354,6 +361,14 @@ export function attachGameService(
     },
     profileChanged: (userId) => {
       gateway.sessionOf(userId)?.room.updateProfile(userId, publicProfile(ctx.repos, userId));
+    },
+    companyChanged: (companyId) => {
+      for (const room of gateway.rooms.all()) {
+        if (room.kind === `company:${companyId}`) room.broadcastAll({ type: 'company_refresh' });
+      }
+    },
+    projectDone: (ownerId, message) => {
+      gateway.sessionOf(ownerId)?.room.sendTo(ownerId, message);
     },
   });
   gateway.setAccess({

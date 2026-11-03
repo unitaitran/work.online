@@ -15,6 +15,7 @@ import {
   PROTOCOL_VERSION,
   COMPANY_COLORS,
   hasCeoMeeting,
+  CEO_MEETING_SEAT_PREFIX,
   type CompanyPublic,
   type MyCompanyResponse,
   type InventoryResponse,
@@ -52,7 +53,7 @@ import { markLocalSaveImported, pendingLocalSave } from './progress/localSave';
 import { ServerProgress } from './progress/serverProgress';
 import { compareVersion, registerServiceWorker } from './version';
 import { CreatorScene } from './scenes/creatorScene';
-import { createNpcRoster } from './npc/roster';
+import { createNpcRoster, createStaffRoster } from './npc/roster';
 import { OfficeScene, type OfficeEvent } from './scenes/officeScene';
 import {
   loadAudioSettings,
@@ -74,6 +75,7 @@ import { el } from './ui/dom';
 import { showCoachMarks, type CoachCard } from './ui/coachMarks';
 import { openModal, type Modal } from './ui/modal';
 import type { CallResult, CompanyApi } from './ui/companyPanel';
+import { projectNameOf } from './ui/projectName';
 
 // Các màn ít dùng được tải lười (chia nhỏ JS, tải ban đầu nhẹ hơn).
 const lazy = {
@@ -92,7 +94,7 @@ import { mountRoomEventBanner } from './ui/roomEventBanner';
 import { mountTeaInvite } from './ui/teaInvite';
 import { enhanceSelects } from './ui/prettySelect';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
-import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
+import { OFFICE_FLOOR, type Interactable, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
 
 function requireElement<T extends Element>(selector: string, type: abstract new () => T): T {
@@ -397,7 +399,7 @@ function start(): void {
   /** Mở bảng công ty trong một hộp thoại (dùng ở văn phòng và ở màn "Ở nhà"). */
   const mountCompany = (
     modal: Modal,
-    ctl: Pick<CompanyApi, 'enterRoom' | 'currentCompanyRoom' | 'onLeft'>,
+    ctl: Pick<CompanyApi, 'enterRoom' | 'currentCompanyRoom' | 'onLeft' | 'onChanged'>,
   ): void => {
     track(store, 'company_open');
     modal.body.closest('.modal')?.classList.add('modal-wide');
@@ -460,15 +462,19 @@ function start(): void {
   // Công ty người chơi đang làm, để tính chức danh: tự mở là CEO, làm cho người khác thì
   // theo khung cấp từng vị trí; ở văn phòng chung thì theo thang chức danh chung.
   let workplace: Workplace | null = null;
+  /** Tên công ty người chơi đang làm / làm chủ (để hiện trên thẻ nhân viên). */
+  let myCompanyName: string | null = null;
   const loadWorkplace = async (): Promise<void> => {
     if (!progress.state.employer?.startsWith('company:')) {
       workplace = null;
+      myCompanyName = null;
       progress.setCareerUnlock(undefined);
       return;
     }
     const r = await api.request<MyCompanyResponse>('GET', '/api/company/me');
     const detail = r.ok ? r.value.detail : null;
     workplace = detail ? { owner: detail.isOwner, ladder: detail.company.hiringBands } : null;
+    myCompanyName = detail?.company.name ?? null;
     // Nhân viên: mốc chọn phòng ban / nhánh theo lộ trình CEO đặt (server cũng kiểm tra y vậy).
     progress.setCareerUnlock(
       workplace && !workplace.owner ? ladderUnlockLevels(workplace.ladder) : undefined,
@@ -698,6 +704,10 @@ function start(): void {
         else if (event.item.kind === 'desk') openHubNow();
         return;
       }
+      if (event.type === 'ceoSeatDenied') {
+        hud?.showToast(STRINGS.ceo.seatDenied);
+        return;
+      }
       if (event.type === 'seatTaken') {
         hud?.showToast(STRINGS.interact.seatTaken(event.name));
         return;
@@ -733,6 +743,31 @@ function start(): void {
       const text = kind === 'window' ? STRINGS.interact.window[currentPeriod()] : results[kind];
       if (text) hud?.showToast(text);
     };
+    // Việc sếp giao kiểu ngồi họp (phòng họp / sofa phòng sếp): ngồi đủ giờ thì báo và tự đứng dậy.
+    let meetingTimer: number | undefined;
+    const scheduleMeetingEnd = (item: Interactable | null): void => {
+      window.clearTimeout(meetingTimer);
+      meetingTimer = undefined;
+      if (item?.kind !== 'meeting') return;
+      const mission = activeMission(progress.state);
+      if (!mission) return;
+      const goal = mission.goal;
+      const fits =
+        goal.kind === 'meetingMinutes' ||
+        (goal.kind === 'ceoMeeting' && item.id.startsWith(CEO_MEETING_SEAT_PREFIX));
+      if (!fits) return;
+      const left = Math.max(1, goal.amount - mission.progress);
+      // Dư 1,5 giây cho chắc server đếm đủ phút.
+      meetingTimer = window.setTimeout(
+        () => {
+          meetingTimer = undefined;
+          audio.play('ting');
+          hud?.showToast(STRINGS.events.meetingDone);
+          office?.leaveSeat();
+        },
+        left * 60_000 + 1500,
+      );
+    };
     const scene = new OfficeScene({
       canvas,
       hudLayer: hudRoot,
@@ -751,6 +786,7 @@ function start(): void {
       canGiftCoffee: () => activities?.canGiftCoffee() ?? false,
       onSeatChange: (item) => {
         activities?.onSeatChange(item);
+        scheduleMeetingEnd(item);
         // Họp đột xuất: ngồi vào ghế phòng họp là xong phần mình, tắt banner.
         if (item?.kind === 'meeting' && eventState?.kind === 'surprise_meeting') {
           banner.dismiss(eventState.id, STRINGS.events.joinedMeeting);
@@ -969,6 +1005,32 @@ function start(): void {
         case 'quick_chat':
           scene.remotes.say(message.sid, QUICK_CHATS[message.index] ?? '');
           break;
+        case 'company_refresh':
+          // Công ty đổi tên / mua đồ / đổi màu đồng phục.
+          updateSign();
+          break;
+        case 'project_done':
+          // CEO: công ty vừa xong một dự án.
+          audio.play('ting');
+          // Nhân viên: báo phần thưởng mình nhận; CEO: báo dự án xong.
+          if (message.bonus) {
+            officeHudView.showToast(
+              STRINGS.company.projectBonusToast(
+                projectNameOf(message.industry, message.nameIndex),
+                message.bonus.coins,
+                message.bonus.xp,
+              ),
+            );
+            break;
+          }
+          officeHudView.showToast(
+            STRINGS.company.projectDoneToast(
+              projectNameOf(message.industry, message.nameIndex),
+              message.reward,
+              message.reputation,
+            ),
+          );
+          break;
         case 'coffee_received':
           // Được người chơi khác tặng cà phê: cảm ơn (bong bóng) và báo.
           audio.play('ting');
@@ -1169,9 +1231,21 @@ function start(): void {
 
     // ---------- Công ty (Phase 6): phòng riêng có biển hiệu ----------
     let roomKind = 'office';
+    // Áo đồng phục của mình (mặc ở mọi phòng nếu công ty đã mua và mình chọn mặc).
+    const refreshUniform = (): void => {
+      void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
+        if (!r.ok) return;
+        const d = r.value.detail;
+        scene.setUniform(d?.wearingUniform ? d.company.uniform : null);
+      });
+    };
     const updateSign = (): void => {
+      refreshUniform();
       if (!roomKind.startsWith('company:')) {
         scene.setCompanySign(null);
+        scene.setCompanyPerks([]);
+        // Văn phòng Công Sở: 3 đồng nghiệp mặc định.
+        scene.setNpcs(createNpcRoster());
         return;
       }
       const id = roomKind.slice('company:'.length);
@@ -1180,6 +1254,9 @@ function start(): void {
         .then((r) => {
           if (!r.ok || roomKind !== `company:${id}`) return;
           const c = r.value;
+          scene.setCompanyPerks(c.perks);
+          // Phòng công ty: đúng số nhân viên NPC đang đi làm (chưa thuê ai thì không có NPC).
+          scene.setNpcs(createStaffRoster(c.staff));
           scene.setCompanySign({
             name: c.name,
             color: COMPANY_COLORS[c.color] ?? 0xff8a65,
@@ -1196,6 +1273,9 @@ function start(): void {
           modal.close();
         },
         currentCompanyRoom: () => (roomKind.startsWith('company:') ? roomKind : null),
+        onChanged: () => {
+          updateSign();
+        },
         onLeft: () => {
           // Nghỉ việc: ra hẳn khỏi văn phòng về màn "Ở nhà".
           modal.close();
@@ -1218,6 +1298,7 @@ function start(): void {
       const kind = roomKind;
       const cachedOwner = ownerCache?.kind === kind && ownerCache.owner;
       const meeting = hasCeoMeeting(progress.state);
+      scene.setCeoOwner(cachedOwner);
       scene.setCeoAccess(meeting || cachedOwner);
       if (meeting || ownerCache?.kind === kind || !kind.startsWith('company:')) return;
       void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
@@ -1225,6 +1306,7 @@ function start(): void {
         const detail = r.value.detail;
         const owner = detail !== null && detail.isOwner && `company:${detail.company.id}` === kind;
         ownerCache = { kind, owner };
+        scene.setCeoOwner(owner);
         scene.setCeoAccess(owner || hasCeoMeeting(progress.state));
       });
     };
@@ -1410,7 +1492,7 @@ function start(): void {
       if (lines.length > 0) {
         moodTimer = window.setInterval(() => {
           const npcs = scene.getNpcStatuses();
-          const npc = createNpcRoster()[Math.floor(Math.random() * npcs.length)];
+          const npc = npcs[Math.floor(Math.random() * npcs.length)];
           const line = lines[Math.floor(Math.random() * lines.length)];
           if (npc && line) scene.npcSay(npc.id, line, 5);
         }, 75_000);
@@ -1457,6 +1539,7 @@ function start(): void {
         playerId,
         progress,
         workplace: () => workplace,
+        companyName: () => myCompanyName,
         initialTab: tab,
         account: {
           recover: async (code) => {

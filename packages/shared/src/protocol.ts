@@ -73,6 +73,8 @@ export interface PlayerProfile {
   job?: JobTag;
   /** Đồ đang mặc và thú cưng (Phase 5A). */
   equipped?: string[];
+  /** Đang mặc đồng phục công ty: màu áo (hex), đè lên áo đang mặc. */
+  uniform?: number;
 }
 
 export interface PlayerSnapshot extends PlayerProfile {
@@ -219,6 +221,19 @@ export type ServerMessage =
   | { type: 'room_plants'; plants: PlantView[] }
   | { type: 'plant_added'; plant: PlantView }
   | { type: 'plant_removed'; ids: number[] }
+  /** Phòng công ty đổi tên / mua đồ: tải lại biển hiệu và đồ trong phòng. */
+  | { type: 'company_refresh' }
+  /** Gửi CEO: công ty vừa hoàn thành một dự án (ở đâu trong game cũng nhận). */
+  | {
+      type: 'project_done';
+      industry: string;
+      nameIndex: number;
+      difficulty: number;
+      reward: number;
+      reputation: number;
+      /** Gửi nhân viên: phần thưởng mình nhận (không có: tin cho CEO). */
+      bonus?: { coins: number; xp: number };
+    }
   /** Người chơi khác vừa tặng mình một ly cà phê. */
   | { type: 'coffee_received'; fromSid: number; fromName: string }
   /** Có người rủ cả phòng uống trà sữa (gửi cho mọi người trừ người rủ). */

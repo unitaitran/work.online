@@ -297,17 +297,10 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
   ] as const) {
     sort.append(el('option', { text: label, attrs: { value } }));
   }
-  const provinceChip = el('button', { className: 'auth-tab is-active', attrs: { type: 'button' } });
-  provinceChip.hidden = true;
-  provinceChip.addEventListener('click', () => {
-    selected = null;
-    shown = PAGE;
-    render();
-  });
   const resultCount = el('p', { className: 'fortune-note map-count' });
   filterBar.append(
     search,
-    el('div', { className: 'map-chips', children: [hiringOnly, fitsMe, provinceChip, sort] }),
+    el('div', { className: 'map-chips', children: [hiringOnly, fitsMe, sort] }),
     resultCount,
   );
   const toggle = (b: HTMLButtonElement): void => {
@@ -323,6 +316,8 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
   toggle(fitsMe);
   let searchTimer: number | undefined;
   search.addEventListener('input', () => {
+    // Sửa / xoá tên tỉnh đã chọn trên bản đồ thì bỏ lọc theo tỉnh, lọc theo chữ gõ.
+    if (selected && search.value !== (provinceOf(selected)?.name ?? '')) selected = null;
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
       shown = PAGE;
@@ -375,12 +370,12 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
     mapBox.replaceChildren(
       drawMap(counts, (id) => {
         selected = selected === id ? null : id;
+        // Tên tỉnh hiện ngay trên ô tìm kiếm (bấm lại tỉnh đó để bỏ chọn).
+        search.value = selected ? (provinceOf(selected)?.name ?? '') : '';
         shown = PAGE;
         render();
       }),
     );
-    provinceChip.hidden = selected === null;
-    provinceChip.textContent = selected ? `${provinceOf(selected)?.name ?? ''} ✕` : '';
     const rows = visible();
     resultCount.textContent = s.results(rows.length, companies.length);
     if (rows.length === 0) {

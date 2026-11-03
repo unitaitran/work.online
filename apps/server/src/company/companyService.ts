@@ -26,6 +26,7 @@ import {
   MISSION_TEMPLATES,
   NPC_COMPANIES,
   projectOffers,
+  offerDone,
   settleEconomy,
   addWork,
   stageConfig,
@@ -41,6 +42,12 @@ import {
   type ProgressState,
   type StaffRank,
   checkText,
+  type ProjectOffer,
+  type CompanyPerk,
+  COMPANY_SHOP,
+  uniformHex,
+  type ServerMessage,
+  projectBonusCoins,
 } from '@dilam/shared';
 import { hashSecret, playerCodeOf } from '../auth/secrets';
 import type { CompanyRow } from '../db/companyRepo';
@@ -67,6 +74,8 @@ export type CompanyError =
   | 'name_taken'
   | 'building_full'
   | 'no_offer'
+  | 'offer_done'
+  | 'owned'
   | 'busy'
   | 'not_enough'
   | 'max_staff'
@@ -103,6 +112,10 @@ export interface CompanyHooks {
   evict(userId: string, companyId: string): void;
   /** Hồ sơ trong phòng đổi (chức danh, công ty). */
   profileChanged(userId: string): void;
+  /** Phòng công ty đổi tên / đồ / đồng phục: báo mọi người trong phòng tải lại. */
+  companyChanged?(companyId: string): void;
+  /** Báo chủ công ty: vừa hoàn thành dự án (nếu đang online). */
+  projectDone?(ownerId: string, message: Extract<ServerMessage, { type: 'project_done' }>): void;
 }
 
 export class CompanyService {
@@ -152,16 +165,72 @@ export class CompanyService {
     return true;
   }
 
+  /** Ghi bảng tin (tên dự án, thưởng, uy tín, tổng số dự án) và báo CEO. */
+  private projectCompleted(company: CompanyRow, project: ProjectOffer, done: number): void {
+    this.repos.companies.addFeed(company.id, this.now(), 'project_done', {
+      industry: company.industry,
+      nameIndex: project.nameIndex,
+      difficulty: project.difficulty,
+      reward: project.reward,
+      reputation: project.reputation,
+      done,
+    });
+    const message = {
+      type: 'project_done',
+      industry: company.industry,
+      nameIndex: project.nameIndex,
+      difficulty: project.difficulty,
+      reward: project.reward,
+      reputation: project.reputation,
+    } as const;
+    this.hooks.projectDone?.(company.ownerId, message);
+    this.payProjectBonus(company.id, project, message);
+  }
+
+  /**
+   * Thưởng nhân viên khi xong dự án: xu theo độ khó và vai trò (trừ từ quỹ, hết quỹ thì thôi) và
+   * XP qua luật shared (giới hạn mỗi ngày). Thực tập sinh và tài khoản nghi là phụ thì không được.
+   */
+  private payProjectBonus(
+    companyId: string,
+    project: ProjectOffer,
+    message: Extract<ServerMessage, { type: 'project_done' }>,
+  ): void {
+    const company = this.repos.companies.get(companyId);
+    if (!company) return;
+    let treasury = company.economy.treasury;
+    for (const member of this.repos.companies.members(companyId)) {
+      if (member.role < 1 || member.suspicious) continue;
+      const want = projectBonusCoins(project.difficulty, member.role);
+      const coins = Math.min(want, Math.max(0, treasury));
+      if (coins > 0 && this.changeCoins(member.userId, coins, 'company:project')) {
+        treasury -= coins;
+      }
+      const before = this.state(member.userId).xp;
+      this.engine.grant(
+        member.userId,
+        makeEvent('company-project', this.now(), 0, { difficulty: project.difficulty }),
+      );
+      const xp = this.state(member.userId).xp - before;
+      if (coins > 0 || xp > 0) {
+        this.hooks.push(member.userId);
+        this.hooks.projectDone?.(member.userId, { ...message, bonus: { coins, xp } });
+      }
+    }
+    if (treasury !== company.economy.treasury) {
+      this.repos.companies.saveEconomy(companyId, { ...company.economy, treasury });
+    }
+  }
+
   /** Tính kinh tế theo giờ thật tới bây giờ, lưu lại, ghi bảng tin nếu xong dự án. */
   private settle(company: CompanyRow): CompanyRow {
     const result = settleEconomy(company.economy, this.now());
     if (result.economy === company.economy) return company;
     this.repos.companies.saveEconomy(company.id, result.economy);
     if (result.completed) {
-      this.repos.companies.addFeed(company.id, this.now(), 'project_done', {
-        difficulty: result.completed.difficulty,
-        reward: result.completed.reward,
-      });
+      this.projectCompleted(company, result.completed, result.economy.projectsDone);
+      // Thưởng nhân viên đã trừ quỹ: đọc lại.
+      return this.repos.companies.get(company.id) ?? { ...company, economy: result.economy };
     }
     return { ...company, economy: result.economy };
   }
@@ -182,6 +251,11 @@ export class CompanyService {
       hiringBands: parseLadder(company.hiringBands),
       ipoCount: company.ipoCount,
       online: this.hooks.online(company.id),
+      perks: company.economy.perks ?? [],
+      uniform: uniformHex(company.economy),
+      staff: company.economy.staff
+        .filter((s) => s.awayUntil <= this.now())
+        .map((s) => ({ id: s.id, nameIndex: s.nameIndex })),
     };
   }
 
@@ -273,6 +347,7 @@ export class CompanyService {
       company: this.publicView(company),
       isOwner,
       economy: company.economy,
+      wearingUniform: (company.economy.uniformOn ?? []).includes(playerCodeOf(userId)),
       offers: isOwner ? projectOffers(company.id, today, company.economy.stage) : [],
       stage: stageProgress(company.economy),
       event,
@@ -370,6 +445,7 @@ export class CompanyService {
       (o) => o.id === offerId,
     );
     if (!offer) return fail('no_offer');
+    if (offerDone(company.economy, offer.id)) return fail('offer_done');
     this.repos.companies.saveEconomy(company.id, {
       ...company.economy,
       project: { ...offer, progress: 0 },
@@ -447,6 +523,100 @@ export class CompanyService {
     return this.detailOk(userId);
   }
 
+  // ---------- Cửa hàng công ty (tiêu quỹ) ----------
+
+  /** Mua đồ cho công ty: ghế massage, máy chơi game, decor bàn, đồng phục (kèm màu). */
+  buyPerk(userId: string, perk: CompanyPerk, color?: number): Result<CompanyDetail> {
+    const owned = this.ownerCompany(userId);
+    if (!owned.ok) return owned;
+    const company = owned.value;
+    const e = company.economy;
+    const perks = e.perks ?? [];
+    if (perks.includes(perk)) return fail('owned');
+    const cost = COMPANY_SHOP.perks[perk];
+    if (e.treasury < cost) return fail('not_enough');
+    this.repos.companies.saveEconomy(company.id, {
+      ...e,
+      treasury: e.treasury - cost,
+      perks: [...perks, perk],
+      ...(perk === 'uniform' ? { uniformColor: color ?? company.color } : {}),
+    });
+    this.repos.companies.addFeed(company.id, this.now(), 'perk_bought', { perk, cost });
+    this.hooks.companyChanged?.(company.id);
+    return this.detailOk(userId);
+  }
+
+  /** Đổi màu đồng phục (đã mua). Người đang mặc đổi màu theo. */
+  recolorUniform(userId: string, color: number): Result<CompanyDetail> {
+    const owned = this.ownerCompany(userId);
+    if (!owned.ok) return owned;
+    const company = owned.value;
+    const e = company.economy;
+    if (!(e.perks ?? []).includes('uniform')) return fail('not_found');
+    if (e.uniformColor === color) return this.detailOk(userId);
+    const cost = COMPANY_SHOP.uniformRecolor;
+    if (e.treasury < cost) return fail('not_enough');
+    this.repos.companies.saveEconomy(company.id, {
+      ...e,
+      treasury: e.treasury - cost,
+      uniformColor: color,
+    });
+    this.refreshWearers(company);
+    this.hooks.companyChanged?.(company.id);
+    return this.detailOk(userId);
+  }
+
+  /** Đổi tên công ty (qua bộ lọc từ cấm và thương hiệu, không trùng công ty khác). */
+  rename(userId: string, raw: string): Result<CompanyDetail> {
+    const owned = this.ownerCompany(userId);
+    if (!owned.ok) return owned;
+    const company = owned.value;
+    const name = checkCompanyName(raw);
+    if (!name.ok) return fail('name', name.reason);
+    const key = companyNameKey(name.name);
+    const other = this.repos.companies.byNameKey(key);
+    if (other && other.id !== company.id) return fail('name_taken');
+    if (name.name === company.name) return this.detailOk(userId);
+    const cost = COMPANY_SHOP.rename;
+    if (company.economy.treasury < cost) return fail('not_enough');
+    this.repos.transaction(() => {
+      this.repos.companies.saveEconomy(company.id, {
+        ...company.economy,
+        treasury: company.economy.treasury - cost,
+      });
+      this.repos.companies.update(company.id, { name: name.name, nameKey: key });
+      this.repos.companies.addFeed(company.id, this.now(), 'renamed', {
+        from: company.name,
+        name: name.name,
+      });
+    });
+    this.hooks.companyChanged?.(company.id);
+    return this.detailOk(userId);
+  }
+
+  /** Mỗi người (chủ hoặc nhân viên) tự chọn mặc đồng phục hay không. */
+  wearUniform(userId: string, wear: boolean): Result<CompanyDetail> {
+    const company = this.companyOf(userId);
+    if (!company) return fail('not_found');
+    const e = company.economy;
+    if (!(e.perks ?? []).includes('uniform')) return fail('not_found');
+    const code = playerCodeOf(userId);
+    const others = (e.uniformOn ?? []).filter((c) => c !== code);
+    this.repos.companies.saveEconomy(company.id, {
+      ...e,
+      uniformOn: wear ? [...others, code] : others,
+    });
+    this.hooks.profileChanged(userId);
+    return this.detailOk(userId);
+  }
+
+  /** Người đang mặc đồng phục: cập nhật hồ sơ trong phòng (đổi màu áo). */
+  private refreshWearers(company: CompanyRow): void {
+    const codes = new Set(company.economy.uniformOn ?? []);
+    const ids = [company.ownerId, ...this.repos.companies.members(company.id).map((m) => m.userId)];
+    for (const id of ids) if (codes.has(playerCodeOf(id))) this.hooks.profileChanged(id);
+  }
+
   upgrade(userId: string): Result<CompanyDetail> {
     const owned = this.ownerCompany(userId);
     if (!owned.ok) return owned;
@@ -481,6 +651,10 @@ export class CompanyService {
         staff: [],
         project: null,
         lastSettle: this.now(),
+        // Đồ đã mua (phòng nghỉ, decor, đồng phục) giữ lại sau IPO.
+        ...(e.perks ? { perks: e.perks } : {}),
+        ...(e.uniformColor !== undefined ? { uniformColor: e.uniformColor } : {}),
+        ...(e.uniformOn ? { uniformOn: e.uniformOn } : {}),
       });
       this.repos.companies.addFeed(company.id, this.now(), 'ipo', { count, bonus });
     });
@@ -498,10 +672,7 @@ export class CompanyService {
     if (result.workAdded === 0) return;
     this.repos.companies.saveEconomy(company.id, result.economy);
     if (result.completed) {
-      this.repos.companies.addFeed(company.id, this.now(), 'project_done', {
-        difficulty: result.completed.difficulty,
-        reward: result.completed.reward,
-      });
+      this.projectCompleted(company, result.completed, result.economy.projectsDone);
     }
   }
 

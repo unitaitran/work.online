@@ -9,6 +9,7 @@ import type {
   StageBlocker,
 } from './company';
 import type { CompanyLadder } from './hiring';
+import type { CompanyPerk } from './companyShop';
 
 export interface CompanyPublic {
   id: string;
@@ -29,6 +30,12 @@ export interface CompanyPublic {
   ipoCount: number;
   /** Số người đang ở phòng công ty. */
   online: number;
+  /** Đồ công ty đã mua (để dựng phòng). */
+  perks: CompanyPerk[];
+  /** Màu đồng phục (hex) nếu đã mua. */
+  uniform: number | null;
+  /** Nhân viên NPC đang đi làm (không nghỉ phép): dựng NPC trong phòng công ty. */
+  staff: { id: number; nameIndex: number }[];
 }
 
 export interface CompanyMemberView {
@@ -74,6 +81,8 @@ export interface CompanyDetail {
   members: CompanyMemberView[];
   applications: CompanyApplicationView[];
   feed: CompanyFeedEntry[];
+  /** Mình đang chọn mặc đồng phục công ty. */
+  wearingUniform: boolean;
 }
 
 export interface JobOfferView {

@@ -31,6 +31,11 @@ export const BALANCE = {
   roomEvent: 8,
   /** Uống trà sữa khi được rủ (tự trả 5 xu, chỉ được XP, không sinh xu). */
   milkTea: 10,
+  /**
+   * Công ty xong một dự án: base + perDifficulty × độ khó (6–14 XP). Không sinh xu (xu thưởng trừ
+   * từ quỹ), tối đa 2 lần/ngày vì công ty đông người xong dự án rất nhanh.
+   */
+  companyProject: { base: 4, perDifficulty: 2 },
   /** Hoàn thành một việc sếp giao. */
   mission: 25,
   /** Số lần mỗi ngày còn được tính XP (chống bấm lặp). */
@@ -45,6 +50,7 @@ export const BALANCE = {
     /** Số cốc trà sữa được tính XP mỗi ngày (chặn uống liên tục lấy XP). */
     milkTea: 3,
     companyPromotion: 1,
+    companyProject: 2,
   },
 
   /** Xu (điểm trong game): tỉ lệ theo XP thực nhận và thưởng thêm khi xong việc sếp giao. */

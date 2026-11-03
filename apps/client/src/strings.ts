@@ -157,6 +157,8 @@ export const STRINGS = {
       ventwall: 'Tường than thở',
       ceodesk: 'Ngồi bàn CEO (quản lý công ty)',
       ceodoor: 'Quẹt thẻ phòng CEO',
+      massage: 'Ngồi ghế massage',
+      console: 'Chơi game',
     },
     prompt: (label: string) => label,
     keyHint: ' (E)',
@@ -169,6 +171,8 @@ export const STRINGS = {
       fridge: 'Toàn trà sữa của người khác…',
       printer: 'Rè rè… ra đúng một trang trắng.',
       plant: 'Lá xanh mướt hẳn lên!',
+      massage: 'Rrrrr… ghế rung rung, vai gáy nhẹ tênh 😌',
+      console: 'Một ván thôi… à mà thêm ván nữa 🎮',
     },
     window: {
       morning: 'Nắng sớm vàng ươm.',
@@ -409,6 +413,7 @@ export const STRINGS = {
       noDepartment: 'Chưa chọn (từ chức danh 3)',
       noBranch: 'Chưa chọn (từ chức danh 5)',
       unemployed: 'Đang tự do',
+      companyUnknown: 'Công ty người chơi',
       employers: { 'may-hong': 'Văn phòng Công Sở' } as Record<string, string>,
       coins: 'Xu',
       reputation: 'Uy tín',
@@ -449,6 +454,7 @@ export const STRINGS = {
         meeting: 'Ngồi họp',
         mission: 'Việc sếp giao',
         'milk-tea': 'Uống trà sữa',
+        'company-project': 'Thưởng dự án công ty',
       } as Record<string, string>,
       capped: (base: number) => `gốc ${String(base)}, đã quá giới hạn ngày`,
     },
@@ -685,6 +691,7 @@ export const STRINGS = {
     companyMap: '🗺️ Bản đồ công ty',
   },
   events: {
+    meetingDone: 'Họp xong rồi! Đứng dậy làm việc tiếp thôi.',
     boss_walk: {
       title: 'Sếp đang đi ngang!',
       body: 'Bấm nhanh để trông thật bận!',
@@ -873,6 +880,7 @@ export const STRINGS = {
       people: 'Nhân sự',
       ladder: 'Lộ trình',
       feed: 'Bảng tin',
+      shop: 'Mua sắm',
     },
     currentJob: 'Đang làm ở',
     found: {
@@ -927,11 +935,58 @@ export const STRINGS = {
       staff: (n: number) => `${String(n)} nhân viên NPC`,
       reserve: (n: number) => `Quỹ dự trữ ${String(n)} xu`,
     },
+    shop: {
+      intro: 'Tiêu quỹ công ty cho cả nhà. Đồ mua một lần dùng mãi (cả sau IPO).',
+      treasury: (coins: number) => `Quỹ hiện có: ${String(coins)} xu`,
+      buy: (cost: number) => `Mua (${String(cost)} xu)`,
+      owned: '✅ Đã có',
+      perks: {
+        massage: {
+          name: 'Ghế massage',
+          desc: 'Đặt ở phòng nghỉ, ai cũng ngồi được. Rung rung xả stress.',
+        },
+        console: {
+          name: 'Máy chơi game',
+          desc: 'TV + máy chơi game trong phòng nghỉ, ngồi đệm chơi giờ nghỉ trưa.',
+        },
+        deskDecor: {
+          name: 'Decor bàn làm việc',
+          desc: 'Mỗi bàn một chậu sen đá, cốc bút và đèn nhỏ cho tất cả mọi người.',
+        },
+        uniform: {
+          name: 'Đồng phục công ty',
+          desc: 'Áo đồng phục màu công ty. Mỗi người tự chọn mặc hay không.',
+        },
+      } as Record<string, { name: string; desc: string }>,
+      uniformColor: 'Màu đồng phục',
+      recolor: (cost: number) => `Đổi màu (${String(cost)} xu)`,
+      rename: 'Đổi tên công ty',
+      renamePlaceholder: 'Tên mới',
+      renameButton: (cost: number) => `Đổi tên (${String(cost)} xu)`,
+      done: 'Xong! 🎉',
+    },
+    uniform: {
+      title: 'Đồng phục công ty',
+      wear: 'Mặc đồng phục',
+      takeOff: 'Thay đồng phục',
+      wearing: 'Bạn đang mặc đồng phục công ty 👕',
+      notWearing: 'Bạn đang mặc đồ riêng.',
+    },
+    projectBonusToast: (name: string, coins: number, xp: number) =>
+      `🎉 Công ty xong dự án ${name}! Thưởng bạn${coins > 0 ? ` +${String(coins)} xu` : ''}${xp > 0 ? ` +${String(xp)} XP` : ''}`,
+    projectDoneToast: (name: string, reward: number, reputation: number) =>
+      `🎉 Sếp ơi, xong dự án "${name}" rồi! +${String(reward)} xu vào quỹ, +${String(reputation)} uy tín`,
     project: {
       active: 'Dự án đang làm',
       none: 'Chưa nhận dự án nào.',
       offers: 'Dự án mời thầu hôm nay',
       take: 'Nhận dự án',
+      statusDone: '✅ Đã xong',
+      statusActive: '⏳ Đang làm',
+      statusOpen: 'Chưa làm',
+      doneCount: (done: number, total: number) =>
+        `Đã xong ${String(done)}/${String(total)} dự án hôm nay`,
+      allDone: 'Xong hết dự án hôm nay rồi! Mai quay lại nhận dự án mới nhé 🎉',
       difficulty: (n: number) => `${'★'.repeat(n)}${'☆'.repeat(Math.max(0, 5 - n))}`,
       work: (now: number, total: number) =>
         `${String(Math.floor(now))}/${String(total)} điểm công việc`,
@@ -982,7 +1037,7 @@ export const STRINGS = {
     },
     staff: {
       title: 'Nhân viên NPC',
-      hire: (cost: number) => `Tuyển thực tập sinh (${String(cost)} xu)`,
+      hire: (cost: number) => `Tuyển thực tập sinh NPC (${String(cost)} xu)`,
       promote: (cost: number) => `Thăng chức (${String(cost)} xu)`,
       away: 'đang nghỉ phép',
       none: 'Chưa có nhân viên NPC.',
@@ -1057,8 +1112,18 @@ export const STRINGS = {
     feed: {
       founded: (d: Record<string, string | number>) =>
         `Công ty ${String(d.name)} chính thức khai trương!`,
-      project_done: (d: Record<string, string | number>) =>
-        `Hoàn thành dự án ${String(d.difficulty)} sao, +${String(d.reward)} xu.`,
+      project_done: (d: Record<string, string | number>): string => {
+        const names =
+          typeof d.industry === 'string' && typeof d.nameIndex === 'number'
+            ? (STRINGS.company.project.names[d.industry] ?? [])
+            : [];
+        const name =
+          names.length > 0 ? `"${names[Number(d.nameIndex) % names.length] ?? ''}" ` : '';
+        const stars = '★'.repeat(Number(d.difficulty) || 0);
+        const rep = d.reputation !== undefined ? `, +${String(d.reputation)} uy tín` : '';
+        const total = d.done !== undefined ? ` (dự án thứ ${String(d.done)})` : '';
+        return `🎉 Xong dự án ${name}${stars}: +${String(d.reward)} xu vào quỹ${rep}${total}.`;
+      },
       npc_hired: () => 'Chào mừng thực tập sinh mới!',
       npc_promoted: () => 'Một nhân viên NPC vừa được thăng chức.',
       stage_up: () => `Công ty lên giai đoạn mới!`,
@@ -1070,6 +1135,10 @@ export const STRINGS = {
       member_promoted: (d: Record<string, string | number>) =>
         `Chúc mừng ${String(d.name)} được thăng chức!`,
       event: () => 'Ban giám đốc đã xử lý sự kiện hôm nay.',
+      perk_bought: (d: Record<string, string | number>): string =>
+        `🛍️ Công ty sắm ${STRINGS.company.shop.perks[String(d.perk)]?.name ?? ''} (−${String(d.cost)} xu quỹ). Cả nhà tận hưởng nhé!`,
+      renamed: (d: Record<string, string | number>) =>
+        `📛 Công ty đổi tên từ "${String(d.from)}" thành "${String(d.name)}".`,
     } as Record<string, (d: Record<string, string | number>) => string>,
     errors: {
       level: 'Cần đạt cấp 150 (Senior) trước đã.',
@@ -1081,6 +1150,8 @@ export const STRINGS = {
       profanity: 'Tên có từ chưa phù hợp.',
       name_taken: 'Tên này đã có công ty dùng.',
       busy: 'Đang có việc dở.',
+      offer_done: 'Dự án này xong hôm nay rồi, chọn dự án khác nhé.',
+      owned: 'Công ty đã có món này rồi.',
       not_enough: 'Quỹ công ty chưa đủ.',
       max_staff: 'Đã đủ số nhân viên của giai đoạn này.',
       max_rank: 'Đã ở cấp cao nhất.',
@@ -1158,6 +1229,7 @@ export const STRINGS = {
     swipeMeeting: 'Bíp! Mời vào, sếp đợi ở sofa.',
     swipeDenied: 'Bíp bíp… Chỉ CEO mới vào được.',
     sharedOffice: 'Oops, bạn không vào đây được.',
+    seatDenied: 'Ghế này của sếp. Mời bạn ngồi sofa nhé!',
   },
   lobby: {
     title: 'Ở nhà',

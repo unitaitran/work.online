@@ -19,6 +19,8 @@ import {
   type Branch,
   type Workplace,
   type ProgressState,
+  jobName,
+  jobTagFor,
 } from '@dilam/shared';
 import { STRINGS } from '../strings';
 import { el } from './dom';
@@ -49,6 +51,8 @@ export interface ProfilePanelOptions {
   progress: ProfileSource;
   /** Nơi làm hiện tại (công ty người chơi): lộ trình theo công ty đó. */
   workplace?: () => Workplace | null;
+  /** Tên công ty người chơi (khi làm ở công ty người chơi). */
+  companyName?: () => string | null;
   initialTab?: ProfileTab;
   account: AccountActions;
 }
@@ -94,7 +98,11 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
       el('dl', {
         className: 'profile-grid',
         children: [
-          row(s.card.title, titleName(titleFor(state.xp), state.branch)),
+          // Làm ở công ty người chơi: chức danh theo lộ trình công ty (giống trên HUD).
+          row(
+            s.card.title,
+            jobName(jobTagFor(o.workplace?.() ?? null, p.level), titleFor(state.xp), state.branch),
+          ),
           row(s.card.level, String(p.level)),
           row(s.card.xp, String(state.xp)),
           row(s.card.today, s.card.todayValue(o.progress.todayEarned(), BALANCE.dailySoftCap)),
@@ -106,7 +114,9 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
           row(
             s.card.company,
             state.employer
-              ? (s.card.employers[state.employer] ?? state.employer)
+              ? (s.card.employers[state.employer] ??
+                  (state.employer.startsWith('company:') ? o.companyName?.() : null) ??
+                  s.card.companyUnknown)
               : s.card.unemployed,
           ),
           row(s.card.streak, s.card.streakValue(state.checkIn.streak)),
