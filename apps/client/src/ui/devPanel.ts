@@ -12,6 +12,8 @@ export interface DevPanelOptions {
     usernames: string[],
     grant: { xp?: number; coins?: number },
   ): Promise<{ granted: string[]; missing: string[] } | null>;
+  /** Xoá công ty (theo tên) / tài khoản (theo tên đăng nhập); null là thành công. */
+  remove(kind: 'company' | 'user', name: string): Promise<string | null>;
   toast(text: string): void;
 }
 
@@ -85,6 +87,43 @@ export function mountDevPanel(root: HTMLElement, o: DevPanelOptions): { dispose(
     el('div', {
       className: 'dev-buttons',
       children: [amount, othersButton(s.plusCoins, 'coins'), othersButton(s.plusXp, 'xp')],
+    }),
+  );
+  // Xoá công ty / tài khoản: bấm lần hai để xác nhận.
+  const target = el('input', {
+    className: 'dev-input',
+    attrs: { type: 'text', placeholder: s.removePlaceholder, 'aria-label': s.removePlaceholder },
+  });
+  const removeButton = (text: string, kind: 'company' | 'user'): HTMLButtonElement => {
+    const b = el('button', { className: 'dev-button dev-danger', text, attrs: { type: 'button' } });
+    let armed = false;
+    b.addEventListener('click', () => {
+      const name = target.value.trim();
+      if (!name) return;
+      if (!armed) {
+        armed = true;
+        b.textContent = s.confirm;
+        window.setTimeout(() => {
+          armed = false;
+          b.textContent = text;
+        }, 4000);
+        return;
+      }
+      armed = false;
+      b.textContent = text;
+      void o.remove(kind, name).then((error) => {
+        o.toast(error ?? s.removed(name));
+        if (!error) target.value = '';
+      });
+    });
+    return b;
+  };
+  panel.append(
+    el('p', { className: 'dev-day', text: s.removeTitle }),
+    el('div', { className: 'dev-buttons', children: [target] }),
+    el('div', {
+      className: 'dev-buttons',
+      children: [removeButton(s.removeCompany, 'company'), removeButton(s.removeUser, 'user')],
     }),
   );
   panel.addEventListener('toggle', render);

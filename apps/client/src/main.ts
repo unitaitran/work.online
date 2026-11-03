@@ -8,6 +8,7 @@ import {
   QUICK_CHATS,
   jobName,
   jobTagFor,
+  ladderUnlockLevels,
   levelFor,
   titleForLevel,
   dayMood,
@@ -462,11 +463,16 @@ function start(): void {
   const loadWorkplace = async (): Promise<void> => {
     if (!progress.state.employer?.startsWith('company:')) {
       workplace = null;
+      progress.setCareerUnlock(undefined);
       return;
     }
     const r = await api.request<MyCompanyResponse>('GET', '/api/company/me');
     const detail = r.ok ? r.value.detail : null;
-    workplace = detail ? { owner: detail.isOwner, bands: detail.company.hiringBands } : null;
+    workplace = detail ? { owner: detail.isOwner, ladder: detail.company.hiringBands } : null;
+    // Nhân viên: mốc chọn phòng ban / nhánh theo lộ trình CEO đặt (server cũng kiểm tra y vậy).
+    progress.setCareerUnlock(
+      workplace && !workplace.owner ? ladderUnlockLevels(workplace.ladder) : undefined,
+    );
   };
   const jobAtLevel = (level: number, branch: Branch | null): string =>
     jobName(jobTagFor(workplace, level), titleForLevel(level), branch);
@@ -1444,6 +1450,7 @@ function start(): void {
         name: profile.name,
         playerId,
         progress,
+        workplace: () => workplace,
         initialTab: tab,
         account: {
           recover: async (code) => {
@@ -1480,6 +1487,16 @@ function start(): void {
         devPanel = mountDevPanel(hudRoot, {
           call: async (path, body) => (await api.request('POST', path, body)).ok,
           today: () => progress.today,
+          remove: async (kind, name) => {
+            const r = await api.request(
+              'POST',
+              kind === 'company' ? '/api/dev/delete-company' : '/api/dev/delete-user',
+              { name },
+            );
+            if (r.ok) return null;
+            const d = STRINGS.progress.dev;
+            return r.status === 404 ? d.removeNotFound : r.status === 400 ? d.removeSelf : d.failed;
+          },
           grantUsers: async (usernames, grant) => {
             const r = await api.request<{ granted: string[]; missing: string[] }>(
               'POST',

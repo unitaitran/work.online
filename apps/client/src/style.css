@@ -4271,3 +4271,74 @@ button.office-badge:focus-visible {
 .lobby-name-form .button {
   padding: 8px 12px;
 }
+
+.dev-danger {
+  background: #8e2a2a;
+}
+
+/* Lộ trình công ty (CEO đặt). */
+.ladder-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ladder-index {
+  font-weight: 700;
+  opacity: 0.6;
+  text-align: center;
+}
+
+.ladder-name {
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.ladder-remove {
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease;
+}
+
+.ladder-remove:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--accent-soft);
+}
+
+.ladder-remove:disabled {
+  opacity: 0.2;
+  cursor: default;
+}
+
+.ladder-unlocks {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ladder-unlock {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.ladder-select {
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .ladder-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  }
+
+  .ladder-row .band-range {
+    grid-column: 2;
+  }
+}

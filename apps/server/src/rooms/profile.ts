@@ -3,8 +3,10 @@ import {
   DEFAULT_APPEARANCE,
   jobTagFor,
   levelFor,
-  parseBands,
+  parseLadder,
   titleFor,
+  ladderUnlockLevels,
+  type CareerUnlock,
   type JobTag,
   type PlayerProfile,
 } from '@dilam/shared';
@@ -26,13 +28,22 @@ export function publicProfile(repos: Repositories, userId: string): Omit<PlayerP
   };
 }
 
-/** Chức danh theo nơi làm: chủ công ty là CEO, nhân viên theo khung cấp của công ty. */
+/** Chức danh theo nơi làm: chủ công ty là CEO, nhân viên theo bậc trong lộ trình công ty. */
 export function jobOf(repos: Repositories, userId: string, level: number): JobTag {
-  if (repos.companies.byOwner(userId))
-    return jobTagFor({ owner: true, bands: parseBands(null) }, level);
+  if (repos.companies.byOwner(userId)) {
+    return jobTagFor({ owner: true, ladder: parseLadder(null) }, level);
+  }
   const member = repos.companies.member(userId);
   const company = member ? repos.companies.get(member.companyId) : null;
   return company
-    ? jobTagFor({ owner: false, bands: parseBands(company.hiringBands) }, level)
+    ? jobTagFor({ owner: false, ladder: parseLadder(company.hiringBands) }, level)
     : null;
+}
+
+/** Mốc chọn phòng ban / nhánh: nhân viên công ty người chơi theo lộ trình CEO đặt. */
+export function careerUnlockOf(repos: Repositories, userId: string): CareerUnlock | undefined {
+  if (repos.companies.byOwner(userId)) return undefined;
+  const member = repos.companies.member(userId);
+  const company = member ? repos.companies.get(member.companyId) : null;
+  return company ? ladderUnlockLevels(parseLadder(company.hiringBands)) : undefined;
 }

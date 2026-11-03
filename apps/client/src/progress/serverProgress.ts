@@ -8,6 +8,7 @@ import {
   type Action,
   type ActionOutcome,
   type Branch,
+  type CareerUnlock,
   type CheckInState,
   type Department,
   type Mission,
@@ -66,12 +67,19 @@ export class ServerProgress {
     return this.current.daily.day === this.serverToday ? this.current.daily.earned : 0;
   }
 
+  /** Mốc chọn phòng ban / nhánh theo lộ trình công ty đang làm (không có: mức chung). */
+  private careerUnlock: CareerUnlock | undefined;
+
+  setCareerUnlock(unlock: CareerUnlock | undefined): void {
+    this.careerUnlock = unlock;
+  }
+
   needsDepartment(): boolean {
-    return needsDepartment(this.current);
+    return needsDepartment(this.current, this.careerUnlock);
   }
 
   needsBranch(): boolean {
-    return needsBranch(this.current);
+    return needsBranch(this.current, this.careerUnlock);
   }
 
   chooseDepartment(department: Department): void {

@@ -291,7 +291,7 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
 
   it('chức danh theo nơi làm: chủ là CEO, nhân viên theo khung cấp, rời công ty về thang chung', async () => {
     const { app, a, b, companyId } = await setup();
-    expect(publicProfile(app.repos, a.userId).job).toBe('ceo');
+    expect(publicProfile(app.repos, a.userId).job).toBe('CEO');
     expect(publicProfile(app.repos, b.userId).job).toBeNull();
     const state = app.game.engine.state(b.userId);
     app.game.engine.save(b.userId, { ...state, xp: xpForLevel(40) });
@@ -299,7 +299,7 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
       applicationId: number;
     }>();
     await post(app, a, '/api/company/applications', { applicationId, approve: true });
-    expect(publicProfile(app.repos, b.userId).job).toBe('junior');
+    expect(publicProfile(app.repos, b.userId).job).toBe('Junior');
     await post(app, b, '/api/company/leave');
     expect(publicProfile(app.repos, b.userId).job).toBeNull();
   });
@@ -336,20 +336,22 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     ).json<{ companies: { id: string; province: string }[] }>();
     expect(directory.companies.find((c) => c.id === companyId)?.province).toBe('da-nang');
 
-    const bands = {
-      intern: null,
-      fresher: { min: 2, max: 20 },
-      junior: { min: 21, max: 60 },
-      middle: null,
-      senior: { min: 100, max: 149 },
+    const ladder = {
+      steps: [
+        { name: 'Tập sự', minLevel: 2, hiring: false },
+        { name: 'Kỹ sư', minLevel: 21, hiring: true },
+        { name: 'Trưởng nhóm', minLevel: 100, hiring: true },
+      ],
+      departmentStep: 1,
+      branchStep: 2,
     };
-    // Khung chồng nhau bị từ chối; B không phải CEO thì không đặt được.
-    const overlap = await post(app, a, '/api/company/hiring', {
-      bands: { ...bands, junior: { min: 10, max: 60 } },
+    // Mở khoá phòng ban sớm hơn mức chung bị từ chối; B không phải CEO thì không đặt được.
+    const early = await post(app, a, '/api/company/hiring', {
+      ladder: { ...ladder, departmentStep: 0 },
     });
-    expect(overlap.statusCode).toBe(400);
-    expect((await post(app, b, '/api/company/hiring', { bands })).statusCode).toBe(403);
-    expect((await post(app, a, '/api/company/hiring', { bands })).statusCode).toBe(200);
+    expect(early.statusCode).toBe(422);
+    expect((await post(app, b, '/api/company/hiring', { ladder })).statusCode).toBe(403);
+    expect((await post(app, a, '/api/company/hiring', { ladder })).statusCode).toBe(200);
 
     // B mới cấp 1: chưa vào khung nào.
     const tooLow = await post(app, b, '/api/company/apply', { companyId });
@@ -361,13 +363,13 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     const detail = (
       await app.inject({ method: 'GET', url: '/api/company/me', headers: a.headers })
     ).json<MyCompanyResponse>().detail;
-    expect(detail?.applications[0]?.position).toBe('junior');
-    expect(detail?.company.hiringBands.intern).toBeNull();
+    expect(detail?.applications[0]?.position).toBe('Kỹ sư');
+    expect(detail?.company.hiringBands.steps[0]?.name).toBe('Tập sự');
     const { applicationId } = applied.json<{ applicationId: number }>();
     const after = (
       await post(app, a, '/api/company/applications', { applicationId, approve: true })
     ).json<CompanyDetail>();
-    expect(after.members.find((m) => m.code === b.code)?.position).toBe('junior');
+    expect(after.members.find((m) => m.code === b.code)?.position).toBe('Kỹ sư');
   });
 
   it('người ngoài không vào được phòng riêng; bị đuổi và chặn thì không làm gì được nữa', async () => {
@@ -465,5 +467,16 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     // Người chưa vào công ty nào vẫn ở văn phòng chung.
     const botB = await Bot.connect(host, b.token);
     expect((await botB.waitFor('welcome')).room.startsWith('office')).toBe(true);
+  });
+
+  it('giải thể công ty (công cụ dev): chủ và nhân viên về Văn phòng Công Sở, công ty biến mất', async () => {
+    const { app, a, b, companyId } = await setup();
+    const { code } = (await post(app, a, '/api/company/invite')).json<{ code: string }>();
+    await post(app, b, '/api/company/join', { code });
+    expect(app.game.company.dissolve(companyId)).toBe(true);
+    expect(app.repos.companies.get(companyId)).toBeNull();
+    expect(app.repos.companies.member(b.userId)).toBeNull();
+    expect(app.game.engine.state(a.userId).employer).toBe('may-hong');
+    expect(app.game.engine.state(b.userId).employer).toBe('may-hong');
   });
 });

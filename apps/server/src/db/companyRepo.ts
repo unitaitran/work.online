@@ -61,6 +61,8 @@ export interface CompanyRepo {
   members(companyId: string): MemberRow[];
   addMember(row: MemberRow): void;
   removeMember(userId: string): void;
+  /** Xoá hẳn công ty (thành viên, đơn, mã mời, bảng tin xoá theo khoá ngoại). */
+  deleteCompany(id: string): void;
   setRole(userId: string, role: number, promoDay: string | null): void;
 
   apply(companyId: string, userId: string, at: number): number;
@@ -191,6 +193,7 @@ export function createCompanyRepo(db: Db): CompanyRepo {
        joined_at = excluded.joined_at, suspicious = excluded.suspicious, last_promo_day = NULL`,
     ),
     removeMember: db.prepare('DELETE FROM company_members WHERE user_id = ?'),
+    deleteCompany: db.prepare('DELETE FROM companies WHERE id = ?'),
     setRole: db.prepare(
       'UPDATE company_members SET role = ?, last_promo_day = ? WHERE user_id = ?',
     ),
@@ -300,6 +303,9 @@ export function createCompanyRepo(db: Db): CompanyRepo {
         .filter((m): m is MemberRow => m !== null),
     addMember(row) {
       q.addMember.run({ ...row, suspicious: row.suspicious ? 1 : 0 });
+    },
+    deleteCompany(id) {
+      q.deleteCompany.run(id);
     },
     removeMember(userId) {
       q.removeMember.run(userId);

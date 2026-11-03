@@ -13,10 +13,12 @@ import {
   dayKey,
   DEFAULT_PROVINCE,
   DEPARTMENTS,
-  memberPosition,
-  parseBands,
-  positionFor,
-  type HiringBands,
+  entryStepFor,
+  LADDER_NAME_MAX,
+  parseLadder,
+  stepName,
+  validateLadder,
+  type CompanyLadder,
   ipoBonus,
   levelFor,
   makeEvent,
@@ -38,6 +40,7 @@ import {
   type MyCompanyResponse,
   type ProgressState,
   type StaffRank,
+  checkText,
 } from '@dilam/shared';
 import { hashSecret, playerCodeOf } from '../auth/secrets';
 import type { CompanyRow } from '../db/companyRepo';
@@ -78,6 +81,10 @@ export type CompanyError =
   | 'not_hiring'
   | 'bad_code'
   | 'level_band'
+  | 'ladder_empty'
+  | 'ladder_order'
+  | 'ladder_unlock_step'
+  | 'ladder_unlock_early'
   | 'self';
 
 export type Result<T = undefined> =
@@ -172,7 +179,7 @@ export class CompanyService {
       members: this.repos.companies.members(company.id).length,
       hiring: company.hiring,
       province: company.province,
-      hiringBands: parseBands(company.hiringBands),
+      hiringBands: parseLadder(company.hiringBands),
       ipoCount: company.ipoCount,
       online: this.hooks.online(company.id),
     };
@@ -224,7 +231,7 @@ export class CompanyService {
       ...this.repos.companies.members(company.id).map((m) => m.userId),
     ];
     const names = this.repos.characters.names(memberIds);
-    const bands = parseBands(company.hiringBands);
+    const ladder = parseLadder(company.hiringBands);
     const levelOf = (id: string): number => levelFor(this.state(id).xp);
     const members = [
       {
@@ -244,7 +251,7 @@ export class CompanyService {
         owner: false,
         title: titleFor(this.state(m.userId).xp),
         level: levelOf(m.userId),
-        position: memberPosition(bands, levelOf(m.userId)),
+        position: stepName(ladder, levelOf(m.userId)),
         joinedAt: m.joinedAt,
       })),
     ];
@@ -255,7 +262,10 @@ export class CompanyService {
           name: this.repos.characters.get(a.userId)?.name ?? '',
           title: titleFor(this.state(a.userId).xp),
           level: levelOf(a.userId),
-          position: positionFor(bands, levelOf(a.userId)),
+          position: ((): string | null => {
+            const step = entryStepFor(ladder, levelOf(a.userId));
+            return step === null ? null : (ladder.steps[step]?.name ?? null);
+          })(),
           at: a.at,
         }))
       : [];
@@ -495,12 +505,23 @@ export class CompanyService {
     }
   }
 
-  /** CEO đặt khung cấp tuyển dụng theo vị trí (và bật/tắt nhận đơn). */
-  setHiring(userId: string, bands: HiringBands, hiring?: boolean): Result<CompanyDetail> {
+  /**
+   * CEO đặt lộ trình công ty: các bậc (tên, cấp bắt đầu, đang tuyển), mốc chọn phòng ban / nhánh
+   * (không sớm hơn mức chung), và bật/tắt nhận đơn. Tên bậc qua bộ lọc từ cấm.
+   */
+  setHiring(userId: string, ladder: CompanyLadder, hiring?: boolean): Result<CompanyDetail> {
     const owned = this.ownerCompany(userId);
     if (!owned.ok) return owned;
+    const invalid = validateLadder(ladder);
+    if (invalid) return fail(`ladder_${invalid}`);
+    const steps = [];
+    for (const step of ladder.steps) {
+      const name = checkText(step.name, { maxLength: LADDER_NAME_MAX, blockBrands: true });
+      if (!name.ok) return fail('name', name.reason);
+      steps.push({ ...step, name: name.text });
+    }
     this.repos.companies.update(owned.value.id, {
-      hiringBands: JSON.stringify(bands),
+      hiringBands: JSON.stringify({ ...ladder, steps }),
       ...(hiring === undefined ? {} : { hiring }),
     });
     return this.detailOk(userId);
@@ -524,8 +545,8 @@ export class CompanyService {
     // Người đã lên Senior thì tự mở công ty, không xin làm nhân viên.
     if (levelFor(this.state(userId).xp) >= BALANCE.company.unlockLevel) return fail('too_senior');
     if (this.repos.companies.isBanned(companyId, userId)) return fail('banned');
-    // Cấp phải nằm trong một khung tuyển dụng CEO đang mở.
-    if (positionFor(parseBands(company.hiringBands), levelFor(this.state(userId).xp)) === null) {
+    // Cấp phải rơi vào một bậc đang tuyển trong lộ trình của công ty.
+    if (entryStepFor(parseLadder(company.hiringBands), levelFor(this.state(userId).xp)) === null) {
       return fail('level_band');
     }
     if (this.repos.companies.member(userId)?.companyId === companyId) return fail('already');
@@ -627,6 +648,38 @@ export class CompanyService {
     if (member) this.hooks.evict(userId, member.companyId);
     this.hooks.push(userId);
     return ok(undefined);
+  }
+
+  /**
+   * Giải thể công ty (công cụ dev): mọi người (chủ và nhân viên) về làm ở Văn phòng Công Sở,
+   * bị đưa ra khỏi phòng công ty, rồi xoá công ty.
+   */
+  dissolve(companyId: string): boolean {
+    const company = this.repos.companies.get(companyId);
+    if (!company) return false;
+    const people = [
+      company.ownerId,
+      ...this.repos.companies.members(companyId).map((m) => m.userId),
+    ];
+    this.repos.transaction(() => {
+      for (const userId of people) {
+        if (this.repos.progress.get(userId)) {
+          this.setState(userId, { ...this.state(userId), employer: DEFAULT_EMPLOYER });
+        }
+      }
+      this.repos.companies.deleteCompany(companyId);
+    });
+    for (const userId of people) {
+      this.hooks.evict(userId, companyId);
+      this.hooks.push(userId);
+      this.hooks.profileChanged(userId);
+    }
+    return true;
+  }
+
+  /** Tìm công ty theo tên (không phân biệt hoa thường, dấu cách thừa). */
+  findByName(name: string): CompanyRow | null {
+    return this.repos.companies.byNameKey(companyNameKey(name));
   }
 
   /** Quay lại Văn phòng Công Sở (công ty NPC mặc định). */

@@ -98,7 +98,7 @@ export function registerCompanyRoutes(
   });
   write('/api/company/join', inviteCodeSchema, (u, b) => service.joinByCode(u.id, b.code));
   write('/api/company/hiring', setHiringSchema, (u, b) =>
-    service.setHiring(u.id, b.bands, b.hiring),
+    service.setHiring(u.id, b.ladder, b.hiring),
   );
   write('/api/company/leave', null, (u) => service.leave(u.id));
   write('/api/company/rejoin-default', null, (u) => service.rejoinDefault(u.id));

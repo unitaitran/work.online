@@ -4,7 +4,7 @@
 export const BALANCE = {
   /** Giới hạn mềm mỗi ngày: phần vượt chỉ nhận `overCapRate`. */
   dailySoftCap: 190,
-  overCapRate: 0.25,
+  overCapRate: 0.5,
 
   checkIn: { base: 20, perStreakDay: 5, streakCap: 7 },
   /**

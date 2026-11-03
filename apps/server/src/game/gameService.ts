@@ -18,7 +18,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../app';
 import { devToolsAllowed } from '../config';
 import { playerCodeOf } from '../auth/secrets';
-import { publicProfile } from '../rooms/profile';
+import { careerUnlockOf, publicProfile } from '../rooms/profile';
 import type { Gateway, Session } from '../ws/gateway';
 import { PLAYER_GIFT_PREFIX, ProgressEngine, type PlayerContext } from './progressEngine';
 import { ShopService } from './shop';
@@ -100,6 +100,7 @@ export function attachGameService(
         const room = gateway.sessionOf(userId)?.room;
         return room ? events.coffeeOut(room.id) : false;
       },
+      careerUnlock: () => careerUnlockOf(ctx.repos, userId),
       colleagueAt: (code) => {
         const room = gateway.sessionOf(userId)?.room;
         const other = room?.userIds().find((id) => playerCodeOf(id) === code);
@@ -406,6 +407,32 @@ export function attachGameService(
 
   if (ctx.config.devTools || ctx.config.devUsers.length > 0) {
     registerDevRoutes(app, ctx, engine, push);
+    // Xoá công ty / xoá tài khoản (chỉ tài khoản quản trị trong DEV_USERS).
+    app.post('/api/dev/delete-company', (request, reply) => {
+      const user = requireDevUser(ctx, request, reply);
+      if (!user) return reply;
+      const body = ctx.helpers.parse(devNameSchema, request.body, reply);
+      if (!body) return reply;
+      const found = company.findByName(body.name);
+      if (!found) return sendError(reply, 404, 'not_found');
+      company.dissolve(found.id);
+      return reply.send({ ok: true, name: found.name });
+    });
+    app.post('/api/dev/delete-user', (request, reply) => {
+      const user = requireDevUser(ctx, request, reply);
+      if (!user) return reply;
+      const body = ctx.helpers.parse(devNameSchema, request.body, reply);
+      if (!body) return reply;
+      const target = ctx.repos.users.byUsername(normalizeUsername(body.name));
+      if (!target) return sendError(reply, 404, 'not_found');
+      if (target.id === user.id) return sendError(reply, 400, 'bad_request');
+      // Là chủ công ty: giải thể trước để nhân viên không bị kẹt ở công ty đã mất chủ.
+      const owned = ctx.repos.companies.byOwner(target.id);
+      if (owned) company.dissolve(owned.id);
+      gateway.sessionOf(target.id)?.room.remove(target.id, 'unauthorized');
+      ctx.accounts.remove(target.id);
+      return reply.send({ ok: true });
+    });
     app.post('/api/dev/room-event', (request, reply) => {
       const user = requireDevUser(ctx, request, reply);
       if (!user) return reply;
@@ -424,6 +451,9 @@ const devEventSchema = z.strictObject({
   kind: z.enum(['boss_walk', 'wifi_down', 'coffee_out', 'surprise_meeting']),
 });
 const devShiftSchema = z.strictObject({ days: z.number().int().min(-30).max(400) });
+/** Tên công ty / tên đăng nhập cho các lệnh xoá của công cụ dev. */
+const devNameSchema = z.strictObject({ name: z.string().trim().min(1).max(60) });
+
 /** Cộng xu / XP cho người khác (theo tên đăng nhập), tối đa 20 người một lần. */
 const devGrantUsersSchema = z.strictObject({
   usernames: z.array(z.string().min(1).max(40)).min(1).max(20),

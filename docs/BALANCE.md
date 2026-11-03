@@ -16,7 +16,7 @@ Mọi hằng số nằm trong `packages/shared/src/balance.ts`; đây là giá t
 | Họp                          | 4 mỗi phút (tối đa 15 phút/lần)          | 30 phút            |
 | Việc sếp giao                | 40                                       | 3 việc             |
 
-Giới hạn mềm: 190 XP/ngày, phần vượt chỉ nhận 25%. Phòng ban nhân 1,3 cho đúng loại hoạt động (Kế toán: phần thưởng chuỗi chấm công).
+Giới hạn mềm: 190 XP/ngày, phần vượt chỉ nhận 50%. Phòng ban nhân 1,3 cho đúng loại hoạt động (Kế toán: phần thưởng chuỗi chấm công).
 
 ## Mốc theo ngày (chơi đều đúng 190 XP/ngày)
 

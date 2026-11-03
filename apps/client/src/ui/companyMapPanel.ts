@@ -2,8 +2,7 @@
 // công ty ở mỗi nơi; chạm một tỉnh để lọc. Danh sách gọn có tìm, lọc, sắp xếp và chia trang.
 import {
   COMPANY_COLORS,
-  POSITION_NAMES,
-  positionFor,
+  entryStepFor,
   PROVINCES,
   provinceOf,
   type CompanyPublic,
@@ -218,8 +217,9 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
   const fitText = (c: CompanyPublic): string => {
     const level = api.level?.();
     if (level === undefined || !c.hiring) return '';
-    const position = positionFor(c.hiringBands, level);
-    return position ? s.fits(POSITION_NAMES[position]) : '';
+    const step = entryStepFor(c.hiringBands, level);
+    const name = step === null ? null : c.hiringBands.steps[step]?.name;
+    return name ? s.fits(name) : '';
   };
 
   const card = (c: CompanyPublic): HTMLElement => {
@@ -351,7 +351,8 @@ export function mountCompanyMapPanel(body: HTMLElement, api: CompanyMapApi): voi
       if (selected && c.province !== selected) return false;
       if (hiringOnly.getAttribute('aria-pressed') === 'true' && !c.hiring) return false;
       if (fitsMe.getAttribute('aria-pressed') === 'true') {
-        if (level === null || !c.hiring || positionFor(c.hiringBands, level) === null) return false;
+        if (level === null || !c.hiring || entryStepFor(c.hiringBands, level) === null)
+          return false;
       }
       if (q && !fold(`${c.name} ${provinceOf(c.province)?.name ?? ''}`).includes(q)) return false;
       return true;
