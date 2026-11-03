@@ -21,6 +21,7 @@ import type { Gateway, Session } from '../ws/gateway';
 import { ProgressEngine, type PlayerContext } from './progressEngine';
 import { ShopService } from './shop';
 import { RoomEventDirector } from './roomEvents';
+import { MilkTeaService } from './milkTea';
 import { registerSocialRoutes, roomInfo } from './socialRoutes';
 import { CompanyService } from '../company/companyService';
 import { registerCompanyRoutes } from '../company/companyRoutes';
@@ -110,8 +111,27 @@ export function attachGameService(
       push(userId);
     },
   });
+  // Rủ cả phòng uống trà sữa: ai uống người nấy trả, server trừ xu (giao dịch + sổ cái), cộng XP.
+  const tea = new MilkTeaService({
+    now: ctx.now,
+    charge: (userId, amount, reason) =>
+      ctx.repos.transaction(() => {
+        const record = ctx.repos.progress.get(userId);
+        if (!record || record.state.coins < amount) return false;
+        const at = ctx.now();
+        const balance = record.state.coins - amount;
+        ctx.repos.progress.save(userId, { ...record.state, coins: balance }, at);
+        ctx.repos.ledger.add(userId, at, -amount, reason, balance);
+        return true;
+      }),
+    reward: (userId) => engine.grantMilkTea(contextFor(userId)).granted,
+    push: (userId) => {
+      push(userId);
+    },
+  });
   const eventTimer = setInterval(() => {
     events.tick(gateway.rooms.all());
+    tea.tick();
   }, 1000);
   eventTimer.unref();
 
@@ -130,6 +150,10 @@ export function attachGameService(
     push(session.userId);
     const current = events.current(session.room.id);
     if (current) session.send({ type: 'room_event', event: current });
+    const teaRound = tea.current(session.room.id);
+    if (teaRound && teaRound.hostSid !== session.room.profileOf(session.userId)?.sid) {
+      session.send({ type: 'tea_round', round: teaRound });
+    }
     session.send({
       type: 'room_plants',
       plants: ctx.repos.plants.list(session.room.kind).map(toView),
@@ -137,6 +161,19 @@ export function attachGameService(
   });
   gateway.onSessionEnd((session: Session) => {
     engine.forget(session.userId);
+  });
+
+  gateway.addHandler((session, message) => {
+    if (message.type === 'tea_invite') {
+      const error = tea.invite(session.room, session.userId);
+      if (error) session.send({ type: 'tea_failed', reason: error });
+      return true;
+    }
+    if (message.type === 'tea_reply') {
+      tea.reply(session.room, session.userId, message.id, message.accept);
+      return true;
+    }
+    return false;
   });
 
   gateway.addHandler((session, message) => {

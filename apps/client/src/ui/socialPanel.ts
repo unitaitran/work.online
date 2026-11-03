@@ -1,6 +1,6 @@
 // Giao lưu: biểu cảm, câu nhanh có sẵn (KHÔNG có chat tự do), danh sách đồng nghiệp trong phòng
 // với nút ẩn/chặn cho riêng mình.
-import { EMOTES, QUICK_CHATS, type Emote } from '@dilam/shared';
+import { EMOTES, MILK_TEA, QUICK_CHATS, type Emote } from '@dilam/shared';
 import type { RemoteListEntry } from '../scenes/remotePlayers';
 import type { KeyValueStore } from '../storage';
 import { STRINGS } from '../strings';
@@ -30,6 +30,8 @@ export function saveHidden(store: KeyValueStore | null, codes: ReadonlySet<strin
 
 export interface SocialPanelOptions {
   players(): RemoteListEntry[];
+  /** Rủ cả phòng uống trà sữa (mình khao). */
+  onTeaInvite(): void;
   onEmote(emote: Emote): void;
   onQuickChat(index: number): void;
   onToggleHidden(code: string, hidden: boolean): void;
@@ -92,7 +94,20 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
     );
   };
   renderPlayers();
+  // Rủ cả phòng uống trà sữa: nút nổi bật đầu bảng.
+  const tea = el('button', {
+    className: 'tea-invite-button',
+    attrs: { type: 'button' },
+    children: [
+      el('strong', { text: STRINGS.tea.invite }),
+      el('small', { text: STRINGS.tea.inviteNote(MILK_TEA.price) }),
+    ],
+  });
+  tea.addEventListener('click', () => {
+    o.onTeaInvite();
+  });
   body.append(
+    tea,
     el('h3', { text: s.emotes }),
     emotes,
     el('h3', { text: s.quickChats }),

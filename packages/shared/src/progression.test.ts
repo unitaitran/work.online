@@ -486,3 +486,20 @@ describe('mở công ty', () => {
     expect(buildingHasRoom(30)).toBe(false);
   });
 });
+
+describe('uống trà sữa', () => {
+  it('được XP nhưng không sinh xu (cốc trà sữa thật sự tốn xu); tối đa 3 cốc tính XP mỗi ngày', () => {
+    let s = createProgress(T0);
+    const cup = () => makeEvent('milk-tea', T0, 0, {});
+    const first = applyEvent(s, cup(), { today: DAY, now: T0 });
+    expect(first.granted).toBe(BALANCE.milkTea);
+    expect(first.coins).toBe(0);
+    expect(first.state.coins).toBe(s.coins);
+    s = first.state;
+    for (let i = 0; i < BALANCE.perDayLimits.milkTea - 1; i += 1) {
+      s = applyEvent(s, cup(), { today: DAY, now: T0 }).state;
+    }
+    const extra = applyEvent(s, cup(), { today: DAY, now: T0 });
+    expect(extra.granted).toBe(0);
+  });
+});

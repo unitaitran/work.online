@@ -166,6 +166,9 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
     case 'room-event':
       if (ctx.countToday('roomEvent') < limits.roomEvent) add('event', BALANCE.roomEvent);
       break;
+    case 'milk-tea':
+      if (ctx.countToday('milkTea') < limits.milkTea) add('event', BALANCE.milkTea);
+      break;
     case 'work-tick': {
       // Mỗi phút trọn đang ngồi máy / họp (server đo), trong giới hạn phút mỗi ngày.
       const meeting = event.detail.kind === 'meeting';
@@ -296,7 +299,14 @@ export function applyEvent(
     if (part.category === 'chore') counts = bump(counts, 'chore');
     if (part.category === 'fortune') fortuneClaimed = true;
     if (part.category === 'event') {
-      counts = bump(counts, event.type === 'company-promotion' ? 'companyPromotion' : 'roomEvent');
+      counts = bump(
+        counts,
+        event.type === 'company-promotion'
+          ? 'companyPromotion'
+          : event.type === 'milk-tea'
+            ? 'milkTea'
+            : 'roomEvent',
+      );
     }
     if (part.minutes !== undefined) {
       counts = bump(
@@ -335,9 +345,11 @@ export function applyEvent(
     log.push({ at: ctx.now, source: 'mission', xp: granted - grantedEvent, base: missionXp });
   }
 
-  // Xu: một phần XP thực nhận + thưởng việc sếp giao.
+  // Xu: một phần XP thực nhận + thưởng việc sếp giao. XP uống trà sữa không sinh xu
+  // (cốc trà sữa thật sự tốn 5 xu, chỉ được XP).
+  const coinXp = event.type === 'milk-tea' ? granted - grantedEvent : granted;
   const coins =
-    Math.floor(granted * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
+    Math.floor(coinXp * BALANCE.coins.perXp) + (missionXp > 0 ? BALANCE.coins.missionBonus : 0);
 
   // Số liệu trong ngày cho thẻ khoe thành tích.
   const stats = { ...(state.daily.stats ?? EMPTY_DAILY_STATS) };

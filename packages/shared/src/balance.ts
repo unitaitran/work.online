@@ -29,6 +29,8 @@ export const BALANCE = {
   companyPromotion: 30,
   /** Tham gia thành công một sự kiện phòng. */
   roomEvent: 8,
+  /** Uống trà sữa khi được rủ (tự trả 5 xu, chỉ được XP, không sinh xu). */
+  milkTea: 10,
   /** Hoàn thành một việc sếp giao. */
   mission: 25,
   /** Số lần mỗi ngày còn được tính XP (chống bấm lặp). */
@@ -40,6 +42,8 @@ export const BALANCE = {
     deskMinutes: 180,
     meetingMinutes: 60,
     roomEvent: 8,
+    /** Số cốc trà sữa được tính XP mỗi ngày (chặn uống liên tục lấy XP). */
+    milkTea: 3,
     companyPromotion: 1,
   },
 

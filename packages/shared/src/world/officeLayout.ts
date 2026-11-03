@@ -163,7 +163,7 @@ export interface OfficeLayout {
    * sneaker cạnh cổng, tượng gấu đỏ, kệ treo một dãy áo; cạnh dãy ngồi là 2 bảng dán note
    * (taskBoard, ventBoard). Bục trưng bày thêm (nếu có).
    */
-  decor: { shoeRack: Aabb; bear: Aabb; coatRack: Aabb; pedestals: Aabb[] };
+  decor: { shoeRack: Aabb; bear: Aabb; coatRacks: Aabb[]; pedestals: Aabb[] };
   printer: Aabb;
   cabinets: Aabb[];
   /** Cửa ra vào trên tường nam và máy quẹt thẻ chấm công cạnh cửa. */
@@ -223,9 +223,9 @@ export const OFFICE_FLOOR: OfficeLayout = {
   spawn: { x: -7.25, z: 5.6 },
   spawnFacing: Math.PI,
   windows: {
+    // Một cửa sổ lớn bên trái (ngắm thành phố) và một ô bên phải.
     spans: [
-      { minX: -6, maxX: -3.5 },
-      { minX: -2, maxX: 0.5 },
+      { minX: -6, maxX: 0.5 },
       { minX: 2, maxX: 4.5 },
     ],
     bottom: 1.05,
@@ -254,8 +254,7 @@ export const OFFICE_FLOOR: OfficeLayout = {
       wallX(ROOM_Z, -1, 2.6, G), // phòng họp: vách bắc, cửa 2,6–3,6
       wallX(ROOM_Z, 3.6, 4, G),
       wallX(ROOM_Z, 4, 4.5, G), // phòng nghỉ: vách kính bắc, cửa 4,5–5,5
-      wallX(ROOM_Z, 5.5, 8.5 + G / 2, G),
-      wallZ(8.5, ROOM_Z, SOUTH, G), // phòng nghỉ: vách kính đông
+      wallX(ROOM_Z, 5.5, 10, G), // phòng nghỉ kéo tới tường đông (không còn dải thừa bên cạnh)
     ],
   },
   meeting: {
@@ -285,27 +284,27 @@ export const OFFICE_FLOOR: OfficeLayout = {
     tables: [box(8.0, -1.2, 0.7, 0.7)],
   },
   lounge: {
-    bounds: { minX: 4, maxX: 8.5, minZ: ROOM_Z, maxZ: SOUTH },
-    rug: { minX: 4.6, maxX: 7.6, minZ: 3.7, maxZ: 6.3 },
-    sofa: { minX: 4.9, maxX: 7.3, minZ: 5.65, maxZ: 6.5 },
-    table: box(6.1, 4.4, 1, 0.5),
-    seatXs: [5.45, 6.1, 6.75],
-    daybed: { minX: 7.65, maxX: 8.43, minZ: 2.5, maxZ: 4.5 },
-    sideTable: box(7.95, 5.0, 0.4, 0.4),
-    lamp: { x: 7.95, z: 6.05 },
+    // Phòng nghỉ rộng tới tường đông: sofa, thảm, bàn ở giữa; ghế dài, bàn nhỏ, đèn cây sát tường.
+    bounds: { minX: 4, maxX: 10, minZ: ROOM_Z, maxZ: SOUTH },
+    rug: { minX: 5.5, maxX: 8.5, minZ: 3.7, maxZ: 6.3 },
+    sofa: { minX: 5.8, maxX: 8.2, minZ: 5.65, maxZ: 6.5 },
+    table: box(7.0, 4.4, 1, 0.5),
+    seatXs: [6.35, 7.0, 7.65],
+    daybed: { minX: 9.2, maxX: 9.98, minZ: 2.5, maxZ: 4.5 },
+    sideTable: box(9.55, 5.05, 0.4, 0.4),
+    lamp: { x: 9.55, z: 6.05 },
   },
-  // Cửa sổ ở x -6…-3,5, -2…0,5, 2…4,5: giá sách nằm ở các mảng tường giữa và hai bên.
-  shelves: [
-    box(-6.85, -6.325, 1.5, 0.35),
-    box(-2.75, -6.325, 1.4, 0.35),
-    box(1.25, -6.325, 1.4, 0.35),
-    box(5.35, -6.325, 1.5, 0.35),
-  ],
+  // Cửa sổ lớn x -6…0,5 và ô x 2…4,5; giá sách mở (ván gỗ trên giá ống) ở hai mảng tường còn lại.
+  shelves: [box(1.25, -6.325, 1.4, 0.35), box(5.35, -6.325, 1.5, 0.35)],
   // Từ cổng (nam) vào trong (bắc) dọc tường tây: kệ giày → gấu → kệ treo áo → 2 bảng note.
   decor: {
     shoeRack: { minX: -10, maxX: -9.6, minZ: 4.3, maxZ: 5.5 },
     bear: box(-9.1, 3.0, 1, 1),
-    coatRack: { minX: -10, maxX: -9.45, minZ: -0.6, maxZ: 1.6 },
+    // Hai kệ treo áo: kệ cũ ở tường tây, kệ mới sát tường bắc bên trái cửa sổ lớn.
+    coatRacks: [
+      { minX: -10, maxX: -9.22, minZ: -0.6, maxZ: 1.6 },
+      { minX: -8.05, maxX: -6.1, minZ: -6.5, maxZ: -5.72 },
+    ],
     pedestals: [],
   },
   // Máy in áp sát đầu bắc của dãy bàn thứ 4 (dãy bàn ở x = 4 kết thúc ở z = -3,75),
@@ -387,7 +386,7 @@ export function officeObstacles(layout: OfficeLayout, options: { ceo?: boolean }
     ...layout.shelves,
     decor.shoeRack,
     decor.bear,
-    decor.coatRack,
+    ...decor.coatRacks,
     ...decor.pedestals,
     layout.printer,
     ...layout.cabinets,
@@ -548,7 +547,11 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
   wallBoard('ventwall', layout.ventBoard);
 
   const w = layout.windows;
-  const view = w.spans[1] ?? w.spans[0] ?? { minX: -1, maxX: 1 };
+  // Đứng ngắm ở ô cửa sổ rộng nhất.
+  const view = w.spans.reduce<{ minX: number; maxX: number } | null>(
+    (best, span) => (!best || span.maxX - span.minX > best.maxX - best.minX ? span : best),
+    null,
+  ) ?? { minX: -1, maxX: 1 };
   const shelfFront = Math.max(minZ, ...layout.shelves.map((s) => s.maxZ));
   list.push({
     id: 'window',
