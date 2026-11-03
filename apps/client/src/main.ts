@@ -929,6 +929,8 @@ function start(): void {
           if (message.protocol !== PROTOCOL_VERSION) showUpdate(true);
           serverOffset = message.serverTime - Date.now();
           roomKind = message.room.replace(/-\d+$/, '');
+          // Vào (lại) phòng: hỏi lại server quyền chủ (có thể vừa mở / bán công ty).
+          ownerCache = null;
           updateCeoAccess();
           // Nơi làm có thể vừa đổi (mở công ty, được nhận, nghỉ việc): tính lại chức danh.
           void loadWorkplace().then(() => {
@@ -1209,17 +1211,21 @@ function start(): void {
     /** Thẻ CEO: chỉ trong phòng công ty mình làm chủ. */
     // Thẻ vào phòng sếp: chủ công ty (trong phòng công ty của mình) hoặc đang có việc
     // "Họp với sếp" (server cũng kiểm tra như vậy).
+    // Nhớ kết quả "có phải chủ phòng này" theo phòng: gọi lại mỗi lần tiến độ đổi (mỗi phút
+    // ngồi máy) mà tắt thẻ rồi chờ API bật lại thì chủ đang ngồi ghế CEO bị đẩy ra cửa.
+    let ownerCache: { kind: string; owner: boolean } | null = null;
     const updateCeoAccess = (): void => {
-      const meeting = hasCeoMeeting(progress.state);
-      scene.setCeoAccess(meeting);
-      if (meeting || !roomKind.startsWith('company:')) return;
       const kind = roomKind;
+      const cachedOwner = ownerCache?.kind === kind && ownerCache.owner;
+      const meeting = hasCeoMeeting(progress.state);
+      scene.setCeoAccess(meeting || cachedOwner);
+      if (meeting || ownerCache?.kind === kind || !kind.startsWith('company:')) return;
       void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
         if (!r.ok || roomKind !== kind) return;
         const detail = r.value.detail;
-        scene.setCeoAccess(
-          detail !== null && detail.isOwner && `company:${detail.company.id}` === kind,
-        );
+        const owner = detail !== null && detail.isOwner && `company:${detail.company.id}` === kind;
+        ownerCache = { kind, owner };
+        scene.setCeoAccess(owner || hasCeoMeeting(progress.state));
       });
     };
     const openCompanyMap = (): void => {
