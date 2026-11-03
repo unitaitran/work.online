@@ -3261,3 +3261,20 @@ button.office-badge:focus-visible {
     top: calc(var(--room-event-bottom, 190px) + 90px);
   }
 }
+
+/* Menu ☰: cột lưới đúng bằng bề rộng menu (không giãn theo mục rộng nhất), thanh trượt co lại. */
+.menu-sheet {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.menu-sheet > * {
+  min-width: 0;
+}
+
+.menu-sheet .volume-slider {
+  min-width: 0;
+}
+
+.menu-sheet .quality-select {
+  max-width: 55%;
+}

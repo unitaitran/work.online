@@ -73,7 +73,6 @@ export class WallClock {
       }
       ctx.fillStyle = '#ff8a65';
       ctx.font = `700 30px ${font}`;
-      ctx.fillText('Giờ Việt Nam', 256, 340);
     }
     const texture = new CanvasTexture(canvas);
     texture.colorSpace = SRGBColorSpace;

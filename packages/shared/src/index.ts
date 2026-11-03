@@ -13,6 +13,7 @@ export * from './hiring';
 export * from './job';
 export * from './constants';
 export * from './levels';
+export * from './milkTea';
 export * from './missions';
 export * from './progress';
 export * from './provinces';

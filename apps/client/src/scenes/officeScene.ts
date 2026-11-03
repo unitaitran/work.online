@@ -76,6 +76,8 @@ export const PLAYER_RADIUS = 0.28;
 const TURN_SPEED = 14;
 const CAMERA_FOLLOW = 9;
 const CAMERA_BLEND = 5;
+/** Tốc độ camera xoay ra sau lưng ở chế độ "Theo nhân vật". */
+const FOLLOW_TURN = 2.2;
 const LOOK_HEIGHT = 0.75;
 const DEFAULT_ORBIT: OrbitState = { yaw: 0.35, pitch: 0.75, distance: 7 };
 /** Góc camera lúc mới vào phòng; yaw tính lệch so với hướng nhân vật lúc xuất hiện. */
@@ -158,6 +160,8 @@ export class OfficeScene implements SceneController {
   private facing: number;
   private path: Vec2[] = [];
   private pending: Interactable | null = null;
+  /** Đi tới chỗ một vật để làm việc khác (không dùng vật), tới nơi thì gọi `done`. */
+  private pendingGo: { item: Interactable; done: () => void } | null = null;
   private seated: Interactable | null = null;
   private stuckSeconds = 0;
   private markerSeconds = 0;
@@ -313,6 +317,13 @@ export class OfficeScene implements SceneController {
     this.autoRotate = on;
   }
 
+  /** Camera theo nhân vật: đi tới đâu, rẽ trái/phải thì camera tự xoay ra sau lưng. */
+  setFollowCamera(on: boolean): void {
+    this.followCamera = on;
+  }
+
+  private followCamera = false;
+
   setZoneLabels(on: boolean): void {
     this.labelsOn = on;
   }
@@ -443,6 +454,46 @@ export class OfficeScene implements SceneController {
     return true;
   }
 
+  /**
+   * Đi tới chỗ đứng của một vật nhưng KHÔNG dùng vật; tới nơi thì quay mặt vào vật và gọi
+   * `done` (ví dụ: chạy ra máy pha đổ hạt cà phê khi cả phòng hết cà phê).
+   */
+  goToItem(id: string, done: () => void): boolean {
+    const item = this.items.find((candidate) => candidate.id === id);
+    if (!item || this.inputLocked) return false;
+    if (this.seated) this.standUp();
+    const d = Math.hypot(item.approach.x - this.position.x, item.approach.z - this.position.z);
+    if (d <= ARRIVE_RADIUS) {
+      this.cancelPath();
+      this.facing = item.facing;
+      done();
+      return true;
+    }
+    const path = findPath(this.position, item.approach, this.obstacles, PLAYER_RADIUS, this.bounds);
+    if (!path) return false;
+    this.cancelPath();
+    this.path = path;
+    this.pendingGo = { item, done };
+    this.showMarker(item.approach);
+    return true;
+  }
+
+  /** Ghế trống gần nhất thuộc loại `kind` (ví dụ ghế phòng họp), hoặc null. */
+  nearestFreeSeat(kind: Interactable['kind']): string | null {
+    let best: Interactable | null = null;
+    let bestD = Infinity;
+    for (const item of this.items) {
+      if (item.kind !== kind || !item.seat) continue;
+      if (this.seats.occupant(item.id) !== null && this.seated?.id !== item.id) continue;
+      const d = Math.hypot(item.approach.x - this.position.x, item.approach.z - this.position.z);
+      if (d < bestD) {
+        bestD = d;
+        best = item;
+      }
+    }
+    return best?.id ?? null;
+  }
+
   getInteractables(): readonly Interactable[] {
     return this.items;
   }
@@ -552,6 +603,15 @@ export class OfficeScene implements SceneController {
     // Camera: ngồi thì nhìn gần qua vai về phía bàn, đứng thì theo sau như cũ.
     if (this.autoRotate)
       this.orbitGoal = { ...this.orbitGoal, yaw: this.orbitGoal.yaw + frameSeconds * 0.3 };
+    // Theo nhân vật: đang đi thì camera xoay dần ra sau lưng (hướng mặt + π).
+    const moving =
+      Math.hypot(this.position.x - this.previous.x, this.position.z - this.previous.z) > 0.0005;
+    if (this.followCamera && moving && !this.seated && this.viewMode !== 'top') {
+      this.orbitGoal = {
+        ...this.orbitGoal,
+        yaw: dampAngle(this.orbitGoal.yaw, this.facing + Math.PI, FOLLOW_TURN, frameSeconds),
+      };
+    }
     this.orbit = {
       yaw: dampAngle(this.orbit.yaw, this.orbitGoal.yaw, CAMERA_BLEND, frameSeconds),
       pitch: damp(this.orbit.pitch, this.orbitGoal.pitch, CAMERA_BLEND, frameSeconds),
@@ -599,8 +659,8 @@ export class OfficeScene implements SceneController {
       this.marker.visible = this.markerSeconds > 0;
     }
 
-    // Tên khu chỉ hiện khi nhìn xa (từ trên, hoặc lùi camera), gần thì đỡ che.
-    this.zoneLabels.setVisible(this.labelsOn && (top || this.orbit.distance > 9.5));
+    // Tên khu: đang ở khu nào thì hiện tên khu đó (treo thấp dưới trần); nhìn từ trên thì hiện hết.
+    this.zoneLabels.update(x, z, this.labelsOn, top);
     // Vách đặc giữa các phòng tự mờ khi nhân vật ở trong phòng phía nam hoặc camera ở sau vách.
     const rooms = this.layout.lounge.bounds.minZ;
     this.office.setPartitionsFaded(
@@ -697,6 +757,15 @@ export class OfficeScene implements SceneController {
       const d = Math.hypot(pending.approach.x - moved.x, pending.approach.z - moved.z);
       if (d <= ARRIVE_RADIUS + 0.05) this.use(pending);
     }
+    const go = this.pendingGo;
+    if (go && this.path.length === 0) {
+      this.pendingGo = null;
+      const d = Math.hypot(go.item.approach.x - moved.x, go.item.approach.z - moved.z);
+      if (d <= ARRIVE_RADIUS + 0.05) {
+        this.facing = go.item.facing;
+        go.done();
+      }
+    }
     if (this.path.length === 0 && this.markerSeconds > 0.3) this.markerSeconds = 0.3;
 
     const walking = distance > 0.0005;
@@ -726,6 +795,7 @@ export class OfficeScene implements SceneController {
     const path = findPath(this.position, item.approach, this.obstacles, PLAYER_RADIUS, this.bounds);
     if (!path) return;
     this.path = path;
+    this.pendingGo = null;
     this.pending = item;
     this.stuckSeconds = 0;
     this.showMarker(item.approach);
@@ -776,6 +846,7 @@ export class OfficeScene implements SceneController {
   private cancelPath(): void {
     this.path = [];
     this.pending = null;
+    this.pendingGo = null;
     this.stuckSeconds = 0;
   }
 

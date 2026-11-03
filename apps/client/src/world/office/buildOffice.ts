@@ -411,7 +411,12 @@ function windowPieces(layout: OfficeLayout): Piece[] {
     const sill = { minX: span.minX - 0.05, maxX: span.maxX + 0.05, minZ, maxZ: minZ + 0.14 };
     pieces.push(boxPiece(sill, bottom - 0.05, bottom, FRAME));
     pieces.push(boxPiece({ ...sill, maxZ: minZ + 0.06 }, top, top + 0.06, FRAME));
-    for (const x of [span.minX, (span.minX + span.maxX) / 2, span.maxX]) {
+    const panes = Math.max(2, Math.round((span.maxX - span.minX) / 1.25));
+    const mullions = Array.from(
+      { length: panes + 1 },
+      (_, k) => span.minX + (k * (span.maxX - span.minX)) / panes,
+    );
+    for (const x of mullions) {
       pieces.push(
         boxPiece({ minX: x - 0.03, maxX: x + 0.03, minZ, maxZ: minZ + 0.06 }, bottom, top, FRAME),
       );
@@ -1048,184 +1053,200 @@ function pantryPieces(layout: OfficeLayout): Piece[] {
   return pieces;
 }
 
-/** Gáy sách tông trầm (đen, xám, kem, xanh than...) và hộp quà đỏ/vàng (decor) trên giá đen. */
-const BOOK_COLORS = [
-  BLACK,
-  GRAY_LIGHT,
-  CREAM,
-  0x2b3a4f,
-  0x6b5a44,
-  0x8a8a92,
-  0x3d4a3e,
-  0xb9ae98,
-  0x4a3b3b,
-];
+// ---------- Giá sách mở: ván gỗ trên giá ống đen, nhiều hộp quà trắng nơ đỏ, ít sách ----------
+
+const PLANK = 0x6e4c34;
+const PLANK_EDGE = 0x8a6244;
+const SHELF_BACK = 0x26262b;
+const GIFT_WHITE = 0xf3f1ec;
+const RIBBON = 0xc8202a;
+const SPEAKER_RED = 0xd8312f;
+
+/** Hộp quà: dây ruy băng hai chiều, nơ trên nóc, hai dải buông xuống mặt trước. */
+function giftPieces(
+  cx: number,
+  y: number,
+  cz: number,
+  w: number,
+  h: number,
+  d: number,
+  color: number,
+  ribbon: number,
+): Piece[] {
+  const r = 0.022;
+  const out: Piece[] = [
+    boxPiece(
+      { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 },
+      y,
+      y + h,
+      color,
+    ),
+    // Ruy băng ngang và dọc ôm quanh hộp.
+    boxPiece(
+      { minX: cx - w / 2 - 0.003, maxX: cx + w / 2 + 0.003, minZ: cz - r, maxZ: cz + r },
+      y,
+      y + h + 0.003,
+      ribbon,
+    ),
+    boxPiece(
+      { minX: cx - r, maxX: cx + r, minZ: cz - d / 2 - 0.003, maxZ: cz + d / 2 + 0.003 },
+      y,
+      y + h + 0.003,
+      ribbon,
+    ),
+    boxPiece(
+      {
+        minX: cx - w / 2 - 0.003,
+        maxX: cx + w / 2 + 0.003,
+        minZ: cz - d / 2 - 0.003,
+        maxZ: cz + d / 2 + 0.003,
+      },
+      y + h * 0.55 - r,
+      y + h * 0.55 + r,
+      ribbon,
+    ),
+  ];
+  // Nơ: hai cánh dẹt, nút ở giữa.
+  for (const side of [-1, 1]) {
+    out.push(
+      piece(new SphereGeometry(0.05, 8, 6), ribbon, {
+        position: [cx + side * 0.045, y + h + 0.03, cz],
+        scale: [1, 0.55, 0.5],
+        rotation: [0, 0, side * 0.45],
+      }),
+    );
+  }
+  out.push(piece(new SphereGeometry(0.022, 6, 4), ribbon, { position: [cx, y + h + 0.025, cz] }));
+  // Hai dải buông xuống mặt trước.
+  for (const side of [-1, 1]) {
+    out.push(
+      piece(new BoxGeometry(0.03, h * 0.7, 0.006), ribbon, {
+        position: [cx + side * 0.03, y + h - (h * 0.7) / 2 + 0.01, cz + d / 2 + 0.006],
+        rotation: [0, 0, side * 0.12],
+      }),
+    );
+  }
+  return out;
+}
+
+/** Loa kiểm âm đỏ: thân bo, loa trầm đen và loa tép mặt trước. */
+function speakerPieces(cx: number, y: number, cz: number, face: number): Piece[] {
+  const w = 0.17;
+  const h = 0.26;
+  const d = 0.2;
+  return [
+    boxPiece(
+      { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 },
+      y,
+      y + h,
+      SPEAKER_RED,
+    ),
+    piece(new CylinderGeometry(0.055, 0.055, 0.012, 16), 0x1a1a1e, {
+      position: [cx, y + 0.09, cz + face * (d / 2 + 0.005)],
+      rotation: [Math.PI / 2, 0, 0],
+    }),
+    piece(new CylinderGeometry(0.02, 0.02, 0.012, 12), 0x1a1a1e, {
+      position: [cx, y + 0.2, cz + face * (d / 2 + 0.005)],
+      rotation: [Math.PI / 2, 0, 0],
+    }),
+  ];
+}
+
+/** Ba lô dựng đứng: thân, nắp bo tròn, túi trước, quai xách. */
+function backpackPieces(cx: number, y: number, cz: number, color: number, accent: number): Piece[] {
+  const w = 0.26;
+  const h = 0.34;
+  const d = 0.14;
+  return [
+    boxPiece(
+      { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 },
+      y,
+      y + h,
+      color,
+    ),
+    piece(new CylinderGeometry(w / 2, w / 2, d, 14, 1, false, 0, Math.PI), color, {
+      position: [cx, y + h, cz],
+      rotation: [Math.PI / 2, 0, Math.PI / 2],
+    }),
+    boxPiece(
+      {
+        minX: cx - w / 2 + 0.03,
+        maxX: cx + w / 2 - 0.03,
+        minZ: cz + d / 2,
+        maxZ: cz + d / 2 + 0.035,
+      },
+      y + 0.04,
+      y + 0.2,
+      accent,
+    ),
+    piece(new TorusGeometry(0.04, 0.008, 4, 10, Math.PI), 0x1a1a1e, {
+      position: [cx, y + h + w / 2 - 0.01, cz],
+    }),
+  ];
+}
+
 function shelfPieces(layout: OfficeLayout): Piece[] {
   const pieces: Piece[] = [];
-  const rng = seededRng(31);
-  const height = 2.0;
-  const levels = 5;
-  const SHELF = CRIMSON;
+  const planks = [0.3, 0.82, 1.34, 1.86];
+  const t = 0.035;
   layout.shelves.forEach((s, shelfIndex) => {
-    // Khung đỏ thẫm: hai vách, nóc, đế, các tầng; tấm lưng sẫm hơn cho có chiều sâu.
-    pieces.push(boxPiece({ ...s, maxX: s.minX + 0.04 }, 0, height, SHELF));
-    pieces.push(boxPiece({ ...s, minX: s.maxX - 0.04 }, 0, height, SHELF));
-    pieces.push(boxPiece({ ...s, maxZ: s.minZ + 0.02 }, 0, height, CRIMSON_DEEP));
-    pieces.push(boxPiece(s, height - 0.04, height, SHELF));
-    pieces.push(boxPiece(s, 0, 0.08, SHELF));
-    for (let level = 0; level < levels; level += 1) {
-      const y0 = 0.08 + level * ((height - 0.12) / levels);
-      pieces.push(boxPiece(s, y0, y0 + 0.025, SHELF));
-      const rowHeight = (height - 0.12) / levels - 0.04;
-      let x = s.minX + 0.06;
-      // Mỗi tầng: sách đứng, thỉnh thoảng một chồng sách nằm hoặc hộp quà.
-      const giftAt = (level + shelfIndex) % 2 === 0 ? Math.floor(rng() * 3) : -1;
-      let item = 0;
-      while (x < s.maxX - 0.08) {
-        if (item === giftAt) {
-          const gw = 0.24 + rng() * 0.1;
-          const gh = Math.min(rowHeight - 0.03, 0.18 + rng() * 0.1);
-          if (x + gw > s.maxX - 0.06) break;
-          const color = [RED, GOLD, CREAM, RED][Math.floor(rng() * 4)] ?? RED;
-          const ribbon = color === RED ? GOLD : RED;
-          const gz = s.maxZ - 0.17;
-          const gx = x + gw / 2;
-          const gy = y0 + 0.025;
-          pieces.push(
-            boxPiece(
-              { minX: x, maxX: x + gw, minZ: gz - 0.11, maxZ: gz + 0.11 },
-              gy,
-              gy + gh,
-              color,
-            ),
-          );
-          pieces.push(
-            boxPiece(
-              { minX: gx - 0.015, maxX: gx + 0.015, minZ: gz - 0.115, maxZ: gz + 0.115 },
-              gy,
-              gy + gh + 0.003,
-              ribbon,
-            ),
-          );
-          pieces.push(
-            boxPiece(
-              { minX: x - 0.003, maxX: x + gw + 0.003, minZ: gz - 0.015, maxZ: gz + 0.015 },
-              gy,
-              gy + gh + 0.003,
-              ribbon,
-            ),
-          );
-          for (const side of [-1, 1]) {
-            pieces.push(
-              piece(new SphereGeometry(0.035, 8, 6), ribbon, {
-                position: [gx + side * 0.03, gy + gh + 0.025, gz],
-                scale: [1, 0.6, 0.5],
-              }),
-            );
-          }
-          x += gw + 0.05;
-        } else if (rng() < 0.12) {
-          const sw = 0.26;
-          if (x + sw > s.maxX - 0.06) break;
-          let sy = y0 + 0.025;
-          for (let k = 0; k < 3; k += 1) {
-            const bh = 0.035 + rng() * 0.02;
-            pieces.push(
-              boxPiece(
-                {
-                  minX: x + k * 0.01,
-                  maxX: x + sw - k * 0.015,
-                  minZ: s.maxZ - 0.29,
-                  maxZ: s.maxZ - 0.06,
-                },
-                sy,
-                sy + bh,
-                BOOK_COLORS[Math.floor(rng() * BOOK_COLORS.length)] ?? CREAM,
-              ),
-            );
-            sy += bh;
-          }
-          x += sw + 0.04;
-        } else {
-          const bw = 0.035 + rng() * 0.035;
-          const bh = rowHeight * (0.7 + rng() * 0.28);
-          if (x + bw > s.maxX - 0.06) break;
-          const lean = rng() < 0.08 ? 0.12 : 0;
-          pieces.push(
-            piece(
-              new BoxGeometry(bw, bh, 0.2 + rng() * 0.06),
-              BOOK_COLORS[Math.floor(rng() * BOOK_COLORS.length)] ?? CREAM,
-              {
-                position: [x + bw / 2, y0 + 0.025 + bh / 2, s.maxZ - 0.17],
-                rotation: [0, 0, lean],
-              },
-            ),
-          );
-          x += bw + 0.004 + (lean ? 0.04 : 0);
-        }
-        item += 1;
-      }
-    }
-    // Trên nóc giá: vài hộp quà xếp chồng, nơ vàng/đỏ.
     const w = s.maxX - s.minX;
-    const gifts: [number, number, number, number][] = [
-      [0.22, 0.32, 0.24, RED],
-      [0.55, 0.22, 0.18, GOLD],
-      [w - 0.3, 0.3, 0.28, CREAM],
-      [w - 0.3, 0.2, 0.15, RED],
-    ];
-    let stackY = height;
-    gifts.forEach(([dx, size, gh, color], gi) => {
-      if ((gi + shelfIndex) % 4 === 1 && gi !== 3) return;
-      const gx = s.minX + dx;
-      const gz = (s.minZ + s.maxZ) / 2;
-      const y0 = gi === 3 ? stackY : height;
-      const ribbon = color === RED ? GOLD : RED;
-      pieces.push(
-        boxPiece(
-          { minX: gx - size / 2, maxX: gx + size / 2, minZ: gz - size / 2, maxZ: gz + size / 2 },
-          y0,
-          y0 + gh,
-          color,
-        ),
-      );
-      pieces.push(
-        boxPiece(
-          {
-            minX: gx - 0.02,
-            maxX: gx + 0.02,
-            minZ: gz - size / 2 - 0.004,
-            maxZ: gz + size / 2 + 0.004,
-          },
-          y0,
-          y0 + gh + 0.004,
-          ribbon,
-        ),
-      );
-      pieces.push(
-        boxPiece(
-          {
-            minX: gx - size / 2 - 0.004,
-            maxX: gx + size / 2 + 0.004,
-            minZ: gz - 0.02,
-            maxZ: gz + 0.02,
-          },
-          y0,
-          y0 + gh + 0.004,
-          ribbon,
-        ),
-      );
-      for (const side of [-1, 1]) {
+    const cz = s.minZ + 0.19;
+    const at = (f: number): number => s.minX + f * w;
+    // Tấm nền tối sát tường (như mảng tường sơn đen sau giá).
+    pieces.push(boxPiece({ ...s, maxZ: s.minZ + 0.02 }, 0, 2.15, SHELF_BACK));
+    for (const y of planks) {
+      // Ván gỗ óc chó, mép trước sáng hơn.
+      pieces.push(boxPiece({ ...s, minZ: s.minZ + 0.02 }, y - t, y, PLANK));
+      pieces.push(boxPiece({ ...s, minZ: s.maxZ - 0.012 }, y - t, y, PLANK_EDGE));
+      // Giá đỡ ống đen: hai ống ngang dưới ván, mặt bích bắt tường.
+      for (const f of [0.18, 0.82]) {
         pieces.push(
-          piece(new SphereGeometry(0.045, 8, 6), ribbon, {
-            position: [gx + side * 0.04, y0 + gh + 0.03, gz],
-            scale: [1, 0.6, 0.55],
-            rotation: [0, 0, side * 0.5],
+          piece(new CylinderGeometry(0.016, 0.016, s.maxZ - s.minZ - 0.04, 8), 0x141417, {
+            position: [at(f), y - t - 0.02, (s.minZ + s.maxZ) / 2],
+            rotation: [Math.PI / 2, 0, 0],
+          }),
+          piece(new CylinderGeometry(0.035, 0.035, 0.012, 10), 0x141417, {
+            position: [at(f), y - t - 0.02, s.minZ + 0.026],
+            rotation: [Math.PI / 2, 0, 0],
           }),
         );
       }
-      if (gi === 2) stackY = height + gh;
-    });
+    }
+    const [p0, p1, p2, p3] = planks as [number, number, number, number];
+    const flip = shelfIndex % 2 === 1;
+    const fx = (f: number): number => at(flip ? 1 - f : f);
+    // Tầng dưới: hộp quà trắng, loa đỏ, hộp quà đỏ, loa đỏ.
+    pieces.push(...giftPieces(fx(0.16), p0, cz, 0.3, 0.3, 0.28, GIFT_WHITE, RIBBON));
+    pieces.push(...speakerPieces(fx(0.42), p0, cz, 1));
+    pieces.push(...giftPieces(fx(0.64), p0, cz, 0.28, 0.24, 0.26, SPEAKER_RED, RIBBON));
+    pieces.push(...speakerPieces(fx(0.87), p0, cz, 1));
+    // Tầng hai: ba hộp quà trắng to.
+    pieces.push(...giftPieces(fx(0.18), p1, cz, 0.36, 0.3, 0.28, GIFT_WHITE, RIBBON));
+    pieces.push(...giftPieces(fx(0.5), p1, cz, 0.3, 0.34, 0.28, GIFT_WHITE, RIBBON));
+    pieces.push(...giftPieces(fx(0.82), p1, cz, 0.32, 0.28, 0.28, GIFT_WHITE, RIBBON));
+    // Tầng ba: một hộp quà, hai cuốn sách dựng, một cuốn nằm.
+    pieces.push(...giftPieces(fx(0.2), p2, cz, 0.34, 0.26, 0.26, GIFT_WHITE, RIBBON));
+    pieces.push(
+      piece(new BoxGeometry(0.2, 0.26, 0.05), 0xd94f9a, {
+        position: [fx(0.55), p2 + 0.13, cz + 0.04],
+        rotation: [-0.08, 0, 0],
+      }),
+      piece(new BoxGeometry(0.22, 0.28, 0.05), 0x1f2a44, {
+        position: [fx(0.82), p2 + 0.14, cz + 0.04],
+        rotation: [-0.08, 0, 0],
+      }),
+      boxPiece(
+        { minX: fx(0.55) - 0.16, maxX: fx(0.55) + 0.16, minZ: cz - 0.02, maxZ: cz + 0.12 },
+        p2,
+        p2 + 0.04,
+        0x2b2b30,
+      ),
+    );
+    // Tầng trên: hộp quà nhỏ và hai ba lô.
+    pieces.push(...giftPieces(fx(0.13), p3, cz, 0.18, 0.26, 0.2, GIFT_WHITE, RIBBON));
+    pieces.push(...backpackPieces(fx(0.42), p3, cz, 0x6b4a33, 0x2a1d14));
+    pieces.push(...backpackPieces(fx(0.75), p3, cz, 0x5a5a63, 0xe9e4da));
   });
   return pieces;
 }
@@ -1236,7 +1257,7 @@ function shelfPieces(layout: OfficeLayout): Piece[] {
  */
 function decorPieces(layout: OfficeLayout): Piece[] {
   const pieces: Piece[] = [];
-  const { pedestals, bear, shoeRack, coatRack } = layout.decor;
+  const { pedestals, bear, shoeRack, coatRacks } = layout.decor;
   // Kệ giày gỗ đen ba tầng, trên có vài đôi giày (một đôi đỏ).
   const r = shoeRack;
   pieces.push(boxPiece({ ...r, maxX: r.minX + 0.02 }, 0, 0.62, 0x1c1c21));
@@ -1274,78 +1295,66 @@ function decorPieces(layout: OfficeLayout): Piece[] {
       );
     }
   });
-  // Kệ treo một dãy áo: khung thép đen, thanh treo, áo khoác xám/đen/kem (một chiếc đỏ), kệ dưới.
-  const c = coatRack;
-  const railX = (c.minX + c.maxX) / 2;
-  for (const z of [c.minZ + 0.04, c.maxZ - 0.04]) {
-    pieces.push(
+  // Kệ treo áo: khung thép đen, thanh treo chạy theo cạnh dài của kệ, kệ dưới để hộp.
+  // u: dọc thanh treo, v: ngang thanh (tính từ tâm kệ).
+  coatRacks.forEach((c, rackIndex) => {
+    const alongX = c.maxX - c.minX > c.maxZ - c.minZ;
+    const rcx = (c.minX + c.maxX) / 2;
+    const rcz = (c.minZ + c.maxZ) / 2;
+    const half = (alongX ? c.maxX - c.minX : c.maxZ - c.minZ) / 2;
+    const halfD = (alongX ? c.maxZ - c.minZ : c.maxX - c.minX) / 2;
+    const rackBox = (
+      u0: number,
+      u1: number,
+      v0: number,
+      v1: number,
+      y0: number,
+      y1: number,
+      color: number,
+    ): Piece =>
       boxPiece(
-        { minX: railX - 0.02, maxX: railX + 0.02, minZ: z - 0.02, maxZ: z + 0.02 },
-        0,
-        1.65,
-        FRAME,
-      ),
-    );
-    pieces.push(
-      boxPiece({ minX: c.minX, maxX: c.maxX, minZ: z - 0.03, maxZ: z + 0.03 }, 0, 0.03, FRAME),
-    );
-  }
-  pieces.push(
-    piece(new CylinderGeometry(0.014, 0.014, c.maxZ - c.minZ, 8), STEEL, {
-      position: [railX, 1.62, (c.minZ + c.maxZ) / 2],
-      rotation: [Math.PI / 2, 0, 0],
-    }),
-  );
-  pieces.push(
-    boxPiece(
-      { minX: c.minX + 0.03, maxX: c.maxX - 0.03, minZ: c.minZ + 0.06, maxZ: c.maxZ - 0.06 },
-      0.22,
-      0.25,
-      0x1c1c21,
-    ),
-  );
-  // Áo phông treo dày như giá treo thật: móc ôm thanh, mặt áo vuông góc với thanh, các áo
-  // song song nhau và lệch góc một chút. Trắng, đen là chính, xen vài chiếc đỏ.
-  const teeRng = seededRng(73);
-  const teeCount = 28;
-  const first = c.minZ + 0.12;
-  const step = (c.maxZ - c.minZ - 0.24) / (teeCount - 1);
-  let run = 0;
-  let runColor = TEE_WHITE;
-  for (let i = 0; i < teeCount; i += 1) {
-    // Màu theo từng cụm 2-5 chiếc như người ta hay xếp.
-    if (run === 0) {
-      const roll = teeRng();
-      runColor = roll < 0.45 ? TEE_WHITE : roll < 0.85 ? TEE_BLACK : RED;
-      run = 2 + Math.floor(teeRng() * 4);
-    }
-    run -= 1;
-    const z = first + i * step + (teeRng() - 0.5) * 0.015;
-    const yaw = (teeRng() - 0.5) * 0.24;
-    const print =
-      runColor === TEE_WHITE && teeRng() < 0.4 ? (teeRng() < 0.5 ? RED : TEE_BLACK) : null;
-    pieces.push(...teePieces(railX, z, yaw, runColor, print, 0.9 + teeRng() * 0.05));
-  }
-  // Vài hộp giày / túi trên kệ dưới.
-  for (const [dz, color] of [
-    [0.35, CREAM],
-    [0.9, BLACK],
-    [1.6, GRAY_LIGHT],
-  ] as const) {
-    pieces.push(
-      boxPiece(
-        {
-          minX: c.minX + 0.08,
-          maxX: c.maxX - 0.08,
-          minZ: c.minZ + dz - 0.18,
-          maxZ: c.minZ + dz + 0.18,
-        },
-        0.25,
-        0.42,
+        alongX
+          ? { minX: rcx + u0, maxX: rcx + u1, minZ: rcz + v0, maxZ: rcz + v1 }
+          : { minX: rcx + v0, maxX: rcx + v1, minZ: rcz + u0, maxZ: rcz + u1 },
+        y0,
+        y1,
         color,
-      ),
+      );
+    for (const u of [-half + 0.04, half - 0.04]) {
+      pieces.push(rackBox(u - 0.02, u + 0.02, -0.02, 0.02, 0, 1.65, FRAME));
+      pieces.push(rackBox(u - 0.03, u + 0.03, -halfD, halfD, 0, 0.03, FRAME));
+    }
+    pieces.push(
+      piece(new CylinderGeometry(0.014, 0.014, half * 2, 8), STEEL, {
+        position: [rcx, 1.62, rcz],
+        rotation: alongX ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0],
+      }),
     );
-  }
+    pieces.push(
+      rackBox(-half + 0.03, half - 0.03, -halfD + 0.06, halfD - 0.06, 0.22, 0.25, 0x1c1c21),
+    );
+    // Bảy áo phông oversize treo dọc (vuông góc thanh như giá thật), cách thưa, đen / trắng / đỏ.
+    const teeRng = seededRng(73 + rackIndex);
+    const teeColors = [TEE_BLACK, TEE_WHITE, RED, TEE_BLACK, RED, TEE_WHITE, TEE_BLACK];
+    const gap = 0.25;
+    const railAngle = alongX ? Math.PI / 2 : 0;
+    teeColors.forEach((color, k) => {
+      const u = (k - (teeColors.length - 1) / 2) * gap;
+      const jitter = (teeRng() - 0.5) * 0.12;
+      const hem = 0.7 + teeRng() * 0.04;
+      pieces.push(
+        ...teePieces(alongX ? rcx + u : rcx, alongX ? rcz : rcz + u, railAngle, jitter, color, hem),
+      );
+    });
+    // Vài hộp giày trên kệ dưới.
+    for (const [du, color] of [
+      [-0.62, CREAM],
+      [-0.1, BLACK],
+      [0.55, GRAY_LIGHT],
+    ] as const) {
+      pieces.push(rackBox(du - 0.18, du + 0.18, -halfD + 0.08, halfD - 0.08, 0.25, 0.42, color));
+    }
+  });
   // Bục gấu đen viền thép. Viền chỉ bọc quanh thân (thấp hơn mặt bục), không có mặt trên
   // trùng độ cao với mặt bục, nếu không hai mặt tranh nhau và nhấp nháy (z-fighting).
   pieces.push(boxPiece(bear, 0, 0.14, BLACK));
@@ -1411,48 +1420,49 @@ function shade(color: number, factor: number): number {
 }
 
 /**
- * Một áo phông trên móc. Dựng theo toạ độ riêng (rộng theo x, mỏng theo z, móc ôm thanh chạy
- * theo z) rồi xoay `yaw` và đặt vào thanh treo tại (railX, z). `print`: hình in nhỏ trước ngực.
+ * Một áo phông oversize trên móc (thân rộng, dài, vai rớt, tay to buông xuống). Dựng theo toạ độ riêng (rộng theo x, mỏng theo z, móc ôm thanh chạy
+ * theo z) rồi xoay theo thanh treo (`railAngle`, lệch thêm `jitter`) và đặt tại (x, z).
  */
 function teePieces(
-  railX: number,
+  x: number,
   z: number,
-  yaw: number,
+  railAngle: number,
+  jitter: number,
   color: number,
-  print: number | null,
   hem: number,
 ): Piece[] {
   const local: Piece[] = [];
-  const top = 1.47;
-  const bodyW = 0.34;
-  const thick = 0.034;
+  const hook: Piece[] = [];
+  const top = 1.46;
+  const bodyW = 0.44;
+  const thick = 0.038;
   const bodyH = top - hem;
   // Móc: nửa vòng ôm thanh, cổ móc, hai cánh vai.
-  local.push(
+  hook.push(
     piece(new TorusGeometry(0.02, 0.004, 3, 6, Math.PI), METAL, { position: [0, 1.6, 0] }),
     piece(new CylinderGeometry(0.004, 0.004, 0.05, 4), METAL, { position: [0, 1.555, 0] }),
   );
   for (const side of [-1, 1]) {
     local.push(
-      piece(new BoxGeometry(0.2, 0.012, 0.012), 0x2a2a30, {
-        position: [side * 0.09, 1.505, 0],
-        rotation: [0, 0, -side * 0.42],
+      piece(new BoxGeometry(0.22, 0.012, 0.012), 0x2a2a30, {
+        position: [side * 0.1, 1.5, 0],
+        rotation: [0, 0, -side * 0.3],
       }),
     );
   }
-  // Thân, vai dốc, tay ngắn xoè ra.
+  // Thân rộng, vai rớt thoải, tay áo to buông thấp.
   local.push(
     piece(new BoxGeometry(bodyW, bodyH, thick), color, { position: [0, hem + bodyH / 2, 0] }),
   );
   for (const side of [-1, 1]) {
     local.push(
-      piece(new BoxGeometry(bodyW / 2 + 0.03, 0.07, thick), color, {
-        position: [side * (bodyW / 4 + 0.015), top - 0.01, 0],
-        rotation: [0, 0, -side * 0.32],
+      piece(new BoxGeometry(bodyW / 2 + 0.03, 0.08, thick), color, {
+        position: [side * (bodyW / 4 + 0.015), top - 0.02, 0],
+        rotation: [0, 0, -side * 0.18],
       }),
-      piece(new BoxGeometry(0.11, 0.17, thick * 0.95), color, {
-        position: [side * (bodyW / 2 + 0.05), top - 0.1, 0],
-        rotation: [0, 0, side * 0.45],
+      piece(new BoxGeometry(0.15, 0.25, thick * 0.95), color, {
+        position: [side * (bodyW / 2 + 0.055), top - 0.16, 0],
+        rotation: [0, 0, side * 0.22],
       }),
     );
   }
@@ -1460,7 +1470,7 @@ function teePieces(
   for (const face of [-1, 1]) {
     local.push(
       piece(
-        new TorusGeometry(0.05, 0.008, 3, 8, Math.PI),
+        new TorusGeometry(0.058, 0.011, 3, 8, Math.PI),
         shade(color, color === TEE_BLACK ? 1.6 : 0.85),
         {
           position: [0, top - 0.005, face * (thick / 2)],
@@ -1469,16 +1479,12 @@ function teePieces(
       ),
     );
   }
-  if (print !== null) {
-    local.push(
-      piece(new BoxGeometry(0.13, 0.1, 0.004), print, {
-        position: [0, top - 0.17, thick / 2 + 0.002],
-      }),
-    );
-  }
-  const place = new Matrix4().makeRotationY(yaw).setPosition(railX, 0, z);
+  const place = new Matrix4().makeRotationY(railAngle + jitter).setPosition(x, 0, z);
   for (const p of local) p.geometry.applyMatrix4(place);
-  return local;
+  // Móc chỉ xoay theo thanh treo (không lệch theo áo): lúc nào cũng ôm thanh.
+  const hookPlace = new Matrix4().makeRotationY(railAngle).setPosition(x, 0, z);
+  for (const p of hook) p.geometry.applyMatrix4(hookPlace);
+  return [...hook, ...local];
 }
 
 function bearGeometry(): BufferGeometry {

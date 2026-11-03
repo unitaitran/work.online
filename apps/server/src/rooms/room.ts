@@ -247,6 +247,11 @@ export class Room {
     this.broadcast(message, null);
   }
 
+  /** Hồ sơ công khai của một người đang trong phòng (sid, tên...). */
+  profileOf(userId: string): PlayerProfile | null {
+    return this.members.get(userId)?.profile ?? null;
+  }
+
   /** Tư thế hiện tại (ngồi máy, ngồi ghế...) theo server. */
   poseOf(userId: string): Pose | null {
     return this.members.get(userId)?.pose ?? null;

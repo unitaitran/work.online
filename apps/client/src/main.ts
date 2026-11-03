@@ -1061,12 +1061,23 @@ function start(): void {
     const respondEvent = (): void => {
       const ev = eventState;
       if (!ev) return;
+      // Bấm nút trên banner là tự chạy tới chỗ làm nhiệm vụ rồi làm luôn.
       if (ev.kind === 'coffee_out' && coffeeSpot) {
         const p = scene.getPlayerPosition();
         if (Math.hypot(p.x - coffeeSpot.approach.x, p.z - coffeeSpot.approach.z) > 2.4) {
-          officeHudView.showToast(STRINGS.events.needCoffee);
+          const started = scene.goToItem(coffeeSpot.id, () => {
+            if (eventState?.id === ev.id) room.send({ type: 'event_respond', id: ev.id });
+          });
+          if (!started) officeHudView.showToast(STRINGS.events.needCoffee);
           return;
         }
+      }
+      if (ev.kind === 'surprise_meeting') {
+        // Ngồi vào ghế họp trống gần nhất (ngồi xuống là banner tự tắt).
+        const seat = scene.nearestFreeSeat('meeting');
+        if (seat) scene.requestInteractionById(seat);
+        else officeHudView.showToast(STRINGS.events.noMeetingSeat);
+        return;
       }
       room.send({ type: 'event_respond', id: ev.id });
       if (ev.kind === 'wifi_down') audio.play('keyboard');

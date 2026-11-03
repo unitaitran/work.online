@@ -76,7 +76,8 @@ export function mountRoomEventBanner(
       title.textContent = s.title;
       text.textContent = s.body;
       action.textContent = s.action;
-      action.hidden = s.action === '';
+      // Sự kiện nào cũng có nút: bấm là tự chạy tới làm nhiệm vụ.
+      action.hidden = false;
       action.disabled = false;
       progressText.textContent =
         event.goal !== undefined ? STRINGS.events.progress(event.progress ?? 0, event.goal) : '';

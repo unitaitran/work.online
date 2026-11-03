@@ -5,6 +5,7 @@ import type { Appearance } from './character';
 import type { RoomEventKind, RoomEventView } from './social';
 import type { Branch } from './levels';
 import type { JobTag } from './job';
+import type { MilkTeaInviteError, MilkTeaReplyError, MilkTeaRoundView } from './milkTea';
 
 /** Đường dẫn WebSocket trên server (dev: Vite chuyển tiếp tới server). Token ở query `?token=`. */
 export const WS_PATH = '/ws';
@@ -38,6 +39,7 @@ export const EMOTES = [
   'sleepy',
   'coffee',
   'cheer',
+  'tea',
 ] as const;
 export type Emote = (typeof EMOTES)[number];
 
@@ -143,6 +145,16 @@ export const clientEventRespondSchema = z.strictObject({
   id: z.number().int().nonnegative(),
 });
 
+/** Rủ cả phòng uống trà sữa (mình khao, mỗi cốc MILK_TEA.price xu). */
+export const clientTeaInviteSchema = z.strictObject({ type: z.literal('tea_invite') });
+
+/** Nhận lời / từ chối lời rủ uống trà sữa. */
+export const clientTeaReplySchema = z.strictObject({
+  type: z.literal('tea_reply'),
+  id: z.number().int().nonnegative(),
+  accept: z.boolean(),
+});
+
 /** Chuyển sang phòng khác (bản đồ toà nhà). */
 export const clientSwitchRoomSchema = z.strictObject({
   type: z.literal('switch_room'),
@@ -160,6 +172,8 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   clientActionSchema,
   clientEventRespondSchema,
   clientSwitchRoomSchema,
+  clientTeaInviteSchema,
+  clientTeaReplySchema,
 ]);
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
@@ -205,6 +219,17 @@ export type ServerMessage =
   | { type: 'room_plants'; plants: PlantView[] }
   | { type: 'plant_added'; plant: PlantView }
   | { type: 'plant_removed'; ids: number[] }
+  /** Có người rủ cả phòng uống trà sữa (gửi cho mọi người trừ người rủ). */
+  | { type: 'tea_round'; round: MilkTeaRoundView }
+  /** Người rủ: lượt của mình đã mở (đã trả cốc của mình). */
+  | { type: 'tea_started'; round: MilkTeaRoundView }
+  | { type: 'tea_failed'; reason: MilkTeaInviteError }
+  /** Kết quả trả lời của mình. */
+  | { type: 'tea_replied'; id: number; accept: boolean; ok: boolean; reason?: MilkTeaReplyError }
+  /** Một người nhận lời (cả phòng thấy). */
+  | { type: 'tea_served'; id: number; sid: number; cups: number }
+  /** Lượt rủ kết thúc: tổng số cốc (gồm cốc người rủ). */
+  | { type: 'tea_end'; id: number; cups: number; hostSid: number }
   | ActionServerMessage;
 
 // ---------------------------------------------------------------------------

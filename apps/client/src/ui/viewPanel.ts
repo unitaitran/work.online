@@ -6,6 +6,7 @@ import { el } from './dom';
 export interface ViewControls {
   setXray(on: boolean): void;
   setAutoRotate(on: boolean): void;
+  setFollowCamera(on: boolean): void;
   setTopView(on: boolean): void;
   setZoneLabels(on: boolean): void;
   resetView(): void;
@@ -18,7 +19,7 @@ export function mountViewPanel(
   menu: HTMLElement | null = null,
 ): { dispose(): void } {
   const s = STRINGS.view;
-  const state = { xray: false, rotate: false, top: false, labels: true };
+  const state = { xray: false, rotate: false, top: false, labels: true, follow: false };
   const toggle = el('button', {
     className: 'button button-soft view-button',
     text: `🎥 ${s.open}`,
@@ -32,7 +33,7 @@ export function mountViewPanel(
 
   const switchButton = (
     label: string,
-    key: 'xray' | 'rotate' | 'top' | 'labels',
+    key: 'xray' | 'rotate' | 'top' | 'labels' | 'follow',
     apply: (on: boolean) => void,
   ) => {
     const b = el('button', { className: 'view-switch', text: label, attrs: { type: 'button' } });
@@ -52,6 +53,9 @@ export function mountViewPanel(
   });
   const rotate = switchButton(s.autoRotate, 'rotate', (on) => {
     controls.setAutoRotate(on);
+  });
+  const follow = switchButton(s.follow, 'follow', (on) => {
+    controls.setFollowCamera(on);
   });
   const top = switchButton(s.topDown, 'top', (on) => {
     controls.setTopView(on);
@@ -76,7 +80,7 @@ export function mountViewPanel(
     el('h2', { className: 'view-title', text: s.title }),
     el('div', {
       className: 'view-grid',
-      children: [xray.element, rotate.element, top.element, labels.element, reset],
+      children: [follow.element, xray.element, rotate.element, top.element, labels.element, reset],
     }),
     el('p', { className: 'view-hint', text: s.hint }),
   );
