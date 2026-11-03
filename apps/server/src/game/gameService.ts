@@ -111,7 +111,7 @@ export function attachGameService(
       push(userId);
     },
   });
-  // Rủ cả phòng uống trà sữa: người rủ khao, server trừ xu (giao dịch + sổ cái).
+  // Rủ cả phòng uống trà sữa: ai uống người nấy trả, server trừ xu (giao dịch + sổ cái), cộng XP.
   const tea = new MilkTeaService({
     now: ctx.now,
     charge: (userId, amount, reason) =>
@@ -124,6 +124,7 @@ export function attachGameService(
         ctx.repos.ledger.add(userId, at, -amount, reason, balance);
         return true;
       }),
+    reward: (userId) => engine.grantMilkTea(contextFor(userId)).granted,
     push: (userId) => {
       push(userId);
     },

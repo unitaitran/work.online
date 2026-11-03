@@ -1,6 +1,7 @@
-// Rủ cả phòng uống trà sữa. Người rủ khao: trả MILK_TEA.price xu cho cốc của mình lúc rủ và cho
-// mỗi người nhận lời. Mỗi phòng một lượt cùng lúc, mỗi người rủ lại sau MILK_TEA.cooldownMs.
-// Xu do server trừ (giao dịch + sổ cái), client chỉ gửi "rủ" / "nhận lời" / "thôi".
+// Rủ cả phòng uống trà sữa. Mỗi người tự trả MILK_TEA.price xu cho cốc của mình (người rủ trả lúc
+// rủ, người khác trả lúc nhận lời) và được XP bù lại (luật chung, giới hạn số cốc mỗi ngày).
+// Mỗi phòng một lượt cùng lúc, mỗi người rủ lại sau MILK_TEA.cooldownMs.
+// Xu và XP do server tính, client chỉ gửi "rủ" / "nhận lời" / "thôi".
 import {
   MILK_TEA,
   type MilkTeaInviteError,
@@ -20,8 +21,10 @@ interface Round {
 
 export interface MilkTeaOptions {
   now: () => number;
-  /** Trừ xu của người rủ (giao dịch, ghi sổ). false nếu không đủ xu. */
+  /** Trừ xu (giao dịch, ghi sổ). false nếu không đủ xu. */
   charge(userId: string, amount: number, reason: string): boolean;
+  /** Cộng XP uống trà sữa (luật chung); trả số XP thực nhận. */
+  reward(userId: string): number;
   /** Báo tiến độ (số xu) mới cho người chơi. */
   push(userId: string): void;
 }
@@ -33,7 +36,7 @@ export class MilkTeaService {
 
   constructor(private readonly o: MilkTeaOptions) {}
 
-  /** Rủ cả phòng. Trả lỗi hoặc null (đã mở, đã trừ xu cốc của người rủ). */
+  /** Rủ cả phòng. Trả lỗi hoặc null (đã mở, người rủ đã trả cốc của mình và được XP). */
   invite(room: Room, userId: string): MilkTeaInviteError | null {
     const now = this.o.now();
     const current = this.rounds.get(room.id);
@@ -44,7 +47,8 @@ export class MilkTeaService {
     if (room.connected < 2) return 'alone';
     const host = room.profileOf(userId);
     if (!host) return 'alone';
-    if (!this.o.charge(userId, MILK_TEA.price, 'tea:own')) return 'coins';
+    if (!this.o.charge(userId, MILK_TEA.price, 'tea:cup')) return 'coins';
+    const xp = this.o.reward(userId);
     this.o.push(userId);
     this.lastInvite.set(userId, now);
     const view: MilkTeaRoundView = {
@@ -56,18 +60,25 @@ export class MilkTeaService {
     };
     const round: Round = { view, hostId: userId, room, replied: new Set(), cups: 1 };
     this.rounds.set(room.id, round);
-    room.sendTo(userId, { type: 'tea_started', round: view });
+    room.sendTo(userId, { type: 'tea_started', round: view, xp });
     for (const id of room.userIds()) {
       if (id !== userId) room.sendTo(id, { type: 'tea_round', round: view });
     }
     return null;
   }
 
-  /** Nhận lời / từ chối. Nhận lời thì người rủ trả thêm một cốc. */
+  /** Nhận lời (tự trả một cốc, được XP) / từ chối. */
   reply(room: Room, userId: string, id: number, accept: boolean): void {
     const round = this.rounds.get(room.id);
-    const send = (ok: boolean, reason?: MilkTeaReplyError): void => {
-      room.sendTo(userId, { type: 'tea_replied', id, accept, ok, ...(reason ? { reason } : {}) });
+    const send = (ok: boolean, reason?: MilkTeaReplyError, xp?: number): void => {
+      room.sendTo(userId, {
+        type: 'tea_replied',
+        id,
+        accept,
+        ok,
+        ...(reason ? { reason } : {}),
+        ...(xp !== undefined ? { xp } : {}),
+      });
     };
     if (round?.view.id !== id || this.o.now() >= round.view.endsAt) {
       send(false, 'ended');
@@ -78,18 +89,21 @@ export class MilkTeaService {
       return;
     }
     if (round.replied.has(userId)) return;
-    round.replied.add(userId);
     if (!accept) {
+      round.replied.add(userId);
       send(true);
       return;
     }
-    if (!this.o.charge(round.hostId, MILK_TEA.price, 'tea:treat')) {
-      send(false, 'host_broke');
+    // Không đủ xu thì báo, vẫn nhận lời lại được (ví dụ sau khi kiếm thêm xu).
+    if (!this.o.charge(userId, MILK_TEA.price, 'tea:cup')) {
+      send(false, 'coins');
       return;
     }
-    this.o.push(round.hostId);
+    round.replied.add(userId);
+    const xp = this.o.reward(userId);
+    this.o.push(userId);
     round.cups += 1;
-    send(true);
+    send(true, undefined, xp);
     const guest = room.profileOf(userId);
     if (guest) {
       room.broadcastAll({ type: 'tea_served', id, sid: guest.sid, cups: round.cups });

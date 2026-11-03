@@ -24,6 +24,8 @@ export interface ActivityEventDetails {
   print: Record<string, never>;
   /** Tham gia một sự kiện phòng (sếp đi ngang, mất wifi...) thành công. */
   'room-event': { kind: string };
+  /** Uống một cốc trà sữa khi được rủ (tự trả xu, được XP bù lại). */
+  'milk-tea': Record<string, never>;
   /** Chủ công ty xét thăng chức (giới hạn một lần mỗi ngày). */
   'company-promotion': { role: number };
   /** Một phút trọn đang ngồi máy / trong phiên tập trung / ngồi họp (server đo). */
@@ -45,6 +47,7 @@ export const ACTIVITY_EVENT_TYPES: readonly ActivityEventType[] = [
   'meeting',
   'print',
   'room-event',
+  'milk-tea',
   'company-promotion',
   'work-tick',
 ];

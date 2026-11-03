@@ -167,3 +167,14 @@ Vào phòng công ty qua WebSocket: `switch_room { roomId: "company:<id>" }` (kh
 ### Phát triển
 
 Server chạy với cờ `--dev` (`npm run dev`) có thêm `POST /api/dev/shift-day { days }` (tua ngày riêng cho tài khoản) và `POST /api/dev/grant { xp?, coins? }`. Thêm `POST /api/dev/room-event { kind }` để gọi ngay một sự kiện phòng. Bản chạy thật không có các API này.
+
+## Rủ uống trà sữa
+
+| Hướng                  | Tin                                                                         | Ghi chú                                                         |
+| ---------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| client → server        | `{ type: 'tea_invite' }`                                                    | rủ cả phòng, tự trả cốc của mình (`MILK_TEA.price` xu), được XP |
+| client → server        | `{ type: 'tea_reply', id, accept }`                                         | nhận lời (tự trả một cốc, được XP) / từ chối                    |
+| server → người rủ      | `tea_started` / `tea_failed { reason: busy \| cooldown \| coins \| alone }` |                                                                 |
+| server → người khác    | `tea_round { round }`                                                       | cả người vào phòng giữa chừng                                   |
+| server → người trả lời | `tea_replied { id, accept, ok, reason? }`                                   | `ended`, `coins`, `host`; `xp` khi uống                         |
+| server → cả phòng      | `tea_served { id, sid, cups }`, `tea_end { id, cups, hostSid }`             |                                                                 |

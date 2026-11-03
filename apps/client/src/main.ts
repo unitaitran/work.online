@@ -89,6 +89,8 @@ import { mountOfficeHud, type OfficeHud } from './ui/officeHud';
 import { mountProfilePanel, type ProfileTab } from './ui/profilePanel';
 import { askChoices, celebratePromotion, type PromotionDeps } from './ui/promotion';
 import { mountRoomEventBanner } from './ui/roomEventBanner';
+import { mountTeaInvite } from './ui/teaInvite';
+import { enhanceSelects } from './ui/prettySelect';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
@@ -102,6 +104,8 @@ function requireElement<T extends Element>(selector: string, type: abstract new 
 document.title = GAME_NAME;
 const canvas = requireElement('#scene', HTMLCanvasElement);
 const hudRoot = requireElement('#hud', HTMLElement);
+// Mọi ô chọn (<select>) trong game dùng dropdown tự vẽ cho đẹp, mở/đóng mượt.
+enhanceSelects(hudRoot);
 const debug = new URLSearchParams(window.location.search).has('debug');
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 /** Chế độ máy yếu tự phát hiện: bắt đầu ở chất lượng thấp (ít bóng, ít nhân vật chi tiết, ít hiệu ứng). */
@@ -843,6 +847,42 @@ function start(): void {
         case 'quick_chat':
           scene.remotes.say(message.sid, QUICK_CHATS[message.index] ?? '');
           break;
+        // ---------- Rủ uống trà sữa ----------
+        case 'tea_round':
+          teaCard.show(message.round, serverOffset);
+          audio.play('ting');
+          break;
+        case 'tea_started':
+          myTeaRound = message.round.id;
+          officeHudView.showToast(STRINGS.tea.started(message.round.price));
+          if (message.xp > 0) officeHudView.showXpGain(message.xp, false);
+          scene.playerSay(STRINGS.tea.sip, 'coffee');
+          break;
+        case 'tea_failed':
+          officeHudView.showToast(STRINGS.tea.failed[message.reason] ?? '');
+          break;
+        case 'tea_replied':
+          teaCard.replied(message.id, message.accept, message.ok, message.reason);
+          if (message.ok && message.accept) {
+            scene.playerSay(STRINGS.tea.sip, 'coffee');
+            if (message.xp) officeHudView.showXpGain(message.xp, false);
+          }
+          break;
+        case 'tea_served': {
+          scene.remotes.say(message.sid, STRINGS.tea.sip, 'coffee');
+          if (message.id === myTeaRound) {
+            const guest = scene.remotes.list().find((p) => p.sid === message.sid);
+            officeHudView.showToast(STRINGS.tea.served(guest?.name ?? ''));
+          }
+          break;
+        }
+        case 'tea_end':
+          teaCard.end(message.id);
+          if (message.id === myTeaRound) {
+            myTeaRound = null;
+            officeHudView.showToast(STRINGS.tea.ended(message.cups));
+          }
+          break;
         case 'correct':
           scene.correctPosition(message.x, message.z);
           break;
@@ -1085,6 +1125,11 @@ function start(): void {
     const banner = mountRoomEventBanner(hudRoot, () => {
       respondEvent();
     });
+    // Rủ uống trà sữa: thẻ lời mời và lượt mình đang rủ (để báo tổng số cốc đã khao).
+    let myTeaRound: number | null = null;
+    const teaCard = mountTeaInvite(hudRoot, (id, accept) => {
+      room.send({ type: 'tea_reply', id, accept });
+    });
     /** Loại chỗ đang ngồi (bàn, ghế họp...) hoặc null nếu đang đứng. */
     const seatedKind = (): string | null => {
       const id = scene.getSeatedId();
@@ -1255,6 +1300,10 @@ function start(): void {
       const modal = officeActivities.openPanel(STRINGS.social.open);
       mountSocialPanel(modal.body, {
         players: () => scene.remotes.list(),
+        onTeaInvite: () => {
+          room.send({ type: 'tea_invite' });
+          modal.close();
+        },
         onEmote: (emote) => {
           room.send({ type: 'emote', emote });
           scene.playerSay(STRINGS.social.emoteNames[emote] ?? '', emote);
@@ -1414,6 +1463,7 @@ function start(): void {
       window.clearInterval(moodTimer);
       offMood();
       banner.dispose();
+      teaCard.dispose();
       room.stop();
       progress.setSender(null);
       scene.remotes.clear();

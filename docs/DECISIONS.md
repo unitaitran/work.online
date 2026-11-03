@@ -380,3 +380,13 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Điện thoại: cần gạt bên phải, các chức năng gom vào menu ☰ góc trái (bấm mới bật lên), bỏ dòng hướng dẫn phím.
 - "Kinh công sở" đổi thành "thư công sở" (cửa sổ "Soạn thư"); file dữ liệu `thu-cong-so.ts`.
 - Bảng Công ty (khi chưa thuộc công ty người chơi) bỏ danh bạ, vì đã có ở "Tìm việc".
+
+## Rủ cả phòng uống trà sữa (2026-11-03)
+
+- Mỗi người tự trả 5 xu cho cốc của mình (người rủ trả lúc rủ, người khác trả lúc nhận lời), uống xong được 10 XP (`BALANCE.milkTea`, hoạt động `milk-tea` trong luật chung). XP trà sữa **không sinh xu** (khác các hoạt động khác), nên mỗi cốc thật sự tốn 5 xu. Tối đa 3 cốc tính XP mỗi ngày (`perDayLimits.milkTea`). Không đủ xu thì không rủ / không nhận lời được.
+- "Cả công ty" = cả phòng đang ở (phòng công ty, hoặc văn phòng chung). Mở 30 giây, mỗi phòng một lượt cùng lúc, mỗi người 5 phút rủ một lần, phải có ít nhất 2 người online.
+- Server trừ xu trong giao dịch, ghi sổ cái (`tea:cup`) và cộng XP; client chỉ gửi `tea_invite` / `tea_reply`.
+
+## Dropdown tự vẽ (2026-11-03)
+
+- Danh sách của `<select>` mặc định (xám) gần như không đổi màu được, nên mọi `<select>` trong HUD được tự thay bằng dropdown tự vẽ (`ui/prettySelect.ts`): `<select>` gốc vẫn giữ giá trị và phát `change`, code cũ không phải sửa. Có bàn phím (mũi tên/Enter/Esc), role listbox, tôn trọng "giảm chuyển động".

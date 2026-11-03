@@ -342,6 +342,14 @@ export class ProgressEngine {
     return this.applyAndSave(player.userId, this.state(player.userId), event, today, now).outcome;
   }
 
+  /** Uống trà sữa khi được rủ (tự trả xu ở MilkTeaService): XP theo luật chung. */
+  grantMilkTea(player: PlayerContext): ActionOutcome {
+    const now = this.now(player.userId);
+    const today = this.today(player.userId, player.timeZone);
+    const event = makeEvent('milk-tea', now, 0, {});
+    return this.applyAndSave(player.userId, this.state(player.userId), event, today, now).outcome;
+  }
+
   private applyAndSave(
     userId: string,
     state: ProgressState,

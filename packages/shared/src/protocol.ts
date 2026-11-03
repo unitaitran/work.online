@@ -145,10 +145,10 @@ export const clientEventRespondSchema = z.strictObject({
   id: z.number().int().nonnegative(),
 });
 
-/** Rủ cả phòng uống trà sữa (mình khao, mỗi cốc MILK_TEA.price xu). */
+/** Rủ cả phòng uống trà sữa (mỗi người tự trả MILK_TEA.price xu, uống xong được XP). */
 export const clientTeaInviteSchema = z.strictObject({ type: z.literal('tea_invite') });
 
-/** Nhận lời / từ chối lời rủ uống trà sữa. */
+/** Nhận lời (tự trả một cốc) / từ chối lời rủ uống trà sữa. */
 export const clientTeaReplySchema = z.strictObject({
   type: z.literal('tea_reply'),
   id: z.number().int().nonnegative(),
@@ -221,11 +221,19 @@ export type ServerMessage =
   | { type: 'plant_removed'; ids: number[] }
   /** Có người rủ cả phòng uống trà sữa (gửi cho mọi người trừ người rủ). */
   | { type: 'tea_round'; round: MilkTeaRoundView }
-  /** Người rủ: lượt của mình đã mở (đã trả cốc của mình). */
-  | { type: 'tea_started'; round: MilkTeaRoundView }
+  /** Người rủ: lượt của mình đã mở (đã trả cốc của mình, `xp` được cộng). */
+  | { type: 'tea_started'; round: MilkTeaRoundView; xp: number }
   | { type: 'tea_failed'; reason: MilkTeaInviteError }
   /** Kết quả trả lời của mình. */
-  | { type: 'tea_replied'; id: number; accept: boolean; ok: boolean; reason?: MilkTeaReplyError }
+  | {
+      type: 'tea_replied';
+      id: number;
+      accept: boolean;
+      ok: boolean;
+      reason?: MilkTeaReplyError;
+      /** XP được cộng khi uống. */
+      xp?: number;
+    }
   /** Một người nhận lời (cả phòng thấy). */
   | { type: 'tea_served'; id: number; sid: number; cups: number }
   /** Lượt rủ kết thúc: tổng số cốc (gồm cốc người rủ). */
