@@ -60,6 +60,9 @@ interface Remote {
   emote?: string | undefined;
 }
 
+/** Người khác ngồi trong bán kính này quanh mình (khi mình đang ngồi) coi như cùng ghế. */
+const SAME_SEAT_RADIUS = 0.35;
+
 export interface RemoteListEntry {
   sid: number;
   code: string;
@@ -219,7 +222,7 @@ export class RemotePlayers {
    */
   update(
     dt: number,
-    viewer: { x: number; z: number },
+    viewer: { x: number; z: number; seated?: boolean },
     project: (x: number, y: number, z: number) => { x: number; y: number } | null,
   ): void {
     const renderAt = this.now() - INTERP_DELAY_MS;
@@ -233,7 +236,13 @@ export class RemotePlayers {
           player.emote = undefined;
         }
       }
-      if (this.hiddenCodes.has(player.profile.code)) {
+      // Hai người ngồi cùng một ghế: trên màn của mình chỉ thấy mình (không vẽ người kia chồng lên).
+      const remoteSeated = player.pose === 'sit' || player.pose === 'type';
+      const sameSeat =
+        viewer.seated === true &&
+        remoteSeated &&
+        Math.hypot(player.x - viewer.x, player.z - viewer.z) < SAME_SEAT_RADIUS;
+      if (sameSeat || this.hiddenCodes.has(player.profile.code)) {
         this.hide(player);
         continue;
       }
