@@ -2,7 +2,7 @@
 // Quy ước: nhân vật nhìn về +Z; xoay X âm ở vai/hông = đưa tay/chân ra phía trước.
 import { lerp } from '../engine/mathUtils';
 
-export const POSES = ['stand', 'walk', 'sit', 'type'] as const;
+export const POSES = ['stand', 'walk', 'sit', 'type', 'lie'] as const;
 export type PoseName = (typeof POSES)[number];
 
 export interface PoseState {
@@ -19,6 +19,8 @@ export interface PoseState {
   armRightZ: number;
   legLeftX: number;
   legRightX: number;
+  /** 0 = đứng/ngồi, 1 = nằm ngửa (cả người ngả ra sau quanh gót chân). */
+  lie: number;
 }
 
 const POSE_KEYS = [
@@ -32,6 +34,7 @@ const POSE_KEYS = [
   'armRightZ',
   'legLeftX',
   'legRightX',
+  'lie',
 ] as const satisfies readonly (keyof PoseState)[];
 
 const WALK_FREQUENCY = 9;
@@ -53,6 +56,7 @@ export function computePose(pose: PoseName, t: number): PoseState {
         armRightZ: -0.12,
         legLeftX: 0,
         legRightX: 0,
+        lie: 0,
       };
     }
     case 'walk': {
@@ -68,6 +72,7 @@ export function computePose(pose: PoseName, t: number): PoseState {
         armRightZ: -0.1,
         legLeftX: -swing * 0.55,
         legRightX: swing * 0.55,
+        lie: 0,
       };
     }
     case 'sit':
@@ -82,6 +87,7 @@ export function computePose(pose: PoseName, t: number): PoseState {
         armRightZ: -0.08,
         legLeftX: -1.35,
         legRightX: -1.35,
+        lie: 0,
       };
     case 'type': {
       const tap = Math.sin(t * TYPE_FREQUENCY);
@@ -97,6 +103,24 @@ export function computePose(pose: PoseName, t: number): PoseState {
         armRightZ: 0.12,
         legLeftX: -1.35,
         legRightX: -1.35,
+        lie: 0,
+      };
+    }
+    case 'lie': {
+      // Nằm ngửa thư giãn: thở chậm, tay xuôi hai bên, chân duỗi thẳng.
+      const breathe = Math.sin(t * 1.4);
+      return {
+        rootY: 0,
+        bodyPitch: 0,
+        headPitch: -0.08 + breathe * 0.015,
+        headRoll: Math.sin(t * 0.35) * 0.08,
+        armLeftX: breathe * 0.03,
+        armRightX: -breathe * 0.03,
+        armLeftZ: 0.22,
+        armRightZ: -0.22,
+        legLeftX: 0,
+        legRightX: 0,
+        lie: 1,
       };
     }
   }
@@ -110,7 +134,7 @@ export function blendPose(a: PoseState, b: PoseState, k: number): PoseState {
 }
 
 export function isSeated(pose: PoseName): boolean {
-  return pose === 'sit' || pose === 'type';
+  return pose === 'sit' || pose === 'type' || pose === 'lie';
 }
 
 // ---------------------------------------------------------------------------

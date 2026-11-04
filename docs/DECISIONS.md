@@ -403,3 +403,20 @@ Ghi lại các lựa chọn mặc định khi prompt không nói rõ. Mỗi mụ
 - Xu: 3–10 theo độ khó và vai trò (Nhân viên 3–7, Chuyên viên cao cấp 5–10), trừ từ quỹ công ty; quỹ hết thì không trả. Thực tập sinh không được.
 - XP: 4 + 2 × độ khó (6–14), không sinh xu, tối đa 2 lần/ngày vì công ty đông người xong dự án rất nhanh.
 - Không thưởng tài khoản nghi là phụ (cùng IP với chủ) (người mới vào vẫn được thưởng).
+
+## Bảng task kiểu nhận việc
+
+- Mỗi lượt chia 4 lá úp (ngẫu nhiên riêng từng người, bỏ qua việc đang giữ); lật từng lá hoặc "Lật hết".
+- Nhận tối đa 3 việc cùng lúc. Server giữ danh sách (`ProgressState.tasks`, trường tuỳ chọn nên không cần đổi phiên bản).
+- Xác nhận xong phải đứng ở bảng task và sau ít nhất 1 phút kể từ lúc nhận; server tạo sự kiện `task-flip` (XP và giới hạn 5 lần/ngày như cũ). Bỏ việc được ở bất cứ đâu.
+- Việc sếp giao về task: "Hoàn thành 1 / 2 / 3 task".
+
+## Việc sếp giao tính theo phút
+
+- Tập trung, ngồi họp, họp với sếp: tính bằng từng phút server đếm khi đang ngồi (`work-tick`), không đợi kết thúc phiên. Đủ phút là xong ngay; client báo và tự đứng dậy / kết thúc phiên tập trung.
+- CEO giao việc: nhân viên đang online nhận thông báo ngay ("CEO vừa giao việc cho bạn: …"), thẻ việc trên HUD hiện theo.
+
+## Thông báo thưởng dự án
+
+- Mỗi nhân viên nhận thông báo riêng số xu và XP của mình; thực tập sinh được báo là chưa được chia thưởng; ai đã nhận đủ thưởng trong ngày được báo 0.
+- CEO được báo đã thưởng bao nhiêu người, tổng bao nhiêu xu từ quỹ. Bảng tin công ty ghi ai nhận bao nhiêu (người offline vẫn xem được).

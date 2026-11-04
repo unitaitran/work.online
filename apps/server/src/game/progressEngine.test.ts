@@ -102,6 +102,58 @@ describe('ProgressEngine', () => {
     expect(r).toMatchObject({ ok: true, outcome: { granted: 20 } });
   });
 
+  it('bảng task: nhận việc ở bảng, đi làm đủ lâu rồi quay lại xác nhận mới có XP', () => {
+    position = at('desk-0');
+    expect(act({ kind: 'task_accept', taskId: 3 })).toEqual({ ok: false, reason: 'too_far' });
+    position = at('taskboard');
+    expect(act({ kind: 'task_accept', taskId: 3 })).toMatchObject({ ok: true });
+    clock += 1000;
+    expect(act({ kind: 'task_accept', taskId: 3 })).toEqual({ ok: false, reason: 'not_allowed' });
+    clock += 1000;
+    expect(act({ kind: 'task_done', taskId: 3 })).toEqual({ ok: false, reason: 'not_started' });
+    // Đi làm ở chỗ khác, xác nhận từ xa không được.
+    position = at('desk-0');
+    clock += 60_000;
+    expect(act({ kind: 'task_done', taskId: 3 })).toEqual({ ok: false, reason: 'too_far' });
+    position = at('taskboard');
+    clock += 2000;
+    const done = act({ kind: 'task_done', taskId: 3 });
+    expect(done).toMatchObject({ ok: true, outcome: { granted: 15 } });
+    expect(engine.state(player.userId).tasks).toEqual([]);
+    clock += 2000;
+    expect(act({ kind: 'task_done', taskId: 3 })).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('bảng task: giữ tối đa 3 việc, bỏ việc thì nhận thêm được', () => {
+    position = at('taskboard');
+    for (const taskId of [1, 2, 4]) {
+      expect(act({ kind: 'task_accept', taskId })).toMatchObject({ ok: true });
+      clock += 1000;
+    }
+    expect(act({ kind: 'task_accept', taskId: 5 })).toEqual({ ok: false, reason: 'not_allowed' });
+    clock += 1000;
+    expect(act({ kind: 'task_drop', taskId: 2 })).toMatchObject({ ok: true });
+    clock += 1000;
+    expect(act({ kind: 'task_accept', taskId: 5 })).toMatchObject({ ok: true });
+    expect(engine.state(player.userId).tasks?.map((t) => t.taskId)).toEqual([1, 4, 5]);
+  });
+
+  it('việc sếp giao theo phút: đủ phút họp là xong ngay, không đợi đứng dậy', () => {
+    const mission = {
+      templateId: 'meeting-2',
+      text: '',
+      goalText: '',
+      goal: { kind: 'meetingMinutes' as const, amount: 2 },
+      progress: 0,
+      assignedAt: clock,
+      completedAt: null,
+    };
+    expect(engine.assignMission(player.userId, mission)).toBe(true);
+    expect(engine.accrueWork(player, 'meeting', 60_000)?.outcome.completedMission).toBeNull();
+    const second = engine.accrueWork(player, 'meeting', 60_000);
+    expect(second?.outcome.completedMission?.templateId).toBe('meeting-2');
+  });
+
   it('tặng cà phê cần pha xong trước (server đo thời gian pha)', () => {
     position = at('coffee');
     expect(act({ kind: 'coffee_gift', npcId: 'npc-1' })).toEqual({

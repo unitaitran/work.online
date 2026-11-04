@@ -16,7 +16,8 @@ import {
 } from './focusTyping/focusTyping';
 import { fortuneFor, fortuneIndex } from './fortune/fortune';
 import { generatePlayerId, isPlayerId, loadOrCreatePlayerId } from './playerId';
-import { chosenTaskId, complete, deal, dealTasks, flip } from './taskFlip/taskFlip';
+import { deal, dealTasks, flip, flipAll, formatWait } from './taskFlip/taskFlip';
+import { MICRO_TASK_COUNT, TASK_DEAL_COUNT } from '@dilam/shared';
 import {
   addVent,
   validateVent,
@@ -177,32 +178,34 @@ describe('quẻ KPI', () => {
   });
 });
 
-describe('lật task', () => {
-  it('chia 3 việc khác nhau', () => {
+describe('bảng task', () => {
+  it('số việc nhỏ khớp với server', () => {
+    expect(MICRO_TASKS).toHaveLength(MICRO_TASK_COUNT);
+  });
+
+  it('chia các việc khác nhau, bỏ qua việc đang giữ', () => {
     const rng = seededRng(3);
     for (let i = 0; i < 50; i += 1) {
-      const cards = dealTasks(rng);
-      expect(cards).toHaveLength(3);
-      expect(new Set(cards).size).toBe(3);
+      const cards = dealTasks(rng, TASK_DEAL_COUNT, [0, 1, 2]);
+      expect(cards).toHaveLength(TASK_DEAL_COUNT);
+      expect(new Set(cards).size).toBe(TASK_DEAL_COUNT);
+      for (const c of cards) expect([0, 1, 2]).not.toContain(c);
     }
   });
 
-  it('lật một lá, chỉ lật được một lần, rồi đánh dấu hoàn thành', () => {
+  it('lật từng lá hoặc lật hết một lần', () => {
     let s = deal(seededRng(9));
-    expect(chosenTaskId(s)).toBeNull();
-    expect(complete(s, 10)).toBe(s);
-    s = flip(s, 1, 100);
-    expect(s.phase).toBe('flipped');
-    expect(chosenTaskId(s)).toBe(s.cards[1]);
-    expect(flip(s, 2, 200)).toBe(s);
-    s = complete(s, 500);
-    expect(s).toMatchObject({ phase: 'done', flippedAt: 100, doneAt: 500 });
+    expect(s.flipped.every((f) => !f)).toBe(true);
+    s = flip(s, 1);
+    expect(s.flipped).toEqual([false, true, false, false]);
+    expect(flip(s, 1)).toBe(s);
+    expect(flip(s, 9)).toBe(s);
+    expect(flipAll(s).flipped.every(Boolean)).toBe(true);
   });
 
-  it('lật lá ngoài khoảng thì bỏ qua', () => {
-    const s = deal(seededRng(1));
-    expect(flip(s, 5, 0)).toBe(s);
-    expect(flip(s, -1, 0)).toBe(s);
+  it('hiện thời gian chờ dạng m:ss', () => {
+    expect(formatWait(60_000)).toBe('1:00');
+    expect(formatWait(5_200)).toBe('0:06');
   });
 });
 

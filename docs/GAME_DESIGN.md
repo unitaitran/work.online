@@ -67,7 +67,7 @@ Mỗi ngày có giới hạn XP, vượt mức chỉ nhận một phần.
 - Gõ phím.
 - Thư công sở (mỗi tiếng gõ ra một dòng mail mẫu).
 - Xin quẻ KPI mỗi ngày một lần.
-- Lật 1 trong 3 task.
+- Bảng task: lật bài xem việc nhỏ, nhận tối đa 3 việc, làm xong quay lại bảng xác nhận để nhận XP.
 - Tường than thở ẩn danh.
 - Cà phê.
 - Công quả.

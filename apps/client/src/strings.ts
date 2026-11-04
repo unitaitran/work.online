@@ -70,6 +70,7 @@ export const STRINGS = {
     walk: 'Đi',
     sit: 'Ngồi',
     type: 'Gõ phím',
+    lie: 'Nằm',
   },
   office: {
     /** Tên tầng văn phòng; giai điệu nhạc nền cũng sinh từ tên này. */
@@ -153,7 +154,7 @@ export const STRINGS = {
       window: 'Ngắm thành phố',
       gate: 'Quẹt thẻ chấm công',
       fortune: 'Xin quẻ KPI',
-      taskboard: 'Lật task',
+      taskboard: 'Bảng task',
       ventwall: 'Tường than thở',
       ceodesk: 'Ngồi bàn CEO (quản lý công ty)',
       ceodoor: 'Quẹt thẻ phòng CEO',
@@ -322,14 +323,30 @@ export const STRINGS = {
     advice: 'Lời khuyên',
   },
   taskFlip: {
-    title: 'Lật 1 trong 3 task',
-    intro: 'Chọn một lá.',
+    title: 'Bảng task',
+    intro:
+      'Lật bài xem việc, nhận việc muốn làm (tối đa 3 việc). Làm xong quay lại bảng này bấm "Xác nhận xong" để nhận XP.',
+    heldTitle: (n: number, max: number) => `Task đang nhận (${String(n)}/${String(max)})`,
+    heldEmpty: 'Chưa nhận task nào.',
+    newTitle: 'Lật task mới',
     cardBack: 'Lá bài úp',
     cardLabel: (i: number) => `Lật lá thứ ${String(i)}`,
-    yourTask: 'Việc nhỏ của bạn:',
-    done: 'Đã xong!',
+    flipAll: 'Lật hết',
+    accept: 'Nhận',
+    accepted: 'Đã nhận',
+    full: 'Đã nhận đủ 3 task. Làm xong hoặc bỏ bớt mới nhận thêm được.',
+    wait: (time: string) => `Đang làm… ${time}`,
+    confirm: 'Xác nhận xong',
+    drop: 'Bỏ task này',
+    acceptToast: 'Đã nhận task! Làm xong quay lại bảng task để xác nhận.',
     doneToast: 'Xong thêm một việc!',
-    redeal: 'Chia lại bài',
+    redeal: 'Chia bài mới',
+    errors: {
+      too_far: 'Lại gần bảng task thêm chút nữa.',
+      not_started: 'Chưa làm đủ lâu, đợi thêm chút nhé.',
+      not_allowed: 'Không nhận thêm task này được.',
+      too_fast: 'Từ từ thôi, bấm chậm lại chút.',
+    } as Record<string, string>,
   },
   vent: {
     title: 'Tường than thở',
@@ -478,6 +495,7 @@ export const STRINGS = {
       label: 'Sếp giao việc',
       progress: (current: number, total: number) => `${String(current)}/${String(total)}`,
       done: (xp: number) => `Xong việc sếp giao! +${String(xp)} XP`,
+      fromCeo: (goal: string) => `📋 CEO vừa giao việc cho bạn: ${goal}`,
     },
     dev: {
       title: 'Công cụ dev',
@@ -972,8 +990,14 @@ export const STRINGS = {
       wearing: 'Bạn đang mặc đồng phục công ty 👕',
       notWearing: 'Bạn đang mặc đồ riêng.',
     },
-    projectBonusToast: (name: string, coins: number, xp: number) =>
-      `🎉 Công ty xong dự án ${name}! Thưởng bạn${coins > 0 ? ` +${String(coins)} xu` : ''}${xp > 0 ? ` +${String(xp)} XP` : ''}`,
+    projectBonusToast: (name: string, coins: number, xp: number, intern: boolean) =>
+      intern
+        ? `🎉 Công ty xong dự án ${name}! Thực tập sinh chưa được chia thưởng, cố lên nhé.`
+        : coins > 0 || xp > 0
+          ? `🎉 Công ty xong dự án ${name}! Bạn được thưởng +${String(coins)} xu, +${String(xp)} XP`
+          : `🎉 Công ty xong dự án ${name}! Hôm nay bạn đã nhận đủ thưởng dự án rồi.`,
+    projectPaid: (people: number, coins: number) =>
+      people > 0 ? `. Đã thưởng ${String(people)} nhân viên, tổng ${String(coins)} xu từ quỹ.` : '',
     projectDoneToast: (name: string, reward: number, reputation: number) =>
       `🎉 Sếp ơi, xong dự án "${name}" rồi! +${String(reward)} xu vào quỹ, +${String(reputation)} uy tín`,
     project: {
@@ -1112,6 +1136,8 @@ export const STRINGS = {
     feed: {
       founded: (d: Record<string, string | number>) =>
         `Công ty ${String(d.name)} chính thức khai trương!`,
+      project_bonus: (d: Record<string, string | number>) =>
+        `💰 Thưởng dự án: ${String(d.summary)} (tổng ${String(d.coins)} xu từ quỹ)`,
       project_done: (d: Record<string, string | number>): string => {
         const names =
           typeof d.industry === 'string' && typeof d.nameIndex === 'number'

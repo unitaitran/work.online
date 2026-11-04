@@ -31,7 +31,12 @@ export interface ActivityEventDetails {
   /** Công ty nơi mình làm vừa xong một dự án (server cấp; vai trò ≥ 1). */
   'company-project': { difficulty: number };
   /** Một phút trọn đang ngồi máy / trong phiên tập trung / ngồi họp (server đo). */
-  'work-tick': { kind: 'desk' | 'focus' | 'meeting'; minutes: number };
+  'work-tick': {
+    kind: 'desk' | 'focus' | 'meeting';
+    minutes: number;
+    /** Ngồi sofa họp trong phòng sếp (việc "Họp với sếp"). */
+    ceo?: boolean;
+  };
 }
 
 export type ActivityEventType = keyof ActivityEventDetails;

@@ -118,15 +118,21 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   },
   {
     id: 'task-1',
-    text: 'Sếp nhắn: "Ra bảng việc lật một task nhỏ rồi làm cho xong nha em."',
-    goalText: 'Lật và hoàn thành 1 task',
+    text: 'Sếp nhắn: "Ra bảng task nhận một việc nhỏ rồi làm cho xong nha em."',
+    goalText: 'Hoàn thành 1 task',
     goal: { kind: 'count', event: 'task-flip', amount: 1 },
   },
   {
     id: 'task-2',
-    text: 'Sếp nhắn: "Mấy việc lặt vặt trên bảng, em xử lý giúp chị hai cái nhé."',
-    goalText: 'Lật và hoàn thành 2 task',
+    text: 'Sếp nhắn: "Mấy việc lặt vặt trên bảng task, em xử lý giúp chị hai cái nhé."',
+    goalText: 'Hoàn thành 2 task',
     goal: { kind: 'count', event: 'task-flip', amount: 2 },
+  },
+  {
+    id: 'task-3',
+    text: 'Sếp nhắn: "Hôm nay bảng task nhiều việc quá, em nhận làm giúp anh ba cái nhé."',
+    goalText: 'Hoàn thành 3 task',
+    goal: { kind: 'count', event: 'task-flip', amount: 3 },
   },
   {
     id: 'fortune',
@@ -145,17 +151,19 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
 /** Bao nhiêu đơn vị tiến độ mà sự kiện này đóng góp cho mục tiêu. */
 export function missionContribution(goal: MissionGoal, event: ActivityEvent): number {
   switch (goal.kind) {
+    // Việc tính theo phút: server đếm từng phút trọn đang làm (work-tick), đủ phút là xong ngay,
+    // không phải đợi kết thúc phiên / đứng dậy.
     case 'focusMinutes':
-      return event.type === 'focus-typing'
-        ? Math.floor(Math.min(event.durationMs, event.detail.plannedMs) / 60_000)
-        : 0;
+      return event.type === 'work-tick' && event.detail.kind === 'focus' ? event.detail.minutes : 0;
     case 'lines':
       return event.type === 'focus-typing' ? event.detail.lines : 0;
     case 'meetingMinutes':
-      return event.type === 'meeting' ? Math.floor(event.durationMs / 60_000) : 0;
+      return event.type === 'work-tick' && event.detail.kind === 'meeting'
+        ? event.detail.minutes
+        : 0;
     case 'ceoMeeting':
-      return event.type === 'meeting' && event.detail.seatId.startsWith('meeting-ceo-')
-        ? Math.floor(event.durationMs / 60_000)
+      return event.type === 'work-tick' && event.detail.kind === 'meeting' && event.detail.ceo
+        ? event.detail.minutes
         : 0;
     case 'count':
       if (event.type !== goal.event) return 0;

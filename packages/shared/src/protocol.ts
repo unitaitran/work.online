@@ -27,7 +27,7 @@ export const IDLE_GRACE_MS = 60_000;
 /** Tốc độ đi tối đa (m/s) server chấp nhận, bằng tốc độ đi ở client. */
 export const MAX_WALK_SPEED = 2.6;
 
-export const POSES = ['stand', 'walk', 'sit', 'type'] as const;
+export const POSES = ['stand', 'walk', 'sit', 'type', 'lie'] as const;
 export type Pose = (typeof POSES)[number];
 
 export const EMOTES = [
@@ -231,8 +231,10 @@ export type ServerMessage =
       difficulty: number;
       reward: number;
       reputation: number;
-      /** Gửi nhân viên: phần thưởng mình nhận (không có: tin cho CEO). */
-      bonus?: { coins: number; xp: number };
+      /** Gửi nhân viên: phần thưởng mình nhận (không có: tin cho CEO). Thực tập sinh: intern. */
+      bonus?: { coins: number; xp: number; intern?: boolean };
+      /** Gửi CEO: đã thưởng bao nhiêu nhân viên, tổng bao nhiêu xu từ quỹ. */
+      paid?: { people: number; coins: number };
     }
   /** Người chơi khác vừa tặng mình một ly cà phê. */
   | { type: 'coffee_received'; fromSid: number; fromName: string }

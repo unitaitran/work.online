@@ -201,7 +201,7 @@ export class NpcAgent {
       }
       this.seatId = seat.id;
       this.position = { ...seat.seat };
-      this.avatar.setPose(seat.pose === 'type' ? 'type' : 'sit');
+      this.avatar.setPose(seat.pose === 'type' || seat.pose === 'lie' ? seat.pose : 'sit');
     } else {
       this.avatar.setPose('stand');
     }

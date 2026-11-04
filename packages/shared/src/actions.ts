@@ -6,6 +6,7 @@ import type { Mission } from './missions';
 import type { ProgressState } from './progress';
 import { BRANCHES, DEPARTMENTS, type Branch, type Department } from './levels';
 import { hashString } from './rng';
+import { MICRO_TASK_COUNT } from './tasks';
 
 export const FOCUS_MINUTES = [1, 3, 5] as const;
 /** Thời gian pha cà phê (ms), bằng BREW_MS ở client. */
@@ -24,15 +25,19 @@ export function fortuneIndex(day: string, playerCode: string, count = KPI_FORTUN
 
 const id = z.string().min(1).max(40);
 const count = z.number().int().min(0).max(100_000);
+const taskIdSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MICRO_TASK_COUNT - 1);
 
 export const actionSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('checkin') }),
   z.strictObject({ kind: z.literal('fortune') }),
-  z.strictObject({
-    kind: z.literal('task_flip'),
-    taskId: z.number().int().min(0).max(1000),
-    completed: z.boolean(),
-  }),
+  // Bảng task: nhận việc đã lật, xác nhận xong (ở bảng, sau thời gian làm tối thiểu), bỏ việc.
+  z.strictObject({ kind: z.literal('task_accept'), taskId: taskIdSchema }),
+  z.strictObject({ kind: z.literal('task_done'), taskId: taskIdSchema }),
+  z.strictObject({ kind: z.literal('task_drop'), taskId: taskIdSchema }),
   z.strictObject({ kind: z.literal('coffee_brew') }),
   // Người nhận: id NPC, hoặc "player:<mã nhân viên>" khi tặng người chơi khác cùng phòng.
   z.strictObject({ kind: z.literal('coffee_gift'), npcId: id }),
@@ -104,4 +109,8 @@ export type ActionServerMessage =
       today: string;
     }
   | { type: 'action_rejected'; id: string; reason: ActionRejectReason }
-  | { type: 'mission_assigned'; mission: Mission };
+  | {
+      type: 'mission_assigned';
+      mission: Mission;
+      /** Chủ công ty giao (không phải sếp NPC). */ fromCeo?: boolean;
+    };
