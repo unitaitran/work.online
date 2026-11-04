@@ -385,14 +385,21 @@ export class ProgressEngine {
   }
 
   /** Giao một việc (chủ công ty giao): chỉ khi chưa có việc dở và chưa đủ số việc trong ngày. */
-  assignMission(userId: string, mission: Mission): boolean {
+  assignMission(userId: string, mission: Mission): 'ok' | 'busy' | 'limit' {
     const timeZone = this.repos.users.byId(userId)?.timeZone ?? 'Asia/Ho_Chi_Minh';
     const state = rollDay(this.state(userId), this.today(userId, timeZone));
     const daily = state.daily;
-    if (daily.missions.some((m) => m.completedAt === null)) return false;
-    if (daily.missions.length >= BALANCE.missions.perDay) return false;
-    this.save(userId, { ...state, daily: { ...daily, missions: [...daily.missions, mission] } });
-    return true;
+    // Việc CEO giao trước đó còn dở thì phải làm xong đã.
+    if (daily.missions.some((m) => m.completedAt === null && m.fromCeo === true)) return 'busy';
+    const ceoToday = daily.missions.filter((m) => m.fromCeo === true).length;
+    if (ceoToday >= BALANCE.missions.ceoPerDay) return 'limit';
+    // Việc dở của sếp NPC nhường chỗ cho việc CEO giao (bỏ hẳn, không tính vào số việc trong ngày).
+    const kept = daily.missions.filter((m) => m.completedAt !== null);
+    this.save(userId, {
+      ...state,
+      daily: { ...daily, missions: [...kept, { ...mission, fromCeo: true }] },
+    });
+    return 'ok';
   }
 
   /** Thưởng tham gia sự kiện phòng (qua đúng luật XP, giới hạn ngày và sổ cái). */

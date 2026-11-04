@@ -32,6 +32,8 @@ export interface Mission {
   progress: number;
   assignedAt: number;
   completedAt: number | null;
+  /** CEO công ty người chơi giao (không phải sếp NPC): ưu tiên hơn, hạn mức riêng mỗi ngày. */
+  fromCeo?: boolean | undefined;
 }
 
 /** Việc "Họp với sếp": đang có việc này thì được quẹt thẻ vào phòng sếp. */

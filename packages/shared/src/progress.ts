@@ -136,6 +136,7 @@ const missionSchema = z.object({
   progress: nonNegInt,
   assignedAt: z.number(),
   completedAt: z.number().nullable(),
+  fromCeo: z.boolean().optional(),
 });
 
 const dailySchema = z.object({

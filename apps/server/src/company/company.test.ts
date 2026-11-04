@@ -329,6 +329,52 @@ describe('vào làm ở công ty người chơi khác (6B)', () => {
     expect(feed.map((f) => f.kind)).toContain('member_joined');
   });
 
+  it('CEO giao việc: nhân viên nhận việc ngay và được báo qua WebSocket', async () => {
+    const { app, host, a, b, companyId } = await setup();
+    const { applicationId } = (await post(app, b, '/api/company/apply', { companyId })).json<{
+      applicationId: number;
+    }>();
+    await post(app, a, '/api/company/applications', { applicationId, approve: true });
+    const botB = await Bot.connect(host, b.token);
+    await botB.waitFor('welcome');
+    const res = await post(app, a, '/api/company/assign', { code: b.code, templateId: 'task-2' });
+    expect(res.statusCode).toBe(200);
+    const assigned = await botB.waitFor('mission_assigned');
+    expect(assigned.mission.templateId).toBe('task-2');
+    const daily = app.game.engine.state(b.userId).daily;
+    expect(daily.missions.find((m) => m.completedAt === null)?.templateId).toBe('task-2');
+    // Việc CEO giao trước còn dở: chưa giao thêm được.
+    const again = await post(app, a, '/api/company/assign', { code: b.code, templateId: 'task-1' });
+    expect(again.json<{ reason: string }>().reason).toBe('busy');
+  });
+
+  it('CEO giao việc khi nhân viên đang dở việc của sếp NPC: việc CEO thay chỗ', async () => {
+    const { app, a, b, companyId } = await setup();
+    const { applicationId } = (await post(app, b, '/api/company/apply', { companyId })).json<{
+      applicationId: number;
+    }>();
+    await post(app, a, '/api/company/applications', { applicationId, approve: true });
+    const state = app.game.engine.state(b.userId);
+    const npcMission = {
+      templateId: 'fortune',
+      text: '',
+      goalText: '',
+      goal: { kind: 'count' as const, event: 'kpi-fortune' as const, amount: 1 },
+      progress: 0,
+      assignedAt: 0,
+      completedAt: null,
+    };
+    app.game.engine.save(b.userId, {
+      ...state,
+      daily: { ...state.daily, missions: [npcMission, npcMission, npcMission] },
+    });
+    const res = await post(app, a, '/api/company/assign', { code: b.code, templateId: 'task-3' });
+    expect(res.statusCode).toBe(200);
+    const missions = app.game.engine.state(b.userId).daily.missions;
+    expect(missions.map((m) => m.templateId)).toEqual(['task-3']);
+    expect(missions[0]?.fromCeo).toBe(true);
+  });
+
   it('CEO đặt khung cấp tuyển dụng: ngoài khung không nộp được đơn; vị trí theo cấp; tỉnh/thành hiện ở danh bạ', async () => {
     const { app, a, b, companyId } = await setup();
     const directory = (
