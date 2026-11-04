@@ -15,8 +15,6 @@ export function actionForEvent(event: ActivityEvent): Action | null {
       };
     case 'kpi-fortune':
       return { kind: 'fortune' };
-    case 'task-flip':
-      return { kind: 'task_flip', taskId: event.detail.taskId, completed: event.detail.completed };
     case 'coffee-gift':
       return { kind: 'coffee_gift', npcId: event.detail.npcId };
     case 'coffee-drink':
@@ -29,6 +27,8 @@ export function actionForEvent(event: ActivityEvent): Action | null {
       return { kind: 'meeting_end' };
     case 'vent':
       return { kind: 'vent', length: event.detail.length, anonymous: event.detail.anonymous };
+    // Bảng task gửi thẳng task_accept / task_done (server tạo sự kiện task-flip).
+    case 'task-flip':
     case 'checkin':
     case 'coffee-brew':
     case 'room-event':

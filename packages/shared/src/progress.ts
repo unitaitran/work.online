@@ -1,6 +1,7 @@
 // Trạng thái tiến độ của một người chơi + đọc dữ liệu cũ (migrate).
 // Phase 3 lưu trên máy; Phase 4 server dùng đúng cấu trúc và luật này.
 import { z } from 'zod';
+import { TASKS_HELD_MAX, type HeldTask } from './tasks';
 import { BALANCE } from './balance';
 import { BRANCHES, DEPARTMENTS, type Branch, type Department } from './levels';
 import type { Mission } from './missions';
@@ -68,6 +69,8 @@ export interface ProgressState {
   linesCarry: number;
   log: LogEntry[];
   createdAt: number;
+  /** Việc đã nhận ở bảng task, chưa xác nhận xong (server giữ). */
+  tasks?: HeldTask[] | undefined;
 }
 
 export function createProgress(now: number): ProgressState {
@@ -175,6 +178,10 @@ const progressV3Schema = z.object({
   linesCarry: nonNegInt,
   log: logSchema,
   createdAt: z.number(),
+  tasks: z
+    .array(z.object({ taskId: nonNegInt, acceptedAt: z.number() }))
+    .max(TASKS_HELD_MAX)
+    .optional(),
 });
 
 /** Phiên bản 2 (Phase 3 bản đầu): có chức danh lưu riêng, kỳ đánh giá và tính cách. */

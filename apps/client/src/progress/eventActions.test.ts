@@ -14,7 +14,6 @@ describe('sự kiện -> hành động gửi server', () => {
         completed: true,
       }),
       makeEvent('kpi-fortune', 0, 0, { day: '2026-11-02', fortuneId: 3, repeat: false }),
-      makeEvent('task-flip', 0, 0, { taskId: 4, completed: true }),
       makeEvent('coffee-gift', 0, 0, { npcId: 'npc-2' }),
       makeEvent('coffee-drink', 0, 0, {}),
       makeEvent('chore', 0, 0, { target: 'plant-1' }),

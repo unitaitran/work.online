@@ -1,4 +1,4 @@
-// Việc nhỏ cho trò "Lật 1 trong 3 task": việc làm được ngay trong vài phút. Tự viết cho dự án.
+// Việc nhỏ cho bảng task: việc làm được ngay trong vài phút. Tự viết cho dự án.
 
 export const MICRO_TASKS: readonly string[] = [
   'Uống một cốc nước đầy.',

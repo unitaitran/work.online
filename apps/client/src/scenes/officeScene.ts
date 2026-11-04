@@ -129,6 +129,12 @@ export interface OfficeSceneOptions {
   onSeatChange(item: Interactable | null): void;
 }
 
+/** Góc camera khi ngồi: qua vai phải; khi nằm thì lùi ra nhìn ngang cả người trên giường. */
+function seatOrbit(item: Interactable): { yaw: number; pitch: number; distance: number } {
+  if (item.pose === 'lie') return { yaw: item.facing - Math.PI / 2, pitch: 0.7, distance: 3.2 };
+  return { yaw: item.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 };
+}
+
 export class OfficeScene implements SceneController {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(50, 1, 0.1, 80);
@@ -372,9 +378,7 @@ export class OfficeScene implements SceneController {
   resetView(): void {
     this.viewMode = 'follow';
     this.autoRotate = false;
-    this.orbitGoal = this.seated
-      ? { yaw: this.seated.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 }
-      : { ...DEFAULT_ORBIT };
+    this.orbitGoal = this.seated ? seatOrbit(this.seated) : { ...DEFAULT_ORBIT };
   }
 
   /** Biển hiệu công ty (phòng riêng); null = văn phòng chung. */
@@ -921,11 +925,11 @@ export class OfficeScene implements SceneController {
       this.position = { ...item.seat };
       this.previous = { ...item.seat };
       this.facing = item.facing;
-      this.avatar.setPose(item.pose === 'type' ? 'type' : 'sit');
+      this.avatar.setPose(item.pose === 'type' || item.pose === 'lie' ? item.pose : 'sit');
       this.typingTimer = 0.4;
       this.freeOrbit = { ...this.orbitGoal };
       // Góc nhìn gần qua vai phải, đủ cao để thấy màn hình phía trên đầu nhân vật.
-      this.orbitGoal = { yaw: item.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 };
+      this.orbitGoal = seatOrbit(item);
       this.options.onSeatChange(item);
     } else {
       this.facing = item.facing;

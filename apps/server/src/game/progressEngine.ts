@@ -28,6 +28,8 @@ import {
   type ProgressState,
   type Vec2,
   type CareerUnlock,
+  TASKS_HELD_MAX,
+  taskWaitMs,
 } from '@dilam/shared';
 import type { Repositories } from '../db/repositories';
 import { recordEarn } from './shop';
@@ -40,7 +42,9 @@ const DAY_MS = 86_400_000;
 const MIN_INTERVAL: Partial<Record<ActionKind, number>> = {
   checkin: 1000,
   fortune: 1000,
-  task_flip: 3000,
+  task_accept: 500,
+  task_done: 1500,
+  task_drop: 500,
   chore: 2000,
   coffee_gift: 1500,
   coffee_brew: 1000,
@@ -52,6 +56,8 @@ const DEFAULT_INTERVAL = 300;
 const CHORE_COOLDOWN_MS = 5 * 60_000;
 /** Sai số cho phép khi đo phiên tập trung kết thúc đúng giờ (trễ mạng). */
 const FOCUS_TOLERANCE_MS = 2000;
+/** Sai số cho phép khi xác nhận task đúng lúc hết thời gian làm tối thiểu. */
+const TASK_TOLERANCE_MS = 1500;
 
 export interface PlayerContext {
   userId: string;
@@ -180,13 +186,44 @@ export class ProgressEngine {
         event = makeEvent('kpi-fortune', now, 0, { day: today, fortuneId: id, repeat });
         break;
       }
-      case 'task_flip':
+      case 'task_accept': {
         if (!near('taskboard')) return { ok: false, reason: 'too_far' };
-        event = makeEvent('task-flip', now, 0, {
-          taskId: action.taskId,
-          completed: action.completed,
+        const held = state.tasks ?? [];
+        if (held.length >= TASKS_HELD_MAX || held.some((t) => t.taskId === action.taskId)) {
+          return { ok: false, reason: 'not_allowed' };
+        }
+        const next = { ...state, tasks: [...held, { taskId: action.taskId, acceptedAt: now }] };
+        this.save(userId, next);
+        live.lastAt.set(action.kind, now);
+        return { ok: true, state: next, outcome: null, today };
+      }
+      case 'task_drop': {
+        const held = state.tasks ?? [];
+        if (!held.some((t) => t.taskId === action.taskId)) return { ok: false, reason: 'invalid' };
+        const next = { ...state, tasks: held.filter((t) => t.taskId !== action.taskId) };
+        this.save(userId, next);
+        live.lastAt.set(action.kind, now);
+        return { ok: true, state: next, outcome: null, today };
+      }
+      case 'task_done': {
+        // Xác nhận ở bảng task, sau khi đã đi làm đủ thời gian tối thiểu.
+        if (!near('taskboard')) return { ok: false, reason: 'too_far' };
+        const held = state.tasks ?? [];
+        const task = held.find((t) => t.taskId === action.taskId);
+        if (!task) return { ok: false, reason: 'invalid' };
+        if (taskWaitMs(task, now) > TASK_TOLERANCE_MS) return { ok: false, reason: 'not_started' };
+        live.lastAt.set(action.kind, now);
+        const without = { ...state, tasks: held.filter((t) => t.taskId !== action.taskId) };
+        event = makeEvent('task-flip', task.acceptedAt, now - task.acceptedAt, {
+          taskId: task.taskId,
+          completed: true,
         });
-        break;
+        return {
+          ok: true,
+          ...this.applyAndSave(userId, without, event, today, now, fortune),
+          today,
+        };
+      }
       case 'coffee_brew':
         if (!near('coffee')) return { ok: false, reason: 'too_far' };
         if (live.coffeeBrewAt !== null || player.coffeeOut?.()) {
@@ -315,7 +352,7 @@ export class ProgressEngine {
    */
   accrueWork(
     player: PlayerContext,
-    seat: 'desk' | 'meeting' | null,
+    seat: 'desk' | 'meeting' | 'ceoMeeting' | null,
     ms: number,
   ): { state: ProgressState; outcome: ActionOutcome; today: string } | null {
     const live = this.liveOf(player.userId);
@@ -327,10 +364,14 @@ export class ProgressEngine {
     const minutes = Math.floor(live.workMs / 60_000);
     if (minutes < 1) return null;
     live.workMs -= minutes * 60_000;
-    const kind = seat === 'meeting' ? 'meeting' : live.focus ? 'focus' : 'desk';
+    const kind = seat === 'desk' ? (live.focus ? 'focus' : 'desk') : 'meeting';
     const now = this.now(player.userId);
     const today = this.today(player.userId, player.timeZone);
-    const event = makeEvent('work-tick', now, minutes * 60_000, { kind, minutes });
+    const event = makeEvent('work-tick', now, minutes * 60_000, {
+      kind,
+      minutes,
+      ...(seat === 'ceoMeeting' ? { ceo: true } : {}),
+    });
     const result = this.applyAndSave(player.userId, this.state(player.userId), event, today, now);
     return { ...result, today };
   }

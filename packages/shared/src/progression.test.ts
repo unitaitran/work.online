@@ -310,15 +310,17 @@ describe('sếp giao việc', () => {
       const goal = mission.goal;
       const events: ActivityEvent[] =
         goal.kind === 'focusMinutes'
-          ? [focus(5, true)]
+          ? [makeEvent('work-tick', T0, 0, { kind: 'focus', minutes: goal.amount })]
           : goal.kind === 'lines'
             ? [focus(1, true, goal.amount)]
             : goal.kind === 'meetingMinutes'
-              ? [meeting(goal.amount)]
+              ? [makeEvent('work-tick', T0, 0, { kind: 'meeting', minutes: goal.amount })]
               : goal.kind === 'ceoMeeting'
                 ? [
-                    makeEvent('meeting', T0, goal.amount * 60_000, {
-                      seatId: 'meeting-ceo-0',
+                    makeEvent('work-tick', T0, 0, {
+                      kind: 'meeting',
+                      minutes: goal.amount,
+                      ceo: true,
                     }),
                   ]
                 : Array.from({ length: goal.amount }, () =>

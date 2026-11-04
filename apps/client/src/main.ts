@@ -15,7 +15,6 @@ import {
   PROTOCOL_VERSION,
   COMPANY_COLORS,
   hasCeoMeeting,
-  CEO_MEETING_SEAT_PREFIX,
   type CompanyPublic,
   type MyCompanyResponse,
   type InventoryResponse,
@@ -94,7 +93,7 @@ import { mountRoomEventBanner } from './ui/roomEventBanner';
 import { mountTeaInvite } from './ui/teaInvite';
 import { enhanceSelects } from './ui/prettySelect';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
-import { OFFICE_FLOOR, type Interactable, type InteractableKind } from './world/office/layout';
+import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
 
 function requireElement<T extends Element>(selector: string, type: abstract new () => T): T {
@@ -743,31 +742,6 @@ function start(): void {
       const text = kind === 'window' ? STRINGS.interact.window[currentPeriod()] : results[kind];
       if (text) hud?.showToast(text);
     };
-    // Việc sếp giao kiểu ngồi họp (phòng họp / sofa phòng sếp): ngồi đủ giờ thì báo và tự đứng dậy.
-    let meetingTimer: number | undefined;
-    const scheduleMeetingEnd = (item: Interactable | null): void => {
-      window.clearTimeout(meetingTimer);
-      meetingTimer = undefined;
-      if (item?.kind !== 'meeting') return;
-      const mission = activeMission(progress.state);
-      if (!mission) return;
-      const goal = mission.goal;
-      const fits =
-        goal.kind === 'meetingMinutes' ||
-        (goal.kind === 'ceoMeeting' && item.id.startsWith(CEO_MEETING_SEAT_PREFIX));
-      if (!fits) return;
-      const left = Math.max(1, goal.amount - mission.progress);
-      // Dư 1,5 giây cho chắc server đếm đủ phút.
-      meetingTimer = window.setTimeout(
-        () => {
-          meetingTimer = undefined;
-          audio.play('ting');
-          hud?.showToast(STRINGS.events.meetingDone);
-          office?.leaveSeat();
-        },
-        left * 60_000 + 1500,
-      );
-    };
     const scene = new OfficeScene({
       canvas,
       hudLayer: hudRoot,
@@ -786,7 +760,6 @@ function start(): void {
       canGiftCoffee: () => activities?.canGiftCoffee() ?? false,
       onSeatChange: (item) => {
         activities?.onSeatChange(item);
-        scheduleMeetingEnd(item);
         // Họp đột xuất: ngồi vào ghế phòng họp là xong phần mình, tắt banner.
         if (item?.kind === 'meeting' && eventState?.kind === 'surprise_meeting') {
           banner.dismiss(eventState.id, STRINGS.events.joinedMeeting);
@@ -867,6 +840,8 @@ function start(): void {
       },
       progress: {
         checkIn: () => progress.state.checkIn,
+        heldTasks: () => progress.heldTasks(),
+        onChange: (listener) => progress.onChange(listener),
         act: async (action) => {
           const reply = await progress.act(action);
           reportReply(reply);
@@ -927,6 +902,10 @@ function start(): void {
         if (result.completedMission) {
           audio.play('ting');
           officeHudView.showToast(STRINGS.progress.mission.done(BALANCE.mission));
+          // Việc tính theo phút vừa đủ phút: thoát khỏi việc đó luôn (đứng dậy / kết thúc phiên).
+          const goal = result.completedMission.goal.kind;
+          if (goal === 'meetingMinutes' || goal === 'ceoMeeting') scene.leaveSeat();
+          if (goal === 'focusMinutes') officeActivities.stopFocus();
         }
         const jobBefore = jobAtLevel(result.levelBefore, state.branch);
         const jobAfter = jobAtLevel(result.levelAfter, state.branch);
@@ -943,7 +922,12 @@ function start(): void {
         }
       } else if (change.kind === 'missionAssigned') {
         audio.play('ting');
-        officeHudView.showToast(change.mission.text);
+        // CEO giao: báo rõ là CEO giao, kèm việc cần làm (thẻ việc trên HUD đã hiện theo tiến độ).
+        officeHudView.showToast(
+          change.fromCeo
+            ? STRINGS.progress.mission.fromCeo(change.mission.goalText)
+            : change.mission.text,
+        );
       }
     });
     refreshProgress();
@@ -1019,6 +1003,7 @@ function start(): void {
                 projectNameOf(message.industry, message.nameIndex),
                 message.bonus.coins,
                 message.bonus.xp,
+                message.bonus.intern === true,
               ),
             );
             break;
@@ -1028,7 +1013,10 @@ function start(): void {
               projectNameOf(message.industry, message.nameIndex),
               message.reward,
               message.reputation,
-            ),
+            ) +
+              (message.paid
+                ? STRINGS.company.projectPaid(message.paid.people, message.paid.coins)
+                : ''),
           );
           break;
         case 'coffee_received':

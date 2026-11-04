@@ -238,7 +238,10 @@ export function mountCreatorPanel(root: HTMLElement, options: CreatorPanelOption
               ),
               choiceGroup(
                 s.pose,
-                POSES.map((pose) => ({ value: pose, label: STRINGS.poses[pose] })),
+                POSES.filter((pose) => pose !== 'lie').map((pose) => ({
+                  value: pose,
+                  label: STRINGS.poses[pose],
+                })),
                 'stand',
                 (pose) => {
                   options.onPoseChange(pose);

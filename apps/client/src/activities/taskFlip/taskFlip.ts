@@ -1,42 +1,46 @@
-// Lật 1 trong 3 task: chia ba lá úp, lật một lá ra việc nhỏ làm được ngay.
+// Bảng task: chia vài lá úp (ngẫu nhiên riêng từng người), lật để xem việc nhỏ, nhận việc muốn làm.
+import { MICRO_TASK_COUNT, TASK_DEAL_COUNT } from '@dilam/shared';
 import type { Rng } from '../../avatar/names';
-import { MICRO_TASKS } from '../../data/micro-tasks';
 
-export const CARD_COUNT = 3;
-
-/** Chọn `count` việc khác nhau (chỉ số trong MICRO_TASKS). */
-export function dealTasks(rng: Rng, count = CARD_COUNT, total = MICRO_TASKS.length): number[] {
+/** Chọn `count` việc khác nhau (chỉ số trong MICRO_TASKS), bỏ qua các việc đang giữ. */
+export function dealTasks(
+  rng: Rng,
+  count = TASK_DEAL_COUNT,
+  exclude: readonly number[] = [],
+  total = MICRO_TASK_COUNT,
+): number[] {
+  const pool = Array.from({ length: total }, (_, i) => i).filter((i) => !exclude.includes(i));
   const picked: number[] = [];
-  const pool = Array.from({ length: total }, (_, i) => i);
-  for (let i = 0; i < Math.min(count, total); i += 1) {
-    const j = Math.floor(rng() * pool.length);
-    const [taskId] = pool.splice(Math.min(j, pool.length - 1), 1);
+  for (let i = 0; i < Math.min(count, pool.length + picked.length) && pool.length > 0; i += 1) {
+    const j = Math.min(pool.length - 1, Math.floor(rng() * pool.length));
+    const [taskId] = pool.splice(j, 1);
     if (taskId !== undefined) picked.push(taskId);
   }
   return picked;
 }
 
-export type TaskFlipState =
-  | { phase: 'dealt'; cards: number[] }
-  | { phase: 'flipped'; cards: number[]; chosen: number; flippedAt: number }
-  | { phase: 'done'; cards: number[]; chosen: number; flippedAt: number; doneAt: number };
-
-export function deal(rng: Rng): TaskFlipState {
-  return { phase: 'dealt', cards: dealTasks(rng) };
+export interface Deal {
+  cards: number[];
+  /** Các lá đã lật (theo vị trí). */
+  flipped: boolean[];
 }
 
-/** Lật lá thứ `cardIndex`. Chỉ lật được một lá. */
-export function flip(state: TaskFlipState, cardIndex: number, now: number): TaskFlipState {
-  if (state.phase !== 'dealt') return state;
-  if (cardIndex < 0 || cardIndex >= state.cards.length) return state;
-  return { phase: 'flipped', cards: state.cards, chosen: cardIndex, flippedAt: now };
+export function deal(rng: Rng, exclude: readonly number[] = []): Deal {
+  const cards = dealTasks(rng, TASK_DEAL_COUNT, exclude);
+  return { cards, flipped: cards.map(() => false) };
 }
 
-export function complete(state: TaskFlipState, now: number): TaskFlipState {
-  if (state.phase !== 'flipped') return state;
-  return { ...state, phase: 'done', doneAt: now };
+export function flip(state: Deal, index: number): Deal {
+  if (index < 0 || index >= state.cards.length || state.flipped[index]) return state;
+  return { ...state, flipped: state.flipped.map((f, i) => f || i === index) };
 }
 
-export function chosenTaskId(state: TaskFlipState): number | null {
-  return state.phase === 'dealt' ? null : (state.cards[state.chosen] ?? null);
+export function flipAll(state: Deal): Deal {
+  return { ...state, flipped: state.cards.map(() => true) };
+}
+
+/** "m:ss" cho thời gian chờ còn lại. */
+export function formatWait(ms: number): string {
+  const total = Math.ceil(ms / 1000);
+  return `${String(Math.floor(total / 60))}:${String(total % 60).padStart(2, '0')}`;
 }

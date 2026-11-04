@@ -1,6 +1,7 @@
 // Người chơi khác trong phòng: nội suy vị trí cho mượt, nhãn tên + chức danh, bong bóng biểu cảm
 // và câu nhanh. Chỉ vẽ chi tiết vài người gần nhất; xa hơn vẽ khối đơn giản bằng một InstancedMesh
 // (1 draw call cho tất cả) để máy yếu vẫn chạy.
+import { isSeated } from '../avatar/pose';
 import {
   jobName,
   poseAt,
@@ -247,7 +248,7 @@ export class RemotePlayers {
         }
       }
       // Hai người ngồi cùng một ghế: trên màn của mình chỉ thấy mình (không vẽ người kia chồng lên).
-      const remoteSeated = player.pose === 'sit' || player.pose === 'type';
+      const remoteSeated = isSeated(player.pose);
       const sameSeat =
         remoteSeated &&
         ((viewer.seated === true &&
@@ -255,7 +256,7 @@ export class RemotePlayers {
           // Hai người khác cùng ngồi một ghế: chỉ vẽ người đầu tiên.
           visible.some(
             (other) =>
-              (other.pose === 'sit' || other.pose === 'type') &&
+              isSeated(other.pose) &&
               Math.hypot(player.x - other.x, player.z - other.z) < SAME_SEAT_RADIUS,
           ));
       if (sameSeat || this.hiddenCodes.has(player.profile.code)) {
@@ -289,7 +290,7 @@ export class RemotePlayers {
         }
         player.companions?.update(dt, player);
         player.avatar.root.visible = true;
-        const seated = player.pose === 'sit' || player.pose === 'type';
+        const seated = isSeated(player.pose);
         player.avatar.root.position.set(
           player.x,
           seated ? this.seatLiftAt(player.x, player.z) : 0,

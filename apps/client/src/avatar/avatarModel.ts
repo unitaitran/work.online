@@ -55,6 +55,8 @@ const HIP_Y = 0.32;
 const SHOULDER_Y = 0.57;
 const NECK_Y = 0.64;
 const HEAD_RADIUS = 0.27;
+/** Nằm: nhấc người lên (m) để đầu và lưng nằm trên mặt đệm chứ không lún xuống. */
+const LIE_LIFT = 0.22;
 
 interface OutfitStyle {
   top: number;
@@ -478,6 +480,8 @@ function torsoLathe(): LatheGeometry {
 export class AvatarModel {
   readonly root = new Group();
   /** Khớp hông: thân nghiêng quanh điểm này. */
+  /** Khung cả người: ngả ra sau khi nằm (quay quanh gót chân). */
+  private readonly rig = new Group();
   private readonly body = new Group();
   /** Phần trên cơ thể, dời xuống để toạ độ bên trong tính từ mặt sàn. */
   private readonly upper = new Group();
@@ -598,12 +602,13 @@ export class AvatarModel {
           }),
         ]),
       );
-      this.root.add(leg);
+      this.rig.add(leg);
     }
 
     this.upper.position.y = -HIP_Y;
     this.body.add(this.upper);
-    this.root.add(this.body);
+    this.rig.add(this.body);
+    this.root.add(this.rig);
     this.applyPose(this.current);
   }
 
@@ -658,6 +663,9 @@ export class AvatarModel {
   }
 
   private applyPose(pose: PoseState): void {
+    // Nằm ngửa: ngả cả người ra sau 90° quanh gót chân, nhấc lên cho lưng và đầu nằm trên đệm.
+    this.rig.rotation.x = (-Math.PI / 2) * pose.lie;
+    this.rig.position.y = LIE_LIFT * pose.lie;
     this.body.position.y = HIP_Y + pose.rootY;
     this.body.rotation.x = pose.bodyPitch;
     this.head.rotation.set(pose.headPitch, 0, pose.headRoll);

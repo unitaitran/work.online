@@ -12,6 +12,7 @@ import {
   type PlantView,
   hasCeoMeeting,
   normalizeUsername,
+  CEO_MEETING_SEAT_PREFIX,
 } from '@dilam/shared';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -247,11 +248,14 @@ export function attachGameService(
   const deskSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'desk' && i.seat);
   const ceoSeats = officeInteractables(OFFICE_FLOOR).filter((i) => i.kind === 'ceodesk' && i.seat);
   const meetingSeats = officeInteractables(OFFICE_FLOOR).filter(
-    (i) => i.kind === 'meeting' && i.seat,
+    (i) => i.kind === 'meeting' && i.seat && !i.id.startsWith(CEO_MEETING_SEAT_PREFIX),
+  );
+  const ceoMeetingSeats = officeInteractables(OFFICE_FLOOR).filter(
+    (i) => i.kind === 'meeting' && i.seat && i.id.startsWith(CEO_MEETING_SEAT_PREFIX),
   );
   const near = (p: { x: number; z: number }, seats: typeof deskSeats): boolean =>
     seats.some((i) => i.seat && Math.hypot(i.seat.x - p.x, i.seat.z - p.z) <= 0.6);
-  const seatOf = (session: Session): 'desk' | 'meeting' | null => {
+  const seatOf = (session: Session): 'desk' | 'meeting' | 'ceoMeeting' | null => {
     const pose = session.room.poseOf(session.userId);
     const p = session.room.positionOf(session.userId);
     if (!p || (pose !== 'type' && pose !== 'sit')) return null;
@@ -264,6 +268,7 @@ export function attachGameService(
         ctx.repos.companies.get(kind.slice('company:'.length))?.ownerId === session.userId;
       return owner ? 'desk' : null;
     }
+    if (near(p, ceoMeetingSeats)) return 'ceoMeeting';
     if (near(p, meetingSeats)) return 'meeting';
     return null;
   };
@@ -369,6 +374,9 @@ export function attachGameService(
     },
     projectDone: (ownerId, message) => {
       gateway.sessionOf(ownerId)?.room.sendTo(ownerId, message);
+    },
+    missionAssigned: (userId, mission) => {
+      gateway.sessionOf(userId)?.send({ type: 'mission_assigned', mission, fromCeo: true });
     },
   });
   gateway.setAccess({

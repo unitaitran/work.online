@@ -24,7 +24,7 @@ export type InteractableKind =
   | 'console';
 
 /** Tư thế khi dùng vật: ngồi gõ phím, ngồi thường, hoặc đứng. */
-export type UsePose = 'type' | 'sit' | 'stand';
+export type UsePose = 'type' | 'sit' | 'stand' | 'lie';
 
 export interface Box3Data {
   min: readonly [number, number, number];
@@ -491,9 +491,10 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
     id: 'sofa-daybed',
     kind: 'sofa',
     approach: { x: daybed.minX - APPROACH_GAP - 0.05, z: bedZ },
-    seat: { x: daybed.minX + 0.28, z: bedZ },
-    facing: -Math.PI / 2,
-    pose: 'sit',
+    // Nằm ngửa dọc giường, đầu gối lên gối ở đầu bắc (chân ở điểm này, đầu hướng -Z).
+    seat: { x: (daybed.minX + daybed.maxX) / 2, z: daybed.minZ + 1.25 },
+    facing: 0,
+    pose: 'lie',
     seatHeight: 0.34,
     pick: { min: [daybed.minX, 0, daybed.minZ], max: [daybed.maxX, 0.6, daybed.maxZ] },
   });

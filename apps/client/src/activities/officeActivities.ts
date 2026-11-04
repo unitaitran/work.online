@@ -1,6 +1,6 @@
 // Nối các hoạt động với văn phòng: vật nào mở hoạt động nào, phát sự kiện qua bus.
 // Mỗi hoạt động vẫn là một module riêng (logic thuần + giao diện) trong thư mục của nó.
-import type { Action, CheckInState } from '@dilam/shared';
+import type { Action, CheckInState, HeldTask } from '@dilam/shared';
 import type { ActionReply } from '../net/roomClient';
 import type { SoundName } from '../audio/audioEngine';
 import { clock } from '../clock';
@@ -49,6 +49,9 @@ export interface ActivityHud {
 /** Tiến độ (Phase 4C: server tính). Hoạt động gửi hành động và đọc trạng thái server trả về. */
 export interface ActivityProgress {
   checkIn(): CheckInState;
+  /** Việc đã nhận ở bảng task (server giữ). */
+  heldTasks(): readonly HeldTask[];
+  onChange(listener: () => void): () => void;
   /** Gửi một hành động lên server. */
   act(action: Action): Promise<ActionReply>;
 }
@@ -82,6 +85,11 @@ export class OfficeActivities {
   private meeting: { seatId: string; since: number } | null = null;
 
   constructor(private readonly o: OfficeActivitiesOptions) {}
+
+  /** Kết thúc phiên tập trung đang chạy (ví dụ việc sếp giao đã đủ phút). */
+  stopFocus(): void {
+    this.focus?.stop();
+  }
 
   /** Có đang cầm ly cà phê (để cảnh hiện gợi ý tặng NPC). */
   canGiftCoffee(): boolean {
@@ -323,11 +331,16 @@ export class OfficeActivities {
   private openTaskFlip(): void {
     let panel: { dispose(): void } | null = null;
     const modal = this.openPanel(STRINGS.taskFlip.title, () => panel?.dispose());
+    const progress = this.o.progress;
     panel = mountTaskFlipPanel(modal.body, {
-      onResult: ({ taskId, completed, flippedAt, endedAt }) => {
-        this.o.bus.emit(
-          makeEvent('task-flip', flippedAt, endedAt - flippedAt, { taskId, completed }),
-        );
+      held: () => progress.heldTasks(),
+      onChange: (listener) => progress.onChange(listener),
+      accept: (taskId) => progress.act({ kind: 'task_accept', taskId }),
+      done: (taskId) => progress.act({ kind: 'task_done', taskId }),
+      drop: (taskId) => progress.act({ kind: 'task_drop', taskId }),
+      onAccepted: () => {
+        this.o.play('ting');
+        this.o.hud.showToast(STRINGS.taskFlip.acceptToast);
       },
       onCompleted: () => {
         this.o.play('ting');

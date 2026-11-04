@@ -10,6 +10,7 @@ import {
   type Branch,
   type CareerUnlock,
   type CheckInState,
+  type HeldTask,
   type Department,
   type Mission,
   type ProgressState,
@@ -19,7 +20,7 @@ import type { ActionReply } from '../net/roomClient';
 
 export type ProgressChange =
   | { kind: 'outcome'; outcome: ActionOutcome }
-  | { kind: 'missionAssigned'; mission: Mission }
+  | { kind: 'missionAssigned'; mission: Mission; fromCeo: boolean }
   | { kind: 'sync' };
 
 export type ProgressListener = (state: ProgressState, change: ProgressChange) => void;
@@ -61,6 +62,10 @@ export class ServerProgress {
 
   checkIn(): CheckInState {
     return this.current.checkIn;
+  }
+
+  heldTasks(): readonly HeldTask[] {
+    return this.current.tasks ?? [];
   }
 
   todayEarned(): number {
@@ -112,7 +117,11 @@ export class ServerProgress {
         message.outcome ? { kind: 'outcome', outcome: message.outcome } : { kind: 'sync' },
       );
     } else if (message.type === 'mission_assigned') {
-      this.notify({ kind: 'missionAssigned', mission: message.mission });
+      this.notify({
+        kind: 'missionAssigned',
+        mission: message.mission,
+        fromCeo: message.fromCeo === true,
+      });
     }
   }
 

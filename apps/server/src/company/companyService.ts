@@ -48,6 +48,7 @@ import {
   uniformHex,
   type ServerMessage,
   projectBonusCoins,
+  type Mission,
 } from '@dilam/shared';
 import { hashSecret, playerCodeOf } from '../auth/secrets';
 import type { CompanyRow } from '../db/companyRepo';
@@ -114,6 +115,8 @@ export interface CompanyHooks {
   profileChanged(userId: string): void;
   /** Phòng công ty đổi tên / đồ / đồng phục: báo mọi người trong phòng tải lại. */
   companyChanged?(companyId: string): void;
+  /** Báo nhân viên: CEO vừa giao việc (nếu đang online). */
+  missionAssigned?(userId: string, mission: Mission): void;
   /** Báo chủ công ty: vừa hoàn thành dự án (nếu đang online). */
   projectDone?(ownerId: string, message: Extract<ServerMessage, { type: 'project_done' }>): void;
 }
@@ -183,8 +186,8 @@ export class CompanyService {
       reward: project.reward,
       reputation: project.reputation,
     } as const;
-    this.hooks.projectDone?.(company.ownerId, message);
-    this.payProjectBonus(company.id, project, message);
+    const paid = this.payProjectBonus(company.id, project, message);
+    this.hooks.projectDone?.(company.ownerId, { ...message, paid });
   }
 
   /**
@@ -195,12 +198,22 @@ export class CompanyService {
     companyId: string,
     project: ProjectOffer,
     message: Extract<ServerMessage, { type: 'project_done' }>,
-  ): void {
+  ): { people: number; coins: number } {
     const company = this.repos.companies.get(companyId);
-    if (!company) return;
+    if (!company) return { people: 0, coins: 0 };
     let treasury = company.economy.treasury;
+    const lines: string[] = [];
+    let people = 0;
     for (const member of this.repos.companies.members(companyId)) {
-      if (member.role < 1 || member.suspicious) continue;
+      if (member.suspicious) continue;
+      if (member.role < 1) {
+        // Thực tập sinh: không được chia thưởng nhưng vẫn được báo dự án xong.
+        this.hooks.projectDone?.(member.userId, {
+          ...message,
+          bonus: { coins: 0, xp: 0, intern: true },
+        });
+        continue;
+      }
       const want = projectBonusCoins(project.difficulty, member.role);
       const coins = Math.min(want, Math.max(0, treasury));
       if (coins > 0 && this.changeCoins(member.userId, coins, 'company:project')) {
@@ -212,14 +225,27 @@ export class CompanyService {
         makeEvent('company-project', this.now(), 0, { difficulty: project.difficulty }),
       );
       const xp = this.state(member.userId).xp - before;
+      // Báo từng người đúng phần mình nhận (kể cả hôm nay đã nhận đủ thưởng: 0 xu, 0 XP).
+      this.hooks.push(member.userId);
+      this.hooks.projectDone?.(member.userId, { ...message, bonus: { coins, xp } });
       if (coins > 0 || xp > 0) {
-        this.hooks.push(member.userId);
-        this.hooks.projectDone?.(member.userId, { ...message, bonus: { coins, xp } });
+        people += 1;
+        const name = this.repos.characters.get(member.userId)?.name ?? '';
+        lines.push(`${name} +${String(coins)} xu +${String(xp)} XP`);
       }
     }
+    const coins = company.economy.treasury - treasury;
     if (treasury !== company.economy.treasury) {
       this.repos.companies.saveEconomy(companyId, { ...company.economy, treasury });
     }
+    // Bảng tin: ai nhận bao nhiêu (người offline vẫn xem được).
+    if (lines.length > 0) {
+      this.repos.companies.addFeed(companyId, this.now(), 'project_bonus', {
+        summary: lines.join(', '),
+        coins,
+      });
+    }
+    return { people, coins };
   }
 
   /** Tính kinh tế theo giờ thật tới bây giờ, lưu lại, ghi bảng tin nếu xong dự án. */
@@ -923,9 +949,11 @@ export class CompanyService {
     if (!member) return fail('not_member');
     const template = MISSION_TEMPLATES.find((t) => t.id === templateId);
     if (!template) return fail('not_found');
-    const assigned = this.engine.assignMission(member.userId, startMission(template, this.now()));
+    const mission = startMission(template, this.now());
+    const assigned = this.engine.assignMission(member.userId, mission);
     if (!assigned) return fail('busy');
     this.hooks.push(member.userId);
+    this.hooks.missionAssigned?.(member.userId, mission);
     return this.detailOk(ownerId);
   }
 
