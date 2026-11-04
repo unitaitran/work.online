@@ -85,6 +85,8 @@ export const BALANCE = {
 
   missions: {
     perDay: 3,
+    /** CEO giao thêm tối đa chừng này việc mỗi ngày (không tính vào việc của sếp NPC). */
+    ceoPerDay: 5,
     /** Sếp giao việc đầu tiên sau chừng này kể từ khi vào văn phòng trong ngày. */
     firstDelayMs: 20_000,
     /** Nghỉ giữa hai việc. */

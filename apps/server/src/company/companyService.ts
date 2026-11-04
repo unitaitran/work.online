@@ -87,6 +87,7 @@ export type CompanyError =
   | 'too_senior'
   | 'banned'
   | 'limit'
+  | 'mission_limit'
   | 'already'
   | 'not_hiring'
   | 'bad_code'
@@ -951,7 +952,7 @@ export class CompanyService {
     if (!template) return fail('not_found');
     const mission = startMission(template, this.now());
     const assigned = this.engine.assignMission(member.userId, mission);
-    if (!assigned) return fail('busy');
+    if (assigned !== 'ok') return fail(assigned === 'busy' ? 'busy' : 'mission_limit');
     this.hooks.push(member.userId);
     this.hooks.missionAssigned?.(member.userId, mission);
     return this.detailOk(ownerId);

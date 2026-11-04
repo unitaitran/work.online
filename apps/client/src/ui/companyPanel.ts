@@ -837,7 +837,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                 () =>
                   void act('/api/company/assign', { code: m.code, templateId: task.value }).then(
                     (r) => {
-                      if (r) say(p.assign, 'ok');
+                      if (r) say(p.assigned(m.name), 'ok');
                     },
                   ),
               ),

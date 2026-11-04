@@ -419,7 +419,8 @@ export function tickBossMissions(
 ): { state: ProgressState; assigned: Mission | null } {
   let state = rollDay(input, ctx.today);
   const daily = state.daily;
-  if (activeMission(state) || daily.missions.length >= BALANCE.missions.perDay) {
+  const npcMissions = daily.missions.filter((mission) => mission.fromCeo !== true).length;
+  if (activeMission(state) || npcMissions >= BALANCE.missions.perDay) {
     return { state, assigned: null };
   }
   if (daily.nextMissionAt === null) {

@@ -148,7 +148,7 @@ describe('ProgressEngine', () => {
       assignedAt: clock,
       completedAt: null,
     };
-    expect(engine.assignMission(player.userId, mission)).toBe(true);
+    expect(engine.assignMission(player.userId, mission)).toBe('ok');
     expect(engine.accrueWork(player, 'meeting', 60_000)?.outcome.completedMission).toBeNull();
     const second = engine.accrueWork(player, 'meeting', 60_000);
     expect(second?.outcome.completedMission?.templateId).toBe('meeting-2');
