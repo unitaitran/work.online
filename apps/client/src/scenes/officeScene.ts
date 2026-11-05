@@ -1060,7 +1060,15 @@ export class OfficeScene implements SceneController {
     }
     const nearby = this.path.length === 0 ? nearestInteractable(this.position, this.items) : null;
     this.options.onHint(
-      nearby ? { kind: 'use', label: STRINGS.interact.labels[nearby.kind] } : null,
+      nearby
+        ? {
+            kind: 'use',
+            label:
+              nearby.pose === 'lie'
+                ? STRINGS.interact.lieDown
+                : STRINGS.interact.labels[nearby.kind],
+          }
+        : null,
     );
   }
 

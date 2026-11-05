@@ -959,10 +959,10 @@ function loungePieces(layout: OfficeLayout): Piece[] {
         minX: daybed.minX + 0.08,
         maxX: daybed.maxX - 0.08,
         minZ: daybed.minZ + 0.06,
-        maxZ: daybed.minZ + 0.36,
+        maxZ: daybed.minZ + 0.5,
       },
       0.32,
-      0.42,
+      0.38,
       RED_SOFT,
     ),
   );
