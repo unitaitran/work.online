@@ -107,19 +107,21 @@ export function computePose(pose: PoseName, t: number): PoseState {
       };
     }
     case 'lie': {
-      // Nằm ngửa thư giãn: thở chậm, tay xuôi hai bên, chân duỗi thẳng.
+      // Nằm ngửa ngay ngắn: đầu thẳng gối lên gối (cằm hơi cúi để gáy tựa trên gối, không lún),
+      // hai tay áp sát thân và hạ xuống mặt nệm, chân duỗi thẳng hạ sát nệm. Chỉ thở rất nhẹ,
+      // không lắc đầu, hai bên đối xứng.
       const breathe = Math.sin(t * 1.4);
       return {
         rootY: 0,
         bodyPitch: 0,
-        headPitch: -0.08 + breathe * 0.015,
-        headRoll: Math.sin(t * 0.35) * 0.08,
-        armLeftX: breathe * 0.03,
-        armRightX: -breathe * 0.03,
-        armLeftZ: 0.22,
-        armRightZ: -0.22,
-        legLeftX: 0,
-        legRightX: 0,
+        headPitch: 0.4 + breathe * 0.01,
+        headRoll: 0,
+        armLeftX: 0.45,
+        armRightX: 0.45,
+        armLeftZ: 0.1,
+        armRightZ: -0.1,
+        legLeftX: 0.45,
+        legRightX: 0.45,
         lie: 1,
       };
     }

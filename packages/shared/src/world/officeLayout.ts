@@ -299,7 +299,8 @@ export const OFFICE_FLOOR: OfficeLayout = {
     sofa: { minX: 5.8, maxX: 8.2, minZ: 5.65, maxZ: 6.5 },
     table: box(7.0, 4.4, 1, 0.5),
     seatXs: [6.35, 7.0, 7.65],
-    daybed: { minX: 9.2, maxX: 9.98, minZ: 2.5, maxZ: 4.5 },
+    // Rộng ~1,2 m để cả người (vai, hai tay) nằm gọn trên nệm, không lẹm ra ngoài mép.
+    daybed: { minX: 8.8, maxX: 9.98, minZ: 2.5, maxZ: 4.5 },
     sideTable: box(9.55, 5.05, 0.4, 0.4),
     lamp: { x: 9.55, z: 6.05 },
   },

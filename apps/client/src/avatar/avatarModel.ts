@@ -55,8 +55,11 @@ const HIP_Y = 0.32;
 const SHOULDER_Y = 0.57;
 const NECK_Y = 0.64;
 const HEAD_RADIUS = 0.27;
-/** Nằm: nhấc người lên (m) để đầu và lưng nằm trên mặt đệm chứ không lún xuống. */
-const LIE_LIFT = 0.22;
+/**
+ * Nằm: nhấc trục người lên (m) để lưng (bán kính thân 0,17) chạm mặt đệm ghế dài (cao 0,32)
+ * chứ không lún xuyên qua nệm: trục ở 0,45 + độ nâng chỗ nằm 0,05 = 0,5 m.
+ */
+const LIE_LIFT = 0.45;
 
 interface OutfitStyle {
   top: number;

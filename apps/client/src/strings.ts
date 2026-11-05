@@ -163,6 +163,8 @@ export const STRINGS = {
     },
     prompt: (label: string) => label,
     keyHint: ' (E)',
+    /** Ghế dài trong phòng nghỉ (tư thế nằm) dùng nhãn riêng, không phải "ngồi". */
+    lieDown: 'Nằm nghỉ',
     standUp: 'Đứng dậy',
     results: {
       desk: 'Lách cách lách cách…',

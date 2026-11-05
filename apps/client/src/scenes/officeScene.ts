@@ -129,10 +129,21 @@ export interface OfficeSceneOptions {
   onSeatChange(item: Interactable | null): void;
 }
 
-/** Góc camera khi ngồi: qua vai phải; khi nằm thì lùi ra nhìn ngang cả người trên giường. */
+/**
+ * Góc camera khi ngồi: qua vai phải. Khi nằm: nhìn chéo từ phía cuối giường (chân) về đầu giường,
+ * người nằm dọc theo chiều cao màn hình nên màn dọc điện thoại vẫn thấy trọn từ đầu tới chân.
+ */
 function seatOrbit(item: Interactable): { yaw: number; pitch: number; distance: number } {
-  if (item.pose === 'lie') return { yaw: item.facing - Math.PI / 2, pitch: 0.7, distance: 3.2 };
+  if (item.pose === 'lie') return { yaw: item.facing - 0.45, pitch: 0.85, distance: 3.0 };
   return { yaw: item.facing + Math.PI - 0.55, pitch: 0.82, distance: 2.3 };
+}
+
+/**
+ * Điểm camera nhìn khi ngồi, dời theo hướng mặt (m): ngồi thì nhìn về phía bàn trước mặt;
+ * nằm thì dời về phía đầu (chỗ ngồi là gót chân) để nhìn vào giữa người.
+ */
+function seatFocusShift(item: Interactable): number {
+  return item.pose === 'lie' ? -0.55 : 0.35;
 }
 
 export class OfficeScene implements SceneController {
@@ -725,14 +736,14 @@ export class OfficeScene implements SceneController {
     const focusX = top
       ? (center.minX + center.maxX) / 2
       : seat
-        ? x - Math.sin(seat.facing + Math.PI) * 0.35
+        ? x - Math.sin(seat.facing + Math.PI) * seatFocusShift(seat)
         : x;
     const focusZ = top
       ? (center.minZ + center.maxZ) / 2 + 0.6
       : seat
-        ? z - Math.cos(seat.facing + Math.PI) * 0.35
+        ? z - Math.cos(seat.facing + Math.PI) * seatFocusShift(seat)
         : z;
-    const focusY = top ? 0 : seat ? 0.5 : LOOK_HEIGHT;
+    const focusY = top ? 0 : seat ? (seat.pose === 'lie' ? 0.45 : 0.5) : LOOK_HEIGHT;
     this.lookTarget.set(
       damp(this.lookTarget.x, focusX, CAMERA_FOLLOW, frameSeconds),
       damp(this.lookTarget.y, focusY, CAMERA_FOLLOW, frameSeconds),
@@ -1060,7 +1071,15 @@ export class OfficeScene implements SceneController {
     }
     const nearby = this.path.length === 0 ? nearestInteractable(this.position, this.items) : null;
     this.options.onHint(
-      nearby ? { kind: 'use', label: STRINGS.interact.labels[nearby.kind] } : null,
+      nearby
+        ? {
+            kind: 'use',
+            label:
+              nearby.pose === 'lie'
+                ? STRINGS.interact.lieDown
+                : STRINGS.interact.labels[nearby.kind],
+          }
+        : null,
     );
   }
 
