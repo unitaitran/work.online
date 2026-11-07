@@ -84,44 +84,194 @@ function xpBar(ratio: number, text: string): HTMLElement {
 
 function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
   const p = levelProgress(state.xp);
+  const currentTitle = jobName(
+    jobTagFor(o.workplace?.() ?? null, p.level),
+    titleFor(state.xp),
+    state.branch,
+  );
+  const employer = state.employer
+    ? (s.card.employers[state.employer] ??
+        (state.employer.startsWith('company:') ? o.companyName?.() : null) ??
+        s.card.companyUnknown)
+    : s.card.unemployed;
+  const department = state.department ? DEPARTMENT_NAMES[state.department] : s.card.noDepartment;
+  const branch = state.branch ? BRANCH_NAMES[state.branch] : s.card.noBranch;
+  const pct = Math.round(p.ratio * 100);
+
   return el('div', {
-    className: 'profile-card',
+    className: 'profile-card-modern',
     children: [
+      // Hero Header
       el('div', {
-        className: 'profile-head',
+        className: 'profile-head-modern',
         children: [
-          el('p', { className: 'profile-name', text: o.name }),
-          el('p', { className: 'profile-sub', text: `${STRINGS.checkIn.code}: ${o.playerId}` }),
+          el('div', {
+            className: 'profile-avatar-badge',
+            text: o.name.charAt(0).toUpperCase() || '👤',
+          }),
+          el('div', {
+            className: 'profile-title-block',
+            children: [
+              el('div', {
+                className: 'profile-name-row',
+                children: [
+                  el('h3', { className: 'profile-name-hero', text: o.name }),
+                  el('span', { className: 'badge-pill badge-id', text: `#${o.playerId}` }),
+                ],
+              }),
+              el('div', {
+                className: 'profile-role-row',
+                children: [
+                  el('span', { className: 'badge-pill badge-rank', text: `⭐ Cấp ${p.level}` }),
+                  el('span', { className: 'badge-pill badge-title', text: currentTitle }),
+                ],
+              }),
+            ],
+          }),
         ],
       }),
-      xpBar(p.ratio, p.isMax ? s.xpMax : s.xpBar(p.into, p.needed)),
-      el('dl', {
-        className: 'profile-grid',
+
+      // XP Progress Bar
+      el('div', {
+        className: 'profile-xp-box',
         children: [
-          // Làm ở công ty người chơi: chức danh theo lộ trình công ty (giống trên HUD).
-          row(
-            s.card.title,
-            jobName(jobTagFor(o.workplace?.() ?? null, p.level), titleFor(state.xp), state.branch),
+          el('div', {
+            className: 'profile-xp-labels',
+            children: [
+              el('span', { className: 'xp-box-title', text: 'Kinh nghiệm tích luỹ' }),
+              el('span', {
+                className: 'xp-box-val',
+                text: p.isMax
+                  ? s.xpMax
+                  : `${p.into.toLocaleString('vi-VN')} / ${p.needed.toLocaleString('vi-VN')} XP (${pct}%)`,
+              }),
+            ],
+          }),
+          xpBar(
+            p.ratio,
+            p.isMax
+              ? s.xpMax
+              : `${p.into.toLocaleString('vi-VN')} / ${p.needed.toLocaleString('vi-VN')} XP`,
           ),
-          row(s.card.level, String(p.level)),
-          row(s.card.xp, String(state.xp)),
-          row(s.card.today, s.card.todayValue(o.progress.todayEarned(), BALANCE.dailySoftCap)),
-          row(
-            s.card.department,
-            state.department ? DEPARTMENT_NAMES[state.department] : s.card.noDepartment,
-          ),
-          row(s.card.branch, state.branch ? BRANCH_NAMES[state.branch] : s.card.noBranch),
-          row(
-            s.card.company,
-            state.employer
-              ? (s.card.employers[state.employer] ??
-                  (state.employer.startsWith('company:') ? o.companyName?.() : null) ??
-                  s.card.companyUnknown)
-              : s.card.unemployed,
-          ),
-          row(s.card.streak, s.card.streakValue(state.checkIn.streak)),
-          row(s.card.coins, String(state.coins)),
-          row(s.card.reputation, String(state.reputation)),
+        ],
+      }),
+
+      // 4 Bento KPI Metric Cards
+      el('div', {
+        className: 'profile-kpi-grid',
+        children: [
+          // Coins
+          el('div', {
+            className: 'kpi-card kpi-coins',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '🪙' }),
+                  el('span', { className: 'kpi-label', text: s.card.coins }),
+                ],
+              }),
+              el('div', {
+                className: 'kpi-value',
+                text: `${state.coins.toLocaleString('vi-VN')} xu`,
+              }),
+              el('div', { className: 'kpi-sub', text: 'Số dư khả dụng' }),
+            ],
+          }),
+          // Reputation
+          el('div', {
+            className: 'kpi-card kpi-reputation',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '⭐' }),
+                  el('span', { className: 'kpi-label', text: s.card.reputation }),
+                ],
+              }),
+              el('div', { className: 'kpi-value', text: state.reputation.toLocaleString('vi-VN') }),
+              el('div', { className: 'kpi-sub', text: 'Độ tín nhiệm công sở' }),
+            ],
+          }),
+          // Streak
+          el('div', {
+            className: 'kpi-card kpi-streak',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '🔥' }),
+                  el('span', { className: 'kpi-label', text: s.card.streak }),
+                ],
+              }),
+              el('div', {
+                className: 'kpi-value',
+                text: `${state.checkIn.streak.toLocaleString('vi-VN')} ngày`,
+              }),
+              el('div', { className: 'kpi-sub', text: 'Chăm chỉ liên tiếp' }),
+            ],
+          }),
+          // Daily XP
+          el('div', {
+            className: 'kpi-card kpi-today',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '📈' }),
+                  el('span', { className: 'kpi-label', text: s.card.today }),
+                ],
+              }),
+              el('div', {
+                className: 'kpi-value',
+                text: `${o.progress.todayEarned().toLocaleString('vi-VN')}/${BALANCE.dailySoftCap.toLocaleString('vi-VN')}`,
+              }),
+              el('div', { className: 'kpi-sub', text: 'Hạn mức tiêu chuẩn' }),
+            ],
+          }),
+        ],
+      }),
+
+      // Meta Organization Info Cards
+      el('div', {
+        className: 'profile-meta-grid',
+        children: [
+          el('div', {
+            className: 'profile-meta-card',
+            children: [
+              el('span', { className: 'meta-icon', text: '🏢' }),
+              el('div', {
+                children: [
+                  el('small', { text: s.card.company }),
+                  el('strong', { text: employer }),
+                ],
+              }),
+            ],
+          }),
+          el('div', {
+            className: 'profile-meta-card',
+            children: [
+              el('span', { className: 'meta-icon', text: '📂' }),
+              el('div', {
+                children: [
+                  el('small', { text: s.card.department }),
+                  el('strong', { text: department }),
+                ],
+              }),
+            ],
+          }),
+          el('div', {
+            className: 'profile-meta-card',
+            children: [
+              el('span', { className: 'meta-icon', text: '🌿' }),
+              el('div', {
+                children: [
+                  el('small', { text: s.card.branch }),
+                  el('strong', { text: branch }),
+                ],
+              }),
+            ],
+          }),
         ],
       }),
     ],

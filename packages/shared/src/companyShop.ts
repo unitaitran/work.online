@@ -6,6 +6,35 @@ import { COMPANY_COLORS, type CompanyEconomy } from './company';
 export type CompanyPerk = 'massage' | 'console' | 'deskDecor' | 'uniform';
 export const COMPANY_PERKS: readonly CompanyPerk[] = ['massage', 'console', 'deskDecor', 'uniform'];
 
+export interface CompanyPerkBuff {
+  name: string;
+  description: string;
+  percent: number;
+}
+
+export const COMPANY_PERK_BUFFS: Readonly<Record<CompanyPerk, CompanyPerkBuff>> = {
+  massage: {
+    name: 'Ghế massage',
+    description: '+15% XP khi ngồi máy trong văn phòng công ty',
+    percent: 15,
+  },
+  console: {
+    name: 'Máy chơi game + TV',
+    description: '+15% xu thưởng khi công ty hoàn thành dự án',
+    percent: 15,
+  },
+  deskDecor: {
+    name: 'Trang trí bàn làm việc',
+    description: '+10% điểm đóng góp dự án cho toàn thể nhân viên & NPC',
+    percent: 10,
+  },
+  uniform: {
+    name: 'Đồng phục công ty',
+    description: '+10% XP mọi hoạt động khi mặc đồng phục làm việc tại công ty',
+    percent: 10,
+  },
+};
+
 /** Giá (xu trừ vào quỹ công ty). Đồ mua một lần dùng mãi; đổi tên / màu đồng phục trả mỗi lần. */
 export const COMPANY_SHOP = {
   rename: 600,

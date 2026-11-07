@@ -18,6 +18,8 @@ import {
   type LogEntry,
   type ProgressState,
 } from './progress';
+import type { ItemBuff, ItemBuffType } from './shop';
+import type { CompanyPerk } from './companyShop';
 import { daysBetween } from './time';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,11 @@ export function buffed(xp: number, category: XpCategory, department: Department 
   return Math.round(xp * BALANCE.departmentBuff);
 }
 
+export function sumBuffPercent(buffs: readonly ItemBuff[] | undefined, type: ItemBuffType): number {
+  if (!buffs || buffs.length === 0) return 0;
+  return buffs.reduce((sum, b) => (b.type === type && b.percent ? sum + b.percent : sum), 0);
+}
+
 export interface XpContext {
   department: Department | null;
   /** Chuỗi chấm công SAU khi chấm (chỉ dùng cho sự kiện checkin hợp lệ). */
@@ -93,6 +100,12 @@ export interface XpContext {
   countToday(key: keyof typeof BALANCE.perDayLimits): number;
   fortuneClaimed: boolean;
   linesCarry: number;
+  /** Danh sách buff từ trang bị đang dùng của người chơi. */
+  itemBuffs?: readonly ItemBuff[] | undefined;
+  /** Đặc quyền công ty (nếu đang ở phòng công ty). */
+  companyPerks?: readonly CompanyPerk[] | undefined;
+  /** Đang mặc đồng phục công ty (nếu có). */
+  wearingUniform?: boolean | undefined;
 }
 
 export interface XpResult {
@@ -104,7 +117,7 @@ export interface XpResult {
 }
 
 /**
- * XP gốc (đã nhân ưu đãi phòng ban, CHƯA áp giới hạn ngày) của một sự kiện.
+ * XP gốc (đã nhân ưu đãi phòng ban & trang bị, CHƯA áp giới hạn ngày) của một sự kiện.
  * Sự kiện checkin chỉ được gọi khi chấm công hợp lệ (status 'checked').
  */
 export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
@@ -113,9 +126,13 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
   const limits = BALANCE.perDayLimits;
   const add = (category: XpCategory, xp: number, minutes?: number): void => {
     if (xp > 0) {
+      let finalXp = buffed(xp, category, ctx.department);
+      if (ctx.wearingUniform && ctx.companyPerks?.includes('uniform')) {
+        finalXp = Math.round(finalXp * 1.1);
+      }
       parts.push({
         category,
-        xp: buffed(xp, category, ctx.department),
+        xp: finalXp,
         ...(minutes !== undefined ? { minutes } : {}),
       });
     }
@@ -124,7 +141,10 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
   switch (event.type) {
     case 'checkin': {
       const { base, perStreakDay, streakCap } = BALANCE.checkIn;
-      const streakBonus = perStreakDay * Math.min(Math.max(ctx.streak, 0), streakCap);
+      const streakBuffPct = sumBuffPercent(ctx.itemBuffs, 'streak_bonus');
+      const streakBonus = Math.round(
+        perStreakDay * Math.min(Math.max(ctx.streak, 0), streakCap) * (1 + streakBuffPct / 100),
+      );
       const bonus =
         ctx.department === 'accounting'
           ? Math.round(streakBonus * BALANCE.departmentBuff)
@@ -137,24 +157,35 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
       const { plannedMs, completed, lines } = event.detail;
       const minutes = Math.round(plannedMs / 60_000);
       if (completed && event.durationMs >= plannedMs) {
-        add('focus', BALANCE.focus.completed[minutes] ?? 0);
+        const focusBuffPct = sumBuffPercent(ctx.itemBuffs, 'focus_xp');
+        const baseFocus = BALANCE.focus.completed[minutes] ?? 0;
+        add('focus', Math.round(baseFocus * (1 + focusBuffPct / 100)));
       }
       // Dòng thư công sở: cộng dồn, mỗi đủ mốc thì quy ra XP.
       linesCarry += Math.max(0, Math.floor(lines));
       const chunks = Math.floor(linesCarry / BALANCE.lines.per);
       linesCarry -= chunks * BALANCE.lines.per;
-      add('lines', chunks * BALANCE.lines.xp);
+      const linesBuffPct = sumBuffPercent(ctx.itemBuffs, 'lines_xp');
+      add('lines', Math.round(chunks * BALANCE.lines.xp * (1 + linesBuffPct / 100)));
       break;
     }
     case 'task-flip':
-      if (event.detail.completed && ctx.countToday('taskDone') < limits.taskDone)
-        add('task', BALANCE.taskDone);
+      if (event.detail.completed && ctx.countToday('taskDone') < limits.taskDone) {
+        const taskBuffPct = sumBuffPercent(ctx.itemBuffs, 'task_xp');
+        add('task', Math.round(BALANCE.taskDone * (1 + taskBuffPct / 100)));
+      }
       break;
     case 'coffee-gift':
-      if (ctx.countToday('coffeeGift') < limits.coffeeGift) add('coffeeGift', BALANCE.coffeeGift);
+      if (ctx.countToday('coffeeGift') < limits.coffeeGift) {
+        const coffeeBuffPct = sumBuffPercent(ctx.itemBuffs, 'coffee_xp');
+        add('coffeeGift', Math.round(BALANCE.coffeeGift * (1 + coffeeBuffPct / 100)));
+      }
       break;
     case 'chore':
-      if (ctx.countToday('chore') < limits.chore) add('chore', BALANCE.chore);
+      if (ctx.countToday('chore') < limits.chore) {
+        const choreBuffPct = sumBuffPercent(ctx.itemBuffs, 'chore_xp');
+        add('chore', Math.round(BALANCE.chore * (1 + choreBuffPct / 100)));
+      }
       break;
     case 'kpi-fortune':
       if (!event.detail.repeat && !ctx.fortuneClaimed) add('fortune', BALANCE.fortune);
@@ -185,7 +216,13 @@ export function xpFor(event: ActivityEvent, ctx: XpContext): XpResult {
         Math.max(0, Math.floor(event.detail.minutes)),
         Math.max(0, limit - used),
       );
-      add(meeting ? 'meeting' : 'focus', minutes * BALANCE.work[event.detail.kind], minutes);
+      const idleBuffPct = meeting
+        ? 0
+        : sumBuffPercent(ctx.itemBuffs, 'idle_xp') +
+          (ctx.companyPerks?.includes('massage') ? 15 : 0);
+      const baseRate = BALANCE.work[event.detail.kind];
+      const tickXp = Math.round(minutes * baseRate * (1 + idleBuffPct / 100));
+      add(meeting ? 'meeting' : 'focus', tickXp, minutes);
       break;
     }
     default:
@@ -235,6 +272,12 @@ export interface ApplyContext {
   /** Ngày lịch hiện tại của người chơi. */
   today: string;
   now: number;
+  /** Danh sách buff từ trang bị đang mặc (nếu có). */
+  itemBuffs?: readonly ItemBuff[] | undefined;
+  /** Đặc quyền công ty (nếu đang ở phòng công ty). */
+  companyPerks?: readonly CompanyPerk[] | undefined;
+  /** Đang mặc đồng phục công ty (nếu có). */
+  wearingUniform?: boolean | undefined;
 }
 
 export interface ApplyResult {
@@ -296,6 +339,9 @@ export function applyEvent(
     countToday: (key) => counts[key] ?? 0,
     fortuneClaimed: state.daily.fortuneClaimed,
     linesCarry: state.linesCarry,
+    itemBuffs: ctx.itemBuffs,
+    companyPerks: ctx.companyPerks,
+    wearingUniform: ctx.wearingUniform,
   });
 
   // Đếm số lần đã tính (chỉ khi thật sự được XP).
@@ -329,6 +375,11 @@ export function applyEvent(
   const helped = xp.parts.some(
     (part) => part.category === 'coffeeGift' || part.category === 'chore',
   );
+  const repBuff =
+    ctx.itemBuffs?.reduce(
+      (sum, b) => (b.type === 'reputation' && b.flat ? sum + b.flat : sum),
+      0,
+    ) ?? 0;
 
   // Việc sếp giao.
   let missionXp = 0;
@@ -344,12 +395,23 @@ export function applyEvent(
   let nextMissionAt = state.daily.nextMissionAt;
   if (missionXp > 0) nextMissionAt = ctx.now + BALANCE.missions.cooldownMs;
 
+  let stamina = state.stamina ?? { current: BALANCE.stamina.baseMax, max: BALANCE.stamina.baseMax, updatedAt: ctx.now, exhausted: false };
+  if (event.type === 'coffee-drink') {
+    stamina = boostStamina(stamina, BALANCE.stamina.drinkBoost, ctx.now);
+  } else if (event.type === 'work-tick' || event.type === 'focus-typing') {
+    stamina = updateStamina(stamina, ctx.now, 'desk', ctx.companyPerks);
+  }
+
+  // Kiệt sức do làm việc liên tục quá 30 phút mà chưa nghỉ: không nhận thêm XP làm việc
+  const isWorkEvent = event.type === 'work-tick' || event.type === 'focus-typing';
   const base = xp.xp + missionXp;
-  const granted = applyDailyCap(state.daily.earned, base);
+  const effectiveBase = (stamina.exhausted && isWorkEvent) ? missionXp : base;
+  const granted = applyDailyCap(state.daily.earned, effectiveBase);
   // Nhật ký tách phần của hoạt động và phần thưởng việc sếp giao.
-  const grantedEvent = applyDailyCap(state.daily.earned, xp.xp);
+  const effectiveXp = (stamina.exhausted && isWorkEvent) ? 0 : xp.xp;
+  const grantedEvent = applyDailyCap(state.daily.earned, effectiveXp);
   const log: LogEntry[] = [...state.log];
-  if (xp.xp > 0) log.push({ at: ctx.now, source: event.type, xp: grantedEvent, base: xp.xp });
+  if (effectiveXp > 0) log.push({ at: ctx.now, source: event.type, xp: grantedEvent, base: effectiveXp });
   if (missionXp > 0) {
     log.push({ at: ctx.now, source: 'mission', xp: granted - grantedEvent, base: missionXp });
   }
@@ -372,7 +434,7 @@ export function applyEvent(
     ...state,
     xp: state.xp + granted,
     coins: state.coins + coins,
-    reputation: state.reputation + (helped ? BALANCE.reputationPerHelp : 0),
+    reputation: state.reputation + (helped ? BALANCE.reputationPerHelp + repBuff : 0),
     linesCarry: xp.linesCarry,
     daily: {
       ...state.daily,
@@ -383,6 +445,7 @@ export function applyEvent(
       nextMissionAt,
       stats,
     },
+    stamina,
     log: log.slice(-BALANCE.log.maxEntries),
   };
 
@@ -453,4 +516,90 @@ export { MISSION_TEMPLATES };
 /** Đang có việc "Họp với sếp" chưa xong: được vào phòng sếp (cả ở văn phòng chung). */
 export function hasCeoMeeting(state: ProgressState): boolean {
   return activeMission(state)?.templateId === CEO_MEETING_MISSION;
+}
+
+// ---------------------------------------------------------------------------
+// Thể lực (Stamina) - Giới hạn 30 phút làm việc liên tiếp
+// ---------------------------------------------------------------------------
+
+export type RestActivity =
+  | 'none'
+  | 'desk'
+  | 'window'
+  | 'sofa'
+  | 'massage'
+  | 'console'
+  | 'walking';
+
+export function updateStamina(
+  currentStamina: { current: number; max: number; updatedAt: number; exhausted?: boolean | undefined },
+  now: number,
+  activity: RestActivity,
+  companyPerks: readonly string[] = [],
+): { current: number; max: number; updatedAt: number; exhausted: boolean } {
+  const elapsedSeconds = Math.max(0, (now - currentStamina.updatedAt) / 1000);
+  if (elapsedSeconds <= 0) {
+    return {
+      current: currentStamina.current,
+      max: currentStamina.max,
+      updatedAt: currentStamina.updatedAt,
+      exhausted: currentStamina.exhausted ?? (currentStamina.current <= 0),
+    };
+  }
+
+  const hasUniform = companyPerks.includes('uniform');
+  const targetMax = BALANCE.stamina.baseMax + (hasUniform ? 20 : 0);
+  const max = Math.max(targetMax, currentStamina.max);
+
+  let current = currentStamina.current;
+  let exhausted = currentStamina.exhausted ?? (current <= 0);
+
+  if (activity === 'desk') {
+    // Nếu thời gian trôi qua lớn (nghỉ ngơi > 5 phút, offline hoặc qua ngày mới), thể lực tự hồi đầy
+    if (elapsedSeconds >= 300) {
+      current = max;
+      exhausted = false;
+    } else {
+      const hasDecor = companyPerks.includes('deskDecor');
+      const drainMultiplier = hasDecor ? 0.8 : 1.0;
+      const drain = elapsedSeconds * BALANCE.stamina.drainPerSecond * drainMultiplier;
+      current = Math.max(0, current - drain);
+      if (current <= 0) exhausted = true;
+    }
+  } else {
+    let regenRate = BALANCE.stamina.passiveRegenPerSecond;
+    if (activity === 'massage' || (activity === 'sofa' && companyPerks.includes('massage'))) {
+      regenRate = BALANCE.stamina.massageRegenPerSecond;
+    } else if (activity === 'console' || (activity === 'sofa' && companyPerks.includes('console'))) {
+      regenRate = BALANCE.stamina.consoleRegenPerSecond;
+    } else if (activity === 'sofa') {
+      regenRate = BALANCE.stamina.breakroomRegenPerSecond;
+    } else if (activity === 'window') {
+      regenRate = BALANCE.stamina.windowRegenPerSecond;
+    }
+    const regen = elapsedSeconds * regenRate;
+    current = Math.min(max, current + regen);
+    if (current >= BALANCE.stamina.exhaustedThreshold) exhausted = false;
+  }
+
+  return {
+    current: Math.round(current * 10) / 10,
+    max,
+    updatedAt: now,
+    exhausted,
+  };
+}
+
+export function boostStamina(
+  stamina: { current: number; max: number; updatedAt: number; exhausted?: boolean | undefined },
+  amount: number,
+  now: number,
+): { current: number; max: number; updatedAt: number; exhausted: boolean } {
+  const current = Math.min(stamina.max, stamina.current + amount);
+  return {
+    current: Math.round(current * 10) / 10,
+    max: stamina.max,
+    updatedAt: now,
+    exhausted: current < BALANCE.stamina.exhaustedThreshold ? (stamina.exhausted ?? false) : false,
+  };
 }

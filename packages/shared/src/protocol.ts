@@ -128,6 +128,12 @@ export const clientQuickChatSchema = z.strictObject({
     .max(QUICK_CHATS.length - 1),
 });
 
+export const clientChatSchema = z.strictObject({
+  type: z.literal('chat'),
+  text: z.string().trim().min(1).max(100),
+  targetSid: z.number().int().optional(),
+});
+
 export const clientPingSchema = z.strictObject({
   type: z.literal('ping'),
   t: z.number(),
@@ -147,8 +153,11 @@ export const clientEventRespondSchema = z.strictObject({
   id: z.number().int().nonnegative(),
 });
 
-/** Rủ cả phòng uống trà sữa (mỗi người tự trả MILK_TEA.price xu, uống xong được XP). */
-export const clientTeaInviteSchema = z.strictObject({ type: z.literal('tea_invite') });
+/** Rủ cả phòng hoặc 1 người uống trà sữa (mỗi người tự trả MILK_TEA.price xu, uống xong được XP). */
+export const clientTeaInviteSchema = z.strictObject({
+  type: z.literal('tea_invite'),
+  targetSid: z.number().int().optional(),
+});
 
 /** Nhận lời (tự trả một cốc) / từ chối lời rủ uống trà sữa. */
 export const clientTeaReplySchema = z.strictObject({
@@ -167,6 +176,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   clientStateSchema,
   clientEmoteSchema,
   clientQuickChatSchema,
+  clientChatSchema,
   clientPingSchema,
   clientActiveSchema,
   clientLeaveSchema,
@@ -201,6 +211,7 @@ export type ServerMessage =
   | { type: 'states'; s: StateTuple[] }
   | { type: 'emote'; sid: number; emote: Emote }
   | { type: 'quick_chat'; sid: number; index: number }
+  | { type: 'chat'; sid: number; text: string; isDirect?: boolean | undefined; targetSid?: number | undefined }
   /** Vị trí gửi lên không hợp lệ (đi quá nhanh, xuyên tường): kéo về chỗ này. */
   | { type: 'correct'; x: number; z: number }
   | { type: 'idle_check'; deadline: number }

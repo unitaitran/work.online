@@ -295,20 +295,26 @@ export function addWork(economy: CompanyEconomy, points: number): SettleResult {
   if (!project || points <= 0) {
     return { economy, completed: null, workAdded: 0, salaryPaid: 0 };
   }
-  const progress = Math.min(project.work, project.progress + points);
+  const effectivePoints = economy.perks?.includes('deskDecor')
+    ? Math.round(points * 1.1)
+    : points;
+  const progress = Math.min(project.work, project.progress + effectivePoints);
   if (progress < project.work) {
     return {
       economy: { ...economy, project: { ...project, progress } },
       completed: null,
-      workAdded: points,
+      workAdded: effectivePoints,
       salaryPaid: 0,
     };
   }
+  const reward = economy.perks?.includes('console')
+    ? Math.round(project.reward * 1.15)
+    : project.reward;
   return {
     economy: {
       ...economy,
       project: null,
-      treasury: economy.treasury + project.reward,
+      treasury: economy.treasury + reward,
       reputation: economy.reputation + project.reputation,
       projectsDone: economy.projectsDone + 1,
       // Chỉ giữ mã của cùng ngày với dự án vừa xong (mã dạng "ngày-số").
@@ -318,7 +324,7 @@ export function addWork(economy: CompanyEconomy, points: number): SettleResult {
       ],
     },
     completed: project,
-    workAdded: points,
+    workAdded: effectivePoints,
     salaryPaid: 0,
   };
 }

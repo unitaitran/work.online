@@ -257,13 +257,14 @@ export class OfficeActivities {
 
   private nextBack: (() => void) | null = null;
 
-  openPanel(title: string, onClose?: () => void): Modal {
+  openPanel(title: string, onClose?: () => void, className?: string): Modal {
     this.modal?.close();
     this.o.scene.setInputLocked(true);
     const back = this.nextBack;
     this.nextBack = null;
     const modal = openModal(this.o.root, {
       title,
+      className,
       onClose: (byUser) => {
         if (this.modal === modal) this.modal = null;
         if (!this.modal && !this.focus) this.o.scene.setInputLocked(false);

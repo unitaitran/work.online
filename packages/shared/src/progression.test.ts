@@ -148,41 +148,41 @@ describe('cấp độ 1–500', () => {
 });
 
 describe('xpFor', () => {
-  it('chấm công: 20 + 5 × min(chuỗi, 7)', () => {
-    expect(xpFor(checkin(), ctx({ streak: 1 })).xp).toBe(25);
-    expect(xpFor(checkin(), ctx({ streak: 7 })).xp).toBe(55);
-    expect(xpFor(checkin(), ctx({ streak: 30 })).xp).toBe(55);
+  it('chấm công: 200 + 50 × min(chuỗi, 7)', () => {
+    expect(xpFor(checkin(), ctx({ streak: 1 })).xp).toBe(250);
+    expect(xpFor(checkin(), ctx({ streak: 7 })).xp).toBe(550);
+    expect(xpFor(checkin(), ctx({ streak: 30 })).xp).toBe(550);
   });
 
-  it('hết phiên tập trung trọn vẹn: thưởng 3/10/20; dừng sớm hoặc báo xong mà thiếu giờ thì không', () => {
-    expect(xpFor(focus(1, true), ctx()).xp).toBe(3);
-    expect(xpFor(focus(3, true), ctx()).xp).toBe(10);
-    expect(xpFor(focus(5, true), ctx()).xp).toBe(20);
+  it('hết phiên tập trung trọn vẹn: thưởng 50/120/250; dừng sớm hoặc báo xong mà thiếu giờ thì không', () => {
+    expect(xpFor(focus(1, true), ctx()).xp).toBe(50);
+    expect(xpFor(focus(3, true), ctx()).xp).toBe(120);
+    expect(xpFor(focus(5, true), ctx()).xp).toBe(250);
     expect(xpFor(focus(5, false, 0, 150_000), ctx()).xp).toBe(0);
     expect(xpFor(focus(5, true, 0, 60_000), ctx()).xp).toBe(0);
   });
 
-  it('XP nhỏ giọt mỗi phút: ngồi máy 2, phiên tập trung 4, họp 2', () => {
+  it('XP nhỏ giọt mỗi phút: ngồi máy 2, phiên tập trung 10, họp 4', () => {
     expect(xpFor(tick('desk', 1), ctx()).xp).toBe(2);
-    expect(xpFor(tick('focus', 3), ctx()).xp).toBe(12);
-    expect(xpFor(tick('meeting', 5), ctx()).xp).toBe(10);
+    expect(xpFor(tick('focus', 3), ctx()).xp).toBe(30);
+    expect(xpFor(tick('meeting', 5), ctx()).xp).toBe(20);
   });
 
-  it('mỗi 50 dòng thư công sở = 5 XP, phần dư cộng dồn', () => {
+  it('mỗi 50 dòng thư công sở = 50 XP, phần dư cộng dồn', () => {
     const a = xpFor(focus(1, true, 70), ctx());
-    expect(a.xp).toBe(3 + 5);
+    expect(a.xp).toBe(50 + 50);
     expect(a.linesCarry).toBe(20);
-    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(8);
+    expect(xpFor(focus(1, true, 30), ctx({ linesCarry: 20 })).xp).toBe(100);
   });
 
   it('task, cà phê, công quả, quẻ, họp', () => {
-    expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: true }), ctx()).xp).toBe(15);
+    expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: true }), ctx()).xp).toBe(150);
     expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: false }), ctx()).xp).toBe(0);
-    expect(xpFor(gift(), ctx()).xp).toBe(8);
-    expect(xpFor(chore(), ctx()).xp).toBe(12);
+    expect(xpFor(gift(), ctx()).xp).toBe(80);
+    expect(xpFor(chore(), ctx()).xp).toBe(120);
     expect(
       xpFor(makeEvent('kpi-fortune', T0, 0, { day: DAY, fortuneId: 1, repeat: false }), ctx()).xp,
-    ).toBe(10);
+    ).toBe(100);
     expect(
       xpFor(
         makeEvent('kpi-fortune', T0, 0, { day: DAY, fortuneId: 1, repeat: false }),
@@ -199,45 +199,61 @@ describe('xpFor', () => {
     expect(xpFor(chore(), ctx({ countToday: (k) => (k === 'chore' ? 6 : 0) })).xp).toBe(0);
     expect(
       xpFor(tick('meeting', 10), ctx({ countToday: (k) => (k === 'meetingMinutes' ? 56 : 0) })).xp,
-    ).toBe(8);
+    ).toBe(16);
     expect(
-      xpFor(tick('desk', 5), ctx({ countToday: (k) => (k === 'deskMinutes' ? 180 : 0) })).xp,
+      xpFor(tick('desk', 5), ctx({ countToday: (k) => (k === 'deskMinutes' ? 240 : 0) })).xp,
     ).toBe(0);
   });
 
   it('phòng ban: x1.3 đúng loại hoạt động', () => {
-    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(26);
-    expect(xpFor(tick('focus', 10), ctx({ department: 'dev' })).xp).toBe(52);
-    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(20);
-    expect(xpFor(gift(), ctx({ department: 'sales' })).xp).toBe(10);
-    expect(xpFor(gift(), ctx({ department: 'hr' })).xp).toBe(10);
-    expect(xpFor(chore(), ctx({ department: 'hr' })).xp).toBe(16);
-    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(3 + 7);
+    expect(xpFor(focus(5, true), ctx({ department: 'dev' })).xp).toBe(325);
+    expect(xpFor(tick('focus', 10), ctx({ department: 'dev' })).xp).toBe(130);
+    expect(xpFor(focus(5, true), ctx({ department: 'sales' })).xp).toBe(250);
+    expect(xpFor(gift(), ctx({ department: 'sales' })).xp).toBe(104);
+    expect(xpFor(gift(), ctx({ department: 'hr' })).xp).toBe(104);
+    expect(xpFor(chore(), ctx({ department: 'hr' })).xp).toBe(156);
+    expect(xpFor(focus(1, true, 50), ctx({ department: 'marketing' })).xp).toBe(50 + 65);
     // Kế toán: chỉ phần thưởng chuỗi.
-    expect(xpFor(checkin(), ctx({ department: 'accounting', streak: 7 })).xp).toBe(20 + 46);
+    expect(xpFor(checkin(), ctx({ department: 'accounting', streak: 7 })).xp).toBe(200 + 455);
+  });
+
+  it('buff từ trang bị: tăng XP tương ứng', () => {
+    // Vịt cao su: +15% task XP
+    const withDuck = xpFor(
+      makeEvent('task-flip', T0, 0, { taskId: 1, completed: true }),
+      ctx({ itemBuffs: [{ type: 'task_xp', percent: 15, description: '' }] }),
+    );
+    expect(withDuck.xp).toBe(Math.round(150 * 1.15));
+
+    // Cốc sếp: +20% coffee XP
+    const withMug = xpFor(
+      gift(),
+      ctx({ itemBuffs: [{ type: 'coffee_xp', percent: 20, description: '' }] }),
+    );
+    expect(withMug.xp).toBe(Math.round(80 * 1.2));
   });
 });
 
 describe('giới hạn mềm mỗi ngày', () => {
   it('dưới mức nhận đủ, vượt mức chỉ nhận 50%', () => {
-    expect(applyDailyCap(0, 100)).toBe(100);
-    expect(applyDailyCap(150, 40)).toBe(40);
-    expect(applyDailyCap(150, 80)).toBe(40 + 20);
-    expect(applyDailyCap(190, 70)).toBe(35);
-    expect(applyDailyCap(500, 3)).toBe(1);
-    expect(applyDailyCap(500, 1)).toBe(0);
+    expect(applyDailyCap(0, 1000)).toBe(1000);
+    expect(applyDailyCap(2000, 400)).toBe(400);
+    expect(applyDailyCap(2400, 200)).toBe(100 + 50);
+    expect(applyDailyCap(2500, 100)).toBe(50);
+    expect(applyDailyCap(5000, 3)).toBe(1);
+    expect(applyDailyCap(5000, 1)).toBe(0);
     expect(applyDailyCap(0, 0)).toBe(0);
   });
 
   it('applyEvent cộng dồn đúng giới hạn trong ngày, sang ngày mới thì mở lại', () => {
     let s = createProgress(T0);
-    s = applyAll(s, [tick('focus', 35)]); // 140
-    s = applyAll(s, [tick('focus', 25)]); // +50 đủ, +50 vượt → 25
-    expect(s.daily.earned).toBe(140 + 50 + 25);
+    s = applyAll(s, [tick('focus', 35)]); // 350
+    s = applyAll(s, [tick('focus', 25)]); // 250
+    expect(s.daily.earned).toBe(350 + 250);
     expect(s.daily.counts.deskMinutes).toBe(60);
     const next = applyEvent(s, tick('focus', 10), { today: addDays(DAY, 1), now: T0 + 86_400_000 });
-    expect(next.granted).toBe(40);
-    expect(next.state.daily.earned).toBe(40);
+    expect(next.granted).toBe(100);
+    expect(next.state.daily.earned).toBe(100);
   });
 
   it('đổi sang múi giờ chậm hơn (ngày lịch lùi lại): không mở rổ ngày mới', () => {
@@ -246,7 +262,7 @@ describe('giới hạn mềm mỗi ngày', () => {
     s = applyEvent(s, focus(5, true), { today: addDays(DAY, -1), now: T0 + 3_600_000 }).state;
     expect(s.daily.day).toBe(DAY);
     expect(s.daily.earned).toBeGreaterThan(before);
-    expect(s.daily.earned - before).toBeLessThan(70);
+    expect(s.daily.earned - before).toBeLessThan(700);
   });
 });
 
@@ -255,7 +271,7 @@ describe('chấm công trong tiến độ', () => {
     let s = createProgress(T0);
     const r1 = applyEvent(s, checkin(), { today: DAY, now: T0 });
     expect(r1.checkIn).toBe('checked');
-    expect(r1.granted).toBe(25);
+    expect(r1.granted).toBe(250);
     s = r1.state;
     expect(applyEvent(s, checkin(), { today: DAY, now: T0 }).checkIn).toBe('already');
     for (let d = 1; d <= 3; d += 1)
@@ -518,7 +534,7 @@ describe('thưởng dự án công ty', () => {
     let s = createProgress(T0);
     const done = (difficulty: number) => makeEvent('company-project', T0, 0, { difficulty });
     const first = applyEvent(s, done(5), { today: DAY, now: T0 });
-    expect(first.granted).toBe(14);
+    expect(first.granted).toBe(140);
     expect(first.coins).toBe(0);
     s = applyEvent(first.state, done(1), { today: DAY, now: T0 }).state;
     expect(applyEvent(s, done(3), { today: DAY, now: T0 }).granted).toBe(0);

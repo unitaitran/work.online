@@ -61,6 +61,7 @@ export interface OfficeHud {
   /** Trạng thái ly cà phê: đang pha / đang cầm / không có. */
   setCoffee(phase: 'idle' | 'brewing' | 'holding'): void;
   setProgress(view: ProgressView): void;
+  setStamina(current: number, max: number, exhausted: boolean): void;
   /** Chữ "+XP" bay lên cạnh thanh XP. */
   showXpGain(xp: number, capped: boolean): void;
   setMission(mission: MissionView | null): void;
@@ -152,6 +153,16 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     attrs: { title: STRINGS.progress.xpRising, 'aria-label': STRINGS.progress.xpRising },
   });
   xpRising.hidden = true;
+
+  // Thanh Thể lực (Stamina)
+  const staminaFill = el('span', { className: 'stamina-bar-fill' });
+  const staminaText = el('span', { className: 'stamina-bar-text', text: '⚡ 100/100' });
+  const staminaBar = el('span', {
+    className: 'stamina-bar',
+    attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '100' },
+    children: [staminaFill, staminaText],
+  });
+
   const badge = el('button', {
     className: 'office-badge',
     attrs: {
@@ -167,6 +178,7 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
           badgeName,
           levelText,
           el('span', { className: 'xp-row', children: [xpBar, xpRising] }),
+          el('span', { className: 'stamina-row', children: [staminaBar] }),
         ],
       }),
       xpFloat,
@@ -353,10 +365,18 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     window.addEventListener('keydown', onKeyMove);
   }
 
+  const hudLeft = el('div', {
+    className: 'office-hud-left',
+    children: [
+      el('div', { className: 'office-badge-group', children: [badge, coinChip] }),
+      missionCard,
+    ],
+  });
+
   const bar = el('div', {
     className: 'office-bar',
     children: [
-      el('div', { className: 'office-badge-group', children: [badge, coinChip] }),
+      hudLeft,
       el('div', {
         className: 'office-actions',
         children: options.touch ? [homeButton] : [soundGroup, qualityLabel, editButton, homeButton],
@@ -368,7 +388,6 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
     className: options.touch ? 'office-hud is-touch' : 'office-hud',
     children: [
       bar,
-      missionCard,
       toast,
       stats,
       eventsLink,
@@ -431,6 +450,24 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       xpBar.setAttribute('aria-valuenow', String(Math.round(view.ratio * 100)));
       xpBar.setAttribute('aria-label', xpText.textContent);
       coinChip.textContent = STRINGS.progress.coins(view.coins);
+    },
+    setStamina(current, max, exhausted) {
+      const pct = Math.max(0, Math.min(100, Math.round((current / max) * 100)));
+      staminaFill.style.width = `${String(pct)}%`;
+      staminaBar.setAttribute('aria-valuenow', String(pct));
+      if (exhausted || pct <= 15) {
+        staminaFill.className = 'stamina-bar-fill is-exhausted';
+        staminaText.textContent = `⚡ Kiệt sức (${String(Math.round(current))}/${String(max)})`;
+        staminaBar.title = 'Đã kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi phục.';
+      } else if (pct <= 40) {
+        staminaFill.className = 'stamina-bar-fill is-tired';
+        staminaText.textContent = `⚡ Mệt (${String(Math.round(current))}/${String(max)})`;
+        staminaBar.title = 'Thể lực đang giảm. Nên nghỉ ngơi sớm.';
+      } else {
+        staminaFill.className = 'stamina-bar-fill is-normal';
+        staminaText.textContent = `⚡ ${String(Math.round(current))}/${String(max)}`;
+        staminaBar.title = `Thể lực: ${String(Math.round(current))}/${String(max)} (làm việc liên tục tối đa 30p)`;
+      }
     },
     showXpGain(xp, capped) {
       xpFloat.textContent = STRINGS.progress.xpGain(xp);

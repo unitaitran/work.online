@@ -107,6 +107,20 @@ export function attachGameService(
         const other = room?.userIds().find((id) => playerCodeOf(id) === code);
         return room && other ? room.positionOf(other) : null;
       },
+      companyPerks: () => {
+        const room = gateway.sessionOf(userId)?.room;
+        if (!room || !room.kind.startsWith('company:')) return [];
+        const companyId = room.kind.slice('company:'.length);
+        return ctx.repos.companies.get(companyId)?.economy.perks ?? [];
+      },
+      wearingUniform: () => {
+        const room = gateway.sessionOf(userId)?.room;
+        if (!room || !room.kind.startsWith('company:')) return false;
+        const companyId = room.kind.slice('company:'.length);
+        const co = ctx.repos.companies.get(companyId);
+        if (!co) return false;
+        return (co.economy.uniformOn ?? []).includes(playerCodeOf(userId));
+      },
     };
   };
 
@@ -174,7 +188,7 @@ export function attachGameService(
 
   gateway.addHandler((session, message) => {
     if (message.type === 'tea_invite') {
-      const error = tea.invite(session.room, session.userId);
+      const error = tea.invite(session.room, session.userId, message.targetSid);
       if (error) session.send({ type: 'tea_failed', reason: error });
       return true;
     }

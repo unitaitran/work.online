@@ -214,6 +214,9 @@ export function mountShopPanel(body: HTMLElement, o: ShopPanelOptions): { dispos
         text: `${s.rarity[item.rarity] ?? ''}${owned ? ` · ${equipped ? s.equipped : s.owned}` : ''}`,
       }),
       el('p', { className: 'activity-intro', text: item.description }),
+      ...(item.buff
+        ? [el('p', { className: 'shop-buff-badge', text: `✨ Hiệu ứng: ${item.buff.description}` })]
+        : []),
       ...(locked && item.minTitle !== undefined
         ? [el('p', { className: 'fortune-note', text: s.locked(titleName(item.minTitle, null)) })]
         : []),

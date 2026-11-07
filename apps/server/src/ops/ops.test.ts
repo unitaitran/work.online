@@ -10,7 +10,11 @@ import { restoreDatabase } from './restore';
 
 const dirs: string[] = [];
 afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  for (const d of dirs.splice(0)) {
+    try {
+      rmSync(d, { recursive: true, force: true });
+    } catch {}
+  }
 });
 const temp = (): string => {
   const d = mkdtempSync(join(tmpdir(), 'dilam-ops-'));
@@ -36,9 +40,11 @@ describe('sao lưu và khôi phục', () => {
 
     const restoredPath = join(temp(), 'new', 'dilam.sqlite');
     expect(restoreDatabase(file, restoredPath, false)).toBeNull();
-    const restored = createSqliteRepositories(openDatabase(restoredPath));
+    const rDb = openDatabase(restoredPath);
+    const restored = createSqliteRepositories(rDb);
     expect(restored.characters.get(userId)?.name).toBe('Sao Lưu');
     expect(restored.users.count()).toBe(1);
+    rDb.close();
   });
 
   it('giữ N bản mới nhất; khôi phục đè cần --force và giữ lại DB cũ', async () => {

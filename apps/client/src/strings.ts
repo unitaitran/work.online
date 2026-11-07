@@ -396,19 +396,29 @@ export const STRINGS = {
     xpRising: 'XP đang tăng',
     coins: (coins: number) => `${String(coins)} xu`,
     xpGain: (xp: number) => `+${String(xp)} XP`,
-    /** Vượt giới hạn mềm trong ngày: chọn ngẫu nhiên một câu. */
+    /** Vượt giới hạn mềm trong ngày: lời nhắc hóm hỉnh, động viên thay vì phạt. */
     xpCapped: [
-      (xp: number, pct: number) =>
-        `Oops, hôm nay làm việc hơi quá rồi 😵 chỉ được ${String(pct)}% XP nữa thôi (+${String(xp)} XP)`,
-      (xp: number, pct: number) =>
-        `Sếp bảo: chăm thế này công ty ngại lắm 😅 từ giờ ${String(pct)}% XP thôi (+${String(xp)} XP)`,
-      (xp: number, pct: number) =>
-        `Pin năng lượng đỏ rồi 🔋 làm tiếp vẫn được ${String(pct)}% XP (+${String(xp)} XP)`,
-      (xp: number, pct: number) =>
-        `Ghế bắt đầu than mỏi lưng 🪑 phần thêm chỉ ${String(pct)}% XP (+${String(xp)} XP)`,
-      (xp: number, pct: number) =>
-        `Tăng ca không lương mode 🌙 ${String(pct)}% XP thôi nha (+${String(xp)} XP)`,
+      (xp: number, _pct: number) =>
+        `Loa công đoàn: Tan ca thôi bạn ơi! Giữ sức mai cày tiếp (+${String(xp)} XP đam mê ☕)`,
+      (xp: number, _pct: number) =>
+        `Sếp nhắn riêng: "Chăm chỉ quá công ty ngại đấy, thong thả chill thôi!" (+${String(xp)} XP)`,
+      (xp: number, _pct: number) =>
+        `Đèn văn phòng đã chuyển chế độ chill 🌇 Tăng ca lúc này là vì đam mê (+${String(xp)} XP)`,
+      (xp: number, _pct: number) =>
+        `Bàn phím xin nghỉ giải lao tí nào ⌨️ Vươn vai hít thở đón năng lượng (+${String(xp)} XP)`,
+      (xp: number, _pct: number) =>
+        `Ghế công thái học thì thầm: "Hôm nay chủ nhân làm việc xuất sắc lắm rồi!" (+${String(xp)} XP)`,
     ],
+    /** Thông điệp từ chối tế nhị khi một hành động chạm giới hạn trong ngày (tránh cảm giác bị phạt). */
+    flavorLimits: {
+      plant: '🪴 Cây thì thầm: "Sen ơi tưới nhiều quá úng rễ của trẫm mất! Để trẫm thở và quang hợp tí nào ☀️"',
+      wipe: '✨ Mặt bàn sáng bóng soi rõ cả mặt sếp rồi! Lau nữa là bay luôn lớp sơn gỗ đấy bạn ơi!',
+      fridge: '🧊 Tủ lạnh ngăn nắp như khách sạn 5 sao rồi! Nhường phần cho đồng nghiệp khác trổ tài nhé!',
+      printer: '🖨️ Máy in êm ru không một tiếng kẹt! Hãy để máy nghỉ ngơi một chút nhé!',
+      coffee: '☕ Tim đập thình thịch rồi 💓 Uống nữa tối nay đếm cừu tới sáng đấy, uống nước lọc mát lành nào!',
+      task: '📋 Bảng task sạch bong kin kít! Đừng tranh hết việc của đồng nghiệp chứ, chừa chút KPI cho người ta sống với!',
+      desk: '🔥 Bàn phím bốc khói nhẹ! Đứng dậy vươn vai, nhìn xa 20 mét cho mắt nghỉ ngơi chống cận thị nào!',
+    },
     levelUp: (level: number) => `Ting ting! Lên cấp ${String(level)} rồi 🎉`,
     openProfile: 'Xem hồ sơ',
     profileTitle: 'Hồ sơ nhân viên',
@@ -591,7 +601,7 @@ export const STRINGS = {
     analytics: 'Gửi thống kê ẩn danh',
   },
   social: {
-    open: 'Giao lưu',
+    open: 'Đồng nghiệp',
     emotes: 'Biểu cảm',
     quickChats: 'Câu nhanh',
     players: 'Đồng nghiệp trong phòng',
@@ -604,6 +614,9 @@ export const STRINGS = {
     hide: 'Ẩn',
     unhide: 'Hiện lại',
     hiddenNote: 'Chỉ ẩn với riêng bạn.',
+    directChat: '💬 Chat riêng',
+    directTea: '🧋 Rủ riêng',
+    cooldownNote: (sec: number) => `Chờ ${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')} để rủ lại`,
     emoteNames: {
       wave: '👋 Vẫy tay',
       clap: '👏 Vỗ tay',
@@ -963,19 +976,19 @@ export const STRINGS = {
       perks: {
         massage: {
           name: 'Ghế massage',
-          desc: 'Đặt ở phòng nghỉ, ai cũng ngồi được. Rung rung xả stress.',
+          desc: 'Đặt ở phòng nghỉ, ai cũng ngồi được. +15% XP khi ngồi máy trong văn phòng.',
         },
         console: {
           name: 'Máy chơi game',
-          desc: 'TV + máy chơi game trong phòng nghỉ, ngồi đệm chơi giờ nghỉ trưa.',
+          desc: 'TV + console trong phòng nghỉ. +15% xu thưởng khi xong dự án công ty.',
         },
         deskDecor: {
           name: 'Decor bàn làm việc',
-          desc: 'Mỗi bàn một chậu sen đá, cốc bút và đèn nhỏ cho tất cả mọi người.',
+          desc: 'Bàn nào cũng có cây xanh và đèn nhỏ. +10% điểm đóng góp dự án cho toàn công ty.',
         },
         uniform: {
           name: 'Đồng phục công ty',
-          desc: 'Áo đồng phục màu công ty. Mỗi người tự chọn mặc hay không.',
+          desc: 'Áo đồng phục màu công ty. +10% XP mọi hoạt động khi mặc làm việc cùng nhau.',
         },
       } as Record<string, { name: string; desc: string }>,
       uniformColor: 'Màu đồng phục',

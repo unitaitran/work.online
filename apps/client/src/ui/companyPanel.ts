@@ -66,22 +66,33 @@ function employerText(employer: string | null): string {
 
 function companyBadge(c: CompanyPublic): HTMLElement {
   const icon = el('span', {
-    className: 'company-icon',
+    className: 'company-icon company-icon-large',
     text: s.iconGlyph[c.icon] ?? '★',
     attrs: { 'aria-hidden': 'true' },
   });
-  icon.style.background = hex(COMPANY_COLORS[c.color] ?? 0xff8a65);
+  const colorHex = hex(COMPANY_COLORS[c.color] ?? 0xff8a65);
+  icon.style.background = colorHex;
+  icon.style.boxShadow = `0 4px 16px ${colorHex}55`;
+
+  const tags = el('div', {
+    className: 'company-tag-row',
+    children: [
+      el('span', { className: 'badge-pill badge-industry', text: `🏷️ ${s.industries[c.industry] ?? c.industry}` }),
+      el('span', { className: 'badge-pill badge-stage', text: `🏢 ${s.stages[c.stage] ?? ''}` }),
+      el('span', { className: 'badge-pill badge-location', text: `📍 ${provinceOf(c.province)?.name ?? ''} (${s.floorLabel(c.building, c.floor)})` }),
+      el('span', { className: 'badge-pill badge-members', text: `👥 ${s.members(c.members + 1)}` }),
+    ],
+  });
+
   return el('div', {
-    className: 'company-head',
+    className: 'company-head company-head-hero',
     children: [
       icon,
       el('div', {
+        className: 'company-head-details',
         children: [
-          el('strong', { className: 'company-name', text: c.name }),
-          el('p', {
-            className: 'fortune-note',
-            text: `${s.industries[c.industry] ?? ''} · ${s.stages[c.stage] ?? ''} · ${provinceOf(c.province)?.name ?? ''} · ${s.floorLabel(c.building, c.floor)} · ${s.members(c.members + 1)}`,
-          }),
+          el('h3', { className: 'company-name-hero', text: c.name }),
+          tags,
         ],
       }),
     ],
@@ -426,12 +437,6 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     return parts;
   };
 
-  const row = (label: string, value: string): HTMLElement =>
-    el('div', {
-      className: 'profile-row',
-      children: [el('dt', { text: label }), el('dd', { text: value })],
-    });
-
   /** Gọi API rồi tải lại bảng và báo cảnh đổi đồ / áo. */
   const change = (path: string, payload?: unknown): void => {
     void act(path, payload).then((r) => {
@@ -444,18 +449,37 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
   const renderUniform = (d: CompanyDetail): HTMLElement[] => {
     if (!d.company.perks.includes('uniform')) return [];
     return [
-      el('h3', { text: s.uniform.title }),
-      el('p', {
-        className: 'fortune-note',
-        text: d.wearingUniform ? s.uniform.wearing : s.uniform.notWearing,
+      el('div', {
+        className: 'company-card uniform-card',
+        children: [
+          el('div', {
+            className: 'company-card-title',
+            children: [
+              el('span', { text: `👔 ${s.uniform.title}` }),
+              el('span', {
+                className: `badge-pill ${d.wearingUniform ? 'badge-working' : 'badge-rank'}`,
+                text: d.wearingUniform ? 'Đang mặc' : 'Đồ riêng',
+              }),
+            ],
+          }),
+          el('p', {
+            className: 'fortune-note',
+            text: d.wearingUniform ? s.uniform.wearing : s.uniform.notWearing,
+          }),
+          el('div', {
+            className: 'activity-actions',
+            children: [
+              button(
+                d.wearingUniform ? s.uniform.takeOff : s.uniform.wear,
+                () => {
+                  change('/api/company/uniform', { wear: !d.wearingUniform });
+                },
+                !d.wearingUniform,
+              ),
+            ],
+          }),
+        ],
       }),
-      button(
-        d.wearingUniform ? s.uniform.takeOff : s.uniform.wear,
-        () => {
-          change('/api/company/uniform', { wear: !d.wearingUniform });
-        },
-        !d.wearingUniform,
-      ),
     ];
   };
 
@@ -464,9 +488,27 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     const treasury = d.economy.treasury;
     const owned = d.company.perks;
     const parts: HTMLElement[] = [
-      el('p', { className: 'activity-intro', text: s.shop.intro }),
-      el('p', { className: 'fortune-note', text: s.shop.treasury(Math.floor(treasury)) }),
+      el('div', {
+        className: 'company-treasury-banner',
+        children: [
+          el('span', { className: 'banner-icon', text: '🪙' }),
+          el('div', {
+            children: [
+              el('span', { className: 'banner-label', text: 'Quỹ công ty khả dụng' }),
+              el('strong', { className: 'banner-value', text: `${Math.floor(treasury).toLocaleString('vi-VN')} xu` }),
+            ],
+          }),
+        ],
+      }),
     ];
+
+    const perkIcons: Record<string, string> = {
+      massage: '🛋️',
+      console: '🎮',
+      deskDecor: '🪴',
+      uniform: '👔',
+    };
+
     let uniformPick = d.economy.uniformColor ?? d.company.color;
     const swatches = (onPick: (i: number) => void): HTMLElement =>
       el('div', {
@@ -487,55 +529,76 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
           return b;
         }),
       });
-    parts.push(
-      el('ul', {
-        className: 'company-list',
-        children: COMPANY_PERKS.map((perk) => {
-          const info = s.shop.perks[perk];
-          const cost = COMPANY_SHOP.perks[perk];
-          const has = owned.includes(perk);
-          const extra: HTMLElement[] = [];
-          if (perk === 'uniform') {
-            extra.push(el('p', { className: 'fortune-note', text: s.shop.uniformColor }));
-            extra.push(swatches(() => undefined));
-          }
-          return el('li', {
-            className: has ? 'is-done' : '',
-            children: [
-              el('div', {
-                children: [
-                  el('strong', { text: info?.name ?? perk }),
-                  el('p', { className: 'fortune-note', text: info?.desc ?? '' }),
-                  ...extra,
-                ],
-              }),
-              has
-                ? perk === 'uniform'
-                  ? button(
-                      s.shop.recolor(COMPANY_SHOP.uniformRecolor),
+
+    const perksGrid = el('div', {
+      className: 'perks-cards-grid',
+      children: COMPANY_PERKS.map((perk) => {
+        const info = s.shop.perks[perk];
+        const cost = COMPANY_SHOP.perks[perk];
+        const has = owned.includes(perk);
+        const iconGlyph = perkIcons[perk] ?? '✨';
+
+        return el('div', {
+          className: `perk-card ${has ? 'is-owned' : ''}`,
+          children: [
+            el('div', {
+              className: 'perk-card-head',
+              children: [
+                el('span', { className: 'perk-icon', text: iconGlyph }),
+                el('div', {
+                  className: 'perk-title-block',
+                  children: [
+                    el('strong', { className: 'perk-name', text: info?.name ?? perk }),
+                    el('p', { className: 'perk-desc', text: info?.desc ?? '' }),
+                  ],
+                }),
+              ],
+            }),
+            ...(perk === 'uniform' && has
+              ? [
+                  el('div', {
+                    className: 'uniform-recolor-block',
+                    children: [
+                      el('span', { className: 'fortune-note', text: s.shop.uniformColor }),
+                      swatches(() => undefined),
+                    ],
+                  }),
+                ]
+              : []),
+            el('div', {
+              className: 'perk-action-row',
+              children: [
+                has
+                  ? perk === 'uniform'
+                    ? button(
+                        s.shop.recolor(COMPANY_SHOP.uniformRecolor),
+                        () => {
+                          change('/api/company/shop/uniform-color', { color: uniformPick });
+                        },
+                        false,
+                        treasury < COMPANY_SHOP.uniformRecolor,
+                      )
+                    : el('span', { className: 'badge-pill badge-done', text: s.shop.owned })
+                  : button(
+                      `Mua (${cost.toLocaleString('vi-VN')} xu)`,
                       () => {
-                        change('/api/company/shop/uniform-color', { color: uniformPick });
+                        change(
+                          '/api/company/shop/buy',
+                          perk === 'uniform' ? { perk, color: uniformPick } : { perk },
+                        );
                       },
-                      false,
-                      treasury < COMPANY_SHOP.uniformRecolor,
-                    )
-                  : el('span', { className: 'project-status', text: s.shop.owned })
-                : button(
-                    s.shop.buy(cost),
-                    () => {
-                      change(
-                        '/api/company/shop/buy',
-                        perk === 'uniform' ? { perk, color: uniformPick } : { perk },
-                      );
-                    },
-                    true,
-                    treasury < cost,
-                  ),
-            ],
-          });
-        }),
+                      true,
+                      treasury < cost,
+                    ),
+              ],
+            }),
+          ],
+        });
       }),
-    );
+    });
+
+    parts.push(perksGrid);
+
     // Đổi tên.
     const input = el('input', {
       className: 'creator-input',
@@ -548,16 +611,26 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     });
     input.value = d.company.name;
     parts.push(
-      el('h3', { text: s.shop.rename }),
-      input,
-      button(
-        s.shop.renameButton(COMPANY_SHOP.rename),
-        () => {
-          change('/api/company/shop/rename', { name: input.value });
-        },
-        false,
-        treasury < COMPANY_SHOP.rename,
-      ),
+      el('div', {
+        className: 'company-card company-rename-card',
+        children: [
+          el('h4', { className: 'section-title', text: `🏷️ ${s.shop.rename}` }),
+          el('div', {
+            className: 'creator-name-row',
+            children: [
+              input,
+              button(
+                s.shop.renameButton(COMPANY_SHOP.rename),
+                () => {
+                  change('/api/company/shop/rename', { name: input.value });
+                },
+                false,
+                treasury < COMPANY_SHOP.rename,
+              ),
+            ],
+          }),
+        ],
+      }),
     );
     return parts;
   };
@@ -566,26 +639,98 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
     const e = d.economy;
     const cfg = stageConfig(e.stage);
     const parts: HTMLElement[] = [
-      el('dl', {
-        className: 'profile-grid',
+      el('div', {
+        className: 'company-kpi-grid',
         children: [
-          row(s.stage, s.stages[e.stage] ?? ''),
-          row(s.treasury, STRINGS.progress.coins(e.treasury)),
-          row(s.reputation, String(e.reputation)),
-          row(s.projectsDone, String(e.projectsDone)),
-          row(s.staffCount, `${String(e.staff.length)}/${String(cfg.maxStaff)}`),
+          el('div', {
+            className: 'kpi-card kpi-treasury',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '🪙' }),
+                  el('span', { className: 'kpi-label', text: s.treasury }),
+                ],
+              }),
+              el('div', {
+                className: 'kpi-value',
+                text: `${Math.floor(e.treasury).toLocaleString('vi-VN')} xu`,
+              }),
+              el('div', { className: 'kpi-sub', text: 'Quỹ dự trữ khả dụng' }),
+            ],
+          }),
+          el('div', {
+            className: 'kpi-card kpi-reputation',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '⭐' }),
+                  el('span', { className: 'kpi-label', text: s.reputation }),
+                ],
+              }),
+              el('div', { className: 'kpi-value', text: e.reputation.toLocaleString('vi-VN') }),
+              el('div', { className: 'kpi-sub', text: 'Độ tín nhiệm đối tác' }),
+            ],
+          }),
+          el('div', {
+            className: 'kpi-card kpi-projects',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '📋' }),
+                  el('span', { className: 'kpi-label', text: s.projectsDone }),
+                ],
+              }),
+              el('div', { className: 'kpi-value', text: String(e.projectsDone) }),
+              el('div', { className: 'kpi-sub', text: 'Hợp đồng hoàn thành' }),
+            ],
+          }),
+          el('div', {
+            className: 'kpi-card kpi-staff',
+            children: [
+              el('div', {
+                className: 'kpi-header',
+                children: [
+                  el('span', { className: 'kpi-icon', text: '👥' }),
+                  el('span', { className: 'kpi-label', text: s.staffCount }),
+                ],
+              }),
+              el('div', { className: 'kpi-value', text: `${e.staff.length}/${cfg.maxStaff}` }),
+              el('div', {
+                className: 'kpi-progress',
+                children: [
+                  el('div', {
+                    className: 'kpi-progress-bar',
+                    attrs: {
+                      style: `width: ${Math.min(100, Math.round((e.staff.length / cfg.maxStaff) * 100))}%`,
+                    },
+                  }),
+                ],
+              }),
+            ],
+          }),
         ],
       }),
     ];
+
     if (d.event && d.isOwner) {
       const ev = s.event[d.event];
       if (ev && typeof ev !== 'string') {
         parts.push(
           el('div', {
-            className: 'company-offer',
+            className: 'company-card company-event-card',
             children: [
-              el('strong', { text: typeof s.event.title === 'string' ? s.event.title : '' }),
-              el('p', { text: ev.text }),
+              el('div', {
+                className: 'company-card-title',
+                children: [
+                  el('span', {
+                    text: `⚡ ${typeof s.event.title === 'string' ? s.event.title : 'Sự kiện công ty'}`,
+                  }),
+                ],
+              }),
+              el('p', { className: 'event-desc', text: ev.text }),
               el('div', {
                 className: 'choice-cards',
                 children: ev.choices.map((label, i) =>
@@ -599,20 +744,95 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
         );
       }
     }
+
     if (d.isOwner) {
       const needs = cfg.next;
-      parts.push(
-        el('h3', { text: d.stage.ipo ? s.ipoTitle : s.nextStage }),
-        el('ul', {
-          className: 'check-list',
-          children: (['projects', 'reputation', 'staff', 'reserve'] as const).map((id) =>
-            el('li', {
-              className: d.stage.missing.includes(id) ? 'is-missing' : 'is-met',
-              text: s.needs[id](needs[id]),
+      const conditions: {
+        id: 'projects' | 'reputation' | 'staff' | 'reserve';
+        current: number;
+        target: number;
+        unit: string;
+        name: string;
+      }[] = [
+        {
+          id: 'projects',
+          current: e.projectsDone,
+          target: needs.projects,
+          unit: 'dự án',
+          name: 'Dự án',
+        },
+        {
+          id: 'reputation',
+          current: e.reputation,
+          target: needs.reputation,
+          unit: 'điểm',
+          name: 'Uy tín',
+        },
+        {
+          id: 'staff',
+          current: e.staff.length,
+          target: needs.staff,
+          unit: 'nhân sự',
+          name: 'Nhân viên NPC',
+        },
+        {
+          id: 'reserve',
+          current: Math.floor(e.treasury),
+          target: needs.reserve,
+          unit: 'xu',
+          name: 'Quỹ dự trữ',
+        },
+      ];
+      const metCount = conditions.filter((c) => !d.stage.missing.includes(c.id)).length;
+
+      const milestoneCard = el('div', {
+        className: 'company-card milestone-card',
+        children: [
+          el('div', {
+            className: 'milestone-header',
+            children: [
+              el('div', {
+                children: [
+                  el('span', { className: 'milestone-eyebrow', text: 'MỤC TIÊU PHÁT TRIỂN' }),
+                  el('h4', {
+                    className: 'milestone-title',
+                    text: d.stage.ipo
+                      ? s.ipoTitle
+                      : `${s.stages[e.stage]} ➔ ${s.stages[e.stage + 1] ?? s.nextStage}`,
+                  }),
+                ],
+              }),
+              el('span', {
+                className: d.stage.ready ? 'milestone-badge is-ready' : 'milestone-badge',
+                text: d.stage.ready ? '✓ ĐỦ ĐIỀU KIỆN' : `${metCount}/4 điều kiện`,
+              }),
+            ],
+          }),
+          el('div', {
+            className: 'milestone-grid',
+            children: conditions.map((cond) => {
+              const ok = !d.stage.missing.includes(cond.id);
+              return el('div', {
+                className: `milestone-item ${ok ? 'is-met' : 'is-pending'}`,
+                children: [
+                  el('div', {
+                    className: 'milestone-item-head',
+                    children: [
+                      el('span', { className: 'milestone-item-name', text: cond.name }),
+                      el('span', { className: 'milestone-mark', text: ok ? '✓' : '○' }),
+                    ],
+                  }),
+                  el('div', {
+                    className: 'milestone-item-val',
+                    text: `${cond.current.toLocaleString('vi-VN')} / ${cond.target.toLocaleString('vi-VN')} ${cond.unit}`,
+                  }),
+                ],
+              });
             }),
-          ),
-        }),
-      );
+          }),
+        ],
+      });
+
       if (d.stage.ipo) {
         const industry = el('select', {
           className: 'board-select',
@@ -620,7 +840,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
         });
         for (const id of INDUSTRIES)
           industry.append(el('option', { text: s.industries[id] ?? id, attrs: { value: id } }));
-        parts.push(
+        milestoneCard.append(
           el('p', { className: 'fortune-note', text: s.ipoHint }),
           industry,
           el('div', {
@@ -636,12 +856,12 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
           }),
         );
       } else {
-        parts.push(
+        milestoneCard.append(
           el('div', {
             className: 'activity-actions',
             children: [
               button(
-                s.upgrade,
+                `🚀 ${s.upgrade}`,
                 () => void act('/api/company/upgrade').then(load),
                 true,
                 !d.stage.ready,
@@ -650,6 +870,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
           }),
         );
       }
+      parts.push(milestoneCard);
     }
     return parts;
   };
@@ -659,110 +880,228 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
 
   const renderProjects = (d: CompanyDetail): HTMLElement[] => {
     const p = d.economy.project;
-    const parts: HTMLElement[] = [el('h3', { text: s.project.active })];
+    const parts: HTMLElement[] = [];
+
+    // Active project card
     if (p) {
       const fill = el('span', { className: 'xp-bar-fill' });
-      fill.style.width = `${String(Math.round((p.progress / p.work) * 100))}%`;
+      const pct = Math.min(100, Math.round((p.progress / p.work) * 100));
+      fill.style.width = `${pct}%`;
       parts.push(
-        el('p', {
-          className: 'shop-item-name',
-          text: `${projectName(d, p.nameIndex)} ${s.project.difficulty(p.difficulty)}`,
-        }),
         el('div', {
-          className: 'xp-bar xp-bar-large',
+          className: 'active-project-card',
           children: [
-            fill,
-            el('span', { className: 'xp-bar-text', text: s.project.work(p.progress, p.work) }),
+            el('div', {
+              className: 'project-card-header',
+              children: [
+                el('span', {
+                  className: 'project-status-badge is-active',
+                  text: '⚡ DỰ ÁN ĐANG THỰC HIỆN',
+                }),
+                el('span', {
+                  className: 'project-stars',
+                  text: s.project.difficulty(p.difficulty),
+                }),
+              ],
+            }),
+            el('h4', { className: 'project-card-title', text: projectName(d, p.nameIndex) }),
+            el('div', {
+              className: 'xp-bar xp-bar-large',
+              children: [
+                fill,
+                el('span', {
+                  className: 'xp-bar-text',
+                  text: `${Math.floor(p.progress)} / ${p.work} điểm công việc (${pct}%)`,
+                }),
+              ],
+            }),
+            el('div', {
+              className: 'project-rewards-row',
+              children: [
+                el('span', {
+                  className: 'reward-chip reward-coins',
+                  text: `🪙 +${p.reward.toLocaleString('vi-VN')} xu`,
+                }),
+                el('span', {
+                  className: 'reward-chip reward-rep',
+                  text: `⭐ +${p.reputation} Uy tín`,
+                }),
+              ],
+            }),
           ],
         }),
-        el('p', { className: 'fortune-note', text: s.project.reward(p.reward, p.reputation) }),
       );
     } else {
-      parts.push(el('p', { className: 'activity-intro', text: s.project.none }));
+      parts.push(
+        el('div', {
+          className: 'empty-project-card',
+          children: [
+            el('span', { className: 'empty-project-icon', text: '📁' }),
+            el('div', {
+              children: [
+                el('strong', { text: 'Chưa có dự án đang chạy' }),
+                el('p', {
+                  className: 'fortune-note',
+                  text: 'Hãy nhận một dự án khả dụng bên dưới để bắt đầu nhận thưởng!',
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
     }
-    parts.push(
-      el('p', { className: 'fortune-note', text: s.project.hint }),
-      el('h3', { text: s.project.offers }),
-    );
+
+    // Projects offers list (2 dòng: dòng 1 có 3 dự án, dòng 2 có 2 dự án)
     const doneCount = d.offers.filter((o) => offerDone(d.economy, o.id)).length;
     parts.push(
-      el('p', {
-        className: 'fortune-note',
-        text:
-          doneCount >= d.offers.length && d.offers.length > 0
-            ? s.project.allDone
-            : s.project.doneCount(doneCount, d.offers.length),
+      el('div', {
+        className: 'section-header-row',
+        children: [
+          el('h4', { className: 'section-title', text: '📋 Dự án khả dụng hôm nay' }),
+          el('span', {
+            className: 'section-counter',
+            text: `${doneCount}/${d.offers.length} đã xong`,
+          }),
+        ],
       }),
     );
-    parts.push(
-      el('ul', {
-        className: 'company-list',
-        children: d.offers.map((o) => {
-          const done = offerDone(d.economy, o.id);
-          const active = p?.id === o.id;
-          return el('li', {
-            className: done ? 'is-done' : active ? 'is-current' : '',
-            children: [
-              el('div', {
-                children: [
-                  el('strong', {
-                    text: `${projectName(d, o.nameIndex)} ${s.project.difficulty(o.difficulty)}`,
-                  }),
-                  el('p', {
-                    className: 'fortune-note',
-                    text: `${s.project.work(0, o.work)} · ${s.project.reward(o.reward, o.reputation)}`,
-                  }),
-                ],
-              }),
-              done || active
-                ? el('span', {
-                    className: 'project-status',
-                    text: done ? s.project.statusDone : s.project.statusActive,
-                  })
-                : button(
-                    s.project.take,
-                    () => void act('/api/company/project', { offerId: o.id }).then(load),
-                    true,
-                    p !== null,
-                  ),
-            ],
-          });
-        }),
+
+    const offersList = el('div', {
+      className: 'project-offers-grid',
+      children: d.offers.map((o) => {
+        const done = offerDone(d.economy, o.id);
+        const active = p?.id === o.id;
+        return el('div', {
+          className: `project-offer-card ${done ? 'is-done' : active ? 'is-active' : ''}`,
+          children: [
+            el('div', {
+              className: 'offer-top',
+              children: [
+                el('span', {
+                  className: 'project-stars',
+                  text: s.project.difficulty(o.difficulty),
+                }),
+                el('span', { className: 'offer-work', text: `⏱️ ${o.work} việc` }),
+              ],
+            }),
+            el('strong', { className: 'offer-title', text: projectName(d, o.nameIndex) }),
+            el('div', {
+              className: 'offer-rewards',
+              children: [
+                el('span', {
+                  className: 'reward-chip reward-coins',
+                  text: `+${o.reward.toLocaleString('vi-VN')} xu`,
+                }),
+                el('span', {
+                  className: 'reward-chip reward-rep',
+                  text: `+${o.reputation} ⭐`,
+                }),
+              ],
+            }),
+            el('div', {
+              className: 'offer-action',
+              children: [
+                done
+                  ? el('span', {
+                      className: 'badge-pill badge-done offer-btn-pill',
+                      text: '✓ Đã xong',
+                    })
+                  : active
+                    ? el('span', {
+                        className: 'badge-pill badge-running offer-btn-pill',
+                        text: '⚡ Đang chạy',
+                      })
+                    : button(
+                        s.project.take,
+                        () => void act('/api/company/project', { offerId: o.id }).then(load),
+                        true,
+                        p !== null,
+                      ),
+              ],
+            }),
+          ],
+        });
       }),
-    );
-    // Nhân viên NPC.
+    });
+
+    parts.push(offersList);
+
+    // NPC Staff roster
     const e = d.economy;
     const cfg = stageConfig(e.stage);
-    parts.push(el('h3', { text: s.staff.title }));
     parts.push(
-      el('ul', {
-        className: 'company-list',
-        children:
-          e.staff.length === 0
-            ? [el('li', { className: 'activity-intro', text: s.staff.none })]
-            : e.staff.map((st) =>
-                el('li', {
-                  children: [
-                    el('span', {
-                      text: `${npcName(st.nameIndex)} · ${s.ranks[st.rank] ?? ''}${st.awayUntil > Date.now() ? ` (${s.staff.away})` : ''}`,
-                    }),
-                    st.rank < 2
-                      ? button(s.staff.promote(COMPANY.promoteCost[st.rank + 1] ?? 0), () => {
-                          void act('/api/company/staff/promote', { staffId: st.id }).then(load);
-                        })
-                      : el('span'),
-                  ],
-                }),
-              ),
+      el('div', {
+        className: 'section-header-row',
+        children: [
+          el('h4', { className: 'section-title', text: '👥 Đội ngũ nhân viên NPC' }),
+          el('span', {
+            className: 'section-counter',
+            text: `${e.staff.length}/${cfg.maxStaff}`,
+          }),
+        ],
       }),
+    );
+
+    const staffList = el('div', {
+      className: 'staff-cards-grid',
+      children:
+        e.staff.length === 0
+          ? [el('p', { className: 'fortune-note', text: s.staff.none })]
+          : e.staff.map((st) => {
+              const isAway = st.awayUntil > Date.now();
+              return el('div', {
+                className: `staff-card ${isAway ? 'is-away' : ''}`,
+                children: [
+                  el('div', {
+                    className: 'staff-info',
+                    children: [
+                      el('span', { className: 'staff-avatar', text: '👤' }),
+                      el('div', {
+                        children: [
+                          el('strong', { className: 'staff-name', text: npcName(st.nameIndex) }),
+                          el('div', {
+                            className: 'staff-badges',
+                            children: [
+                              el('span', {
+                                className: 'badge-pill badge-rank',
+                                text: s.ranks[st.rank] ?? '',
+                              }),
+                              el('span', {
+                                className: `badge-pill ${isAway ? 'badge-away' : 'badge-working'}`,
+                                text: isAway ? '🟡 Nghỉ phép' : '🟢 Làm việc',
+                              }),
+                            ],
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+                  ...(st.rank < 2
+                    ? [
+                        button(
+                          `Thăng chức (${COMPANY.promoteCost[st.rank + 1]} xu)`,
+                          () =>
+                            void act('/api/company/staff/promote', { staffId: st.id }).then(load),
+                          false,
+                          e.treasury < (COMPANY.promoteCost[st.rank + 1] ?? 0),
+                        ),
+                      ]
+                    : []),
+                ],
+              });
+            }),
+    });
+
+    parts.push(
+      staffList,
       el('div', {
         className: 'activity-actions',
         children: [
           button(
-            s.staff.hire(COMPANY.hireCost[0] ?? 0),
+            `➕ Tuyển nhân viên NPC (${COMPANY.hireCost[0] ?? 0} xu)`,
             () => void act('/api/company/hire').then(load),
             true,
-            e.staff.length >= cfg.maxStaff,
+            e.staff.length >= cfg.maxStaff || e.treasury < (COMPANY.hireCost[0] ?? 0),
           ),
         ],
       }),

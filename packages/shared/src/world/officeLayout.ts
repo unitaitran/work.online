@@ -492,8 +492,8 @@ export function officeInteractables(layout: OfficeLayout): Interactable[] {
     id: 'sofa-daybed',
     kind: 'sofa',
     approach: { x: daybed.minX - APPROACH_GAP - 0.05, z: bedZ },
-    // Nằm ngửa dọc giường, đầu gối lên gối ở đầu bắc (chân ở điểm này, đầu hướng -Z).
-    seat: { x: (daybed.minX + daybed.maxX) / 2, z: daybed.minZ + 1.25 },
+    // Nằm ngửa dọc giường, đầu gối lên gối ở đầu bắc (seat.x tâm giường, seat.z để đầu tựa ngay giữa gối đỏ).
+    seat: { x: (daybed.minX + daybed.maxX) / 2, z: daybed.minZ + 1.19 },
     facing: 0,
     pose: 'lie',
     seatHeight: 0.34,
