@@ -15,6 +15,8 @@ import {
   PROTOCOL_VERSION,
   COMPANY_COLORS,
   hasCeoMeeting,
+  updateStamina,
+  type CompanyPerk,
   type CompanyPublic,
   type MyCompanyResponse,
   type InventoryResponse,
@@ -26,6 +28,7 @@ import {
   type Workplace,
   type ServerMessage,
   type UsernameCheckResponse,
+  type Action,
 } from '@dilam/shared';
 import { ActivityBus } from './activities/events';
 import { OfficeActivities } from './activities/officeActivities';
@@ -93,6 +96,7 @@ import { mountRoomEventBanner } from './ui/roomEventBanner';
 import { mountTeaInvite } from './ui/teaInvite';
 import { enhanceSelects } from './ui/prettySelect';
 import { loadHidden, mountSocialPanel, saveHidden } from './ui/socialPanel';
+import { RadialWheel } from './ui/radialWheel';
 import { OFFICE_FLOOR, type InteractableKind } from './world/office/layout';
 import { isDayPeriod, periodOfDay, type DayPeriod } from './world/office/period';
 
@@ -225,10 +229,25 @@ if (localSave) {
   }
 }
 
-/** Báo lý do server từ chối một hành động (bỏ qua các lý do không cần người chơi biết). */
+/** Báo lý do server từ chối một hành động hoặc thông báo giới hạn hóm hỉnh. */
 let toastReject: (text: string) => void = () => undefined;
-const reportReply = (reply: ActionReply): void => {
-  if (reply.ok) return;
+const reportReply = (reply: ActionReply, action?: Action): void => {
+  if (reply.ok) {
+    if (reply.outcome?.granted === 0 && action) {
+      if (action.kind === 'chore') {
+        const t = action.target;
+        if (t.startsWith('plant-')) toastReject(STRINGS.progress.flavorLimits.plant);
+        else if (t.startsWith('desk-')) toastReject(STRINGS.progress.flavorLimits.wipe);
+        else if (t === 'fridge') toastReject(STRINGS.progress.flavorLimits.fridge);
+        else if (t === 'printer') toastReject(STRINGS.progress.flavorLimits.printer);
+      } else if (action.kind === 'coffee_gift') {
+        toastReject(STRINGS.progress.flavorLimits.coffee);
+      } else if (action.kind === 'task_done') {
+        toastReject(STRINGS.progress.flavorLimits.task);
+      }
+    }
+    return;
+  }
   if (reply.reason === 'too_far' || reply.reason === 'too_fast') {
     toastReject(STRINGS.net.rejected[reply.reason] ?? '');
   } else if (reply.reason === 'offline' || reply.reason === 'timeout') {
@@ -237,7 +256,10 @@ const reportReply = (reply: ActionReply): void => {
 };
 bus.on((event) => {
   const action = actionForEvent(event);
-  if (action) void progress.act(action).then(reportReply);
+  if (action)
+    void progress.act(action).then((r) => {
+      reportReply(r, action);
+    });
 });
 
 // Âm thanh dùng chung cho cả trang; chỉ bật sau lần chạm/bấm phím đầu tiên (chính sách autoplay).
@@ -869,6 +891,13 @@ function start(): void {
         isMax: p.isMax,
         coins: state.coins,
       });
+      const st = state.stamina ?? {
+        current: BALANCE.stamina.baseMax,
+        max: BALANCE.stamina.baseMax,
+        updatedAt: Date.now(),
+        exhausted: false,
+      };
+      officeHudView.setStamina(st.current, st.max, st.exhausted ?? false);
       const mission = activeMission(state);
       officeHudView.setMission(
         mission
@@ -988,6 +1017,15 @@ function start(): void {
           break;
         case 'quick_chat':
           scene.remotes.say(message.sid, QUICK_CHATS[message.index] ?? '');
+          break;
+        case 'chat':
+          if (message.isDirect) {
+            const sender = scene.remotes.list().find((p) => p.sid === message.sid)?.name ?? 'Ai đó';
+            scene.remotes.say(message.sid, `[Riêng] ${message.text}`);
+            officeHudView.showToast(`💬 ${sender} nhắn riêng: "${message.text}"`);
+          } else {
+            scene.remotes.say(message.sid, message.text);
+          }
           break;
         case 'company_refresh':
           // Công ty đổi tên / mua đồ / đổi màu đồng phục.
@@ -1200,8 +1238,11 @@ function start(): void {
     const openShop = (): void => {
       track(store, 'shop_open');
       let panel: { dispose(): void } | null = null;
-      const modal = officeActivities.openPanel(STRINGS.shop.title, () => panel?.dispose());
-      modal.body.closest('.modal')?.classList.add('modal-wide');
+      const modal = officeActivities.openPanel(
+        STRINGS.shop.title,
+        () => panel?.dispose(),
+        'modal-wide modal-shop',
+      );
       void lazy.shop().then(({ mountShopPanel }) => {
         panel = mountShopPanel(modal.body, {
           appearance: profile.appearance,
@@ -1219,6 +1260,7 @@ function start(): void {
 
     // ---------- Công ty (Phase 6): phòng riêng có biển hiệu ----------
     let roomKind = 'office';
+    let currentCompanyPerks: readonly CompanyPerk[] = [];
     // Áo đồng phục của mình (mặc ở mọi phòng nếu công ty đã mua và mình chọn mặc).
     const refreshUniform = (): void => {
       void api.request<MyCompanyResponse>('GET', '/api/company/me').then((r) => {
@@ -1230,6 +1272,7 @@ function start(): void {
     const updateSign = (): void => {
       refreshUniform();
       if (!roomKind.startsWith('company:')) {
+        currentCompanyPerks = [];
         scene.setCompanySign(null);
         scene.setCompanyPerks([]);
         // Văn phòng Công Sở: 3 đồng nghiệp mặc định.
@@ -1242,6 +1285,7 @@ function start(): void {
         .then((r) => {
           if (!r.ok || roomKind !== `company:${id}`) return;
           const c = r.value;
+          currentCompanyPerks = c.perks;
           scene.setCompanyPerks(c.perks);
           // Phòng công ty: đúng số nhân viên NPC đang đi làm (chưa thuê ai thì không có NPC).
           scene.setNpcs(createStaffRoster(c.staff));
@@ -1254,7 +1298,11 @@ function start(): void {
         });
     };
     const openCompany = (): void => {
-      const modal = officeActivities.openPanel(STRINGS.company.title);
+      const modal = officeActivities.openPanel(
+        STRINGS.company.title,
+        undefined,
+        'modal-wide modal-company',
+      );
       mountCompany(modal, {
         enterRoom: (companyId) => {
           room.send({ type: 'switch_room', roomId: `company:${companyId}` });
@@ -1299,7 +1347,11 @@ function start(): void {
       });
     };
     const openCompanyMap = (): void => {
-      const modal = officeActivities.openPanel(STRINGS.companyMap.title);
+      const modal = officeActivities.openPanel(
+        STRINGS.companyMap.title,
+        undefined,
+        'modal-wide modal-company-map',
+      );
       mountCompanyMap(modal);
     };
 
@@ -1344,6 +1396,82 @@ function start(): void {
       const id = scene.getSeatedId();
       return id === null ? null : (scene.getInteractables().find((i) => i.id === id)?.kind ?? null);
     };
+
+    // ---------- Radial Emote & Chat Wheel (Phím T) ----------
+    const radialWheel = new RadialWheel({
+      onSelectEmote: (emote) => {
+        room.send({ type: 'emote', emote });
+        scene.playerSay(STRINGS.social.emoteNames[emote] ?? '', emote);
+      },
+      onSendChat: (text) => {
+        room.send({ type: 'chat', text });
+        scene.playerSay(text);
+      },
+      onClose: () => {
+        scene.setInputLocked(false);
+      },
+      showToast: (msg) => {
+        officeHudView.showToast(msg);
+      },
+    });
+    radialWheel.mount(hudRoot);
+
+    const onGlobalKeyDown = (e: KeyboardEvent): void => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        radialWheel.toggle();
+      }
+    };
+    window.addEventListener('keydown', onGlobalKeyDown);
+
+    // ---------- Vòng lặp Stamina (giới hạn làm việc 30p liên tục) ----------
+    let lastStaminaCheck = Date.now();
+    let wasExhausted = false;
+    const staminaTimer = window.setInterval(() => {
+      const now = Date.now();
+      const sk = seatedKind();
+      let activity: 'desk' | 'sofa' | 'massage' | 'console' | 'window' | 'walking' = 'walking';
+      if (sk === 'desk' || sk === 'ceodesk') {
+        activity = 'desk';
+      } else if (sk === 'sofa') {
+        activity = 'sofa';
+      } else if (sk === 'massage') {
+        activity = 'massage';
+      } else if (sk === 'console') {
+        activity = 'console';
+      } else if (sk === 'window') {
+        activity = 'window';
+      }
+
+      const st = progress.state.stamina ?? {
+        current: BALANCE.stamina.baseMax,
+        max: BALANCE.stamina.baseMax,
+        updatedAt: lastStaminaCheck,
+        exhausted: false,
+      };
+
+      const nextStamina = updateStamina(st, now, activity, currentCompanyPerks);
+      lastStaminaCheck = now;
+      progress.state.stamina = nextStamina;
+      officeHudView.setStamina(nextStamina.current, nextStamina.max, nextStamina.exhausted);
+
+      if (nextStamina.exhausted && !wasExhausted) {
+        wasExhausted = true;
+        officeHudView.showToast(
+          '⚠️ Bạn đã làm việc liên tục 30p và bị kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi lại.',
+        );
+      } else if (!nextStamina.exhausted && wasExhausted) {
+        wasExhausted = false;
+        officeHudView.showToast('✨ Thể lực đã hồi phục! Bạn có thể tiếp tục nhận XP làm việc.');
+      }
+    }, 1000);
 
     // ---------- Xếp hạng, tường chung, bản đồ toà nhà, thẻ khoe (Phase 5B) ----------
     const openWall = (): void => {
@@ -1409,6 +1537,7 @@ function start(): void {
       const state = progress.state;
       void lazy.brag().then(({ drawBragCard, shareOrDownload }) =>
         drawBragCard({
+          name: profile.name,
           appearance: profile.appearance,
           equipped,
           level: progress.level,
@@ -1490,23 +1619,25 @@ function start(): void {
       applyMood();
     });
 
+    let lastRoomTeaInviteTime = 0;
     const openSocial = (): void => {
       const modal = officeActivities.openPanel(STRINGS.social.open);
       mountSocialPanel(modal.body, {
         players: () => scene.remotes.list(),
         onTeaInvite: () => {
+          lastRoomTeaInviteTime = Date.now();
           room.send({ type: 'tea_invite' });
           modal.close();
         },
-        onEmote: (emote) => {
-          room.send({ type: 'emote', emote });
-          scene.playerSay(STRINGS.social.emoteNames[emote] ?? '', emote);
+        onDirectTeaInvite: (targetSid, targetName) => {
+          room.send({ type: 'tea_invite', targetSid });
+          officeHudView.showToast(`Đã gửi lời rủ trà sữa riêng đến ${targetName}!`);
           modal.close();
         },
-        onQuickChat: (index) => {
-          room.send({ type: 'quick_chat', index });
-          scene.playerSay(QUICK_CHATS[index] ?? '');
-          modal.close();
+        onDirectChat: (targetSid, targetName, text) => {
+          room.send({ type: 'chat', text, targetSid });
+          scene.playerSay(`[Tới ${targetName}] ${text}`);
+          officeHudView.showToast(`Đã nhắn riêng cho ${targetName}`);
         },
         onToggleHidden: (code, hide) => {
           if (hide) hidden.add(code);
@@ -1514,13 +1645,19 @@ function start(): void {
           saveHidden(store, hidden);
           scene.remotes.setHidden(hidden);
         },
+        teaCooldownRemainingSec: () => {
+          const elapsed = (Date.now() - lastRoomTeaInviteTime) / 1000;
+          return Math.max(0, Math.ceil(300 - elapsed));
+        },
       });
     };
 
     const openProfile = (tab: ProfileTab = 'card'): void => {
       let panel: { dispose(): void } | null = null;
-      const modal = officeActivities.openPanel(STRINGS.progress.profileTitle, () =>
-        panel?.dispose(),
+      const modal = officeActivities.openPanel(
+        STRINGS.progress.profileTitle,
+        () => panel?.dispose(),
+        'modal-wide modal-profile',
       );
       panel = mountProfilePanel(modal.body, {
         name: profile.name,
@@ -1672,6 +1809,9 @@ function start(): void {
 
     const officeHudRef = hud;
     teardown = () => {
+      window.clearInterval(staminaTimer);
+      window.removeEventListener('keydown', onGlobalKeyDown);
+      radialWheel.dispose();
       window.clearInterval(periodTimer);
       window.clearInterval(stateTimer);
       window.clearInterval(moodTimer);

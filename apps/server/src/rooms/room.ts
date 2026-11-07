@@ -226,6 +226,36 @@ export class Room {
     this.broadcastNear({ type: 'quick_chat', sid: member.profile.sid, index }, member);
   }
 
+  chat(userId: string, text: string, targetSid?: number): void {
+    const member = this.members.get(userId);
+    if (!member?.conn) return;
+    this.markActive(member, this.now());
+    const clean = text.trim().slice(0, 100);
+    if (!clean) return;
+
+    if (targetSid !== undefined) {
+      const target = Array.from(this.members.values()).find((m) => m.profile.sid === targetSid);
+      if (target?.conn) {
+        target.conn.send({
+          type: 'chat',
+          sid: member.profile.sid,
+          text: clean,
+          isDirect: true,
+          targetSid,
+        });
+        member.conn.send({
+          type: 'chat',
+          sid: member.profile.sid,
+          text: clean,
+          isDirect: true,
+          targetSid,
+        });
+      }
+    } else {
+      this.broadcastNear({ type: 'chat', sid: member.profile.sid, text: clean }, member);
+    }
+  }
+
   /** Trả lời "Bạn còn ở đó không?". */
   active(userId: string): void {
     const member = this.members.get(userId);

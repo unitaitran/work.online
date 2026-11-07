@@ -52,6 +52,26 @@ export interface LogEntry {
   note?: string | undefined;
 }
 
+export interface StaminaState {
+  /** Thể lực hiện tại (0 -> max). Mặc định 100. */
+  current: number;
+  /** Thể lực tối đa (mặc định 100, đồng phục +20). */
+  max: number;
+  /** Thời điểm cập nhật cuối cùng (timestamp ms). */
+  updatedAt: number;
+  /** Có đang trong trạng thái kiệt sức không (current = 0). */
+  exhausted?: boolean | undefined;
+}
+
+export function initStamina(now: number, max = BALANCE.stamina.baseMax): StaminaState {
+  return {
+    current: max,
+    max,
+    updatedAt: now,
+    exhausted: false,
+  };
+}
+
 export interface ProgressState {
   version: typeof PROGRESS_VERSION;
   xp: number;
@@ -71,6 +91,8 @@ export interface ProgressState {
   createdAt: number;
   /** Việc đã nhận ở bảng task, chưa xác nhận xong (server giữ). */
   tasks?: HeldTask[] | undefined;
+  /** Thể lực làm việc liên tiếp (tối đa 30p làm việc, hồi khi nghỉ ngơi). */
+  stamina?: StaminaState | undefined;
 }
 
 export function createProgress(now: number): ProgressState {
@@ -87,6 +109,7 @@ export function createProgress(now: number): ProgressState {
     linesCarry: 0,
     log: [],
     createdAt: now,
+    stamina: initStamina(now),
   };
 }
 
@@ -166,6 +189,15 @@ const logSchema = z
 const branchSchema = z.enum(BRANCHES as [Branch, ...Branch[]]).nullable();
 const departmentSchema = z.enum(DEPARTMENTS as [Department, ...Department[]]).nullable();
 
+const staminaSchema = z
+  .object({
+    current: z.number().min(0),
+    max: z.number().positive(),
+    updatedAt: z.number(),
+    exhausted: z.boolean().optional(),
+  })
+  .optional();
+
 const progressV3Schema = z.object({
   version: z.literal(3),
   xp: nonNegInt,
@@ -183,6 +215,7 @@ const progressV3Schema = z.object({
     .array(z.object({ taskId: nonNegInt, acceptedAt: z.number() }))
     .max(TASKS_HELD_MAX)
     .optional(),
+  stamina: staminaSchema,
 });
 
 /** Phiên bản 2 (Phase 3 bản đầu): có chức danh lưu riêng, kỳ đánh giá và tính cách. */
@@ -267,7 +300,13 @@ export function migrateProgress(raw: unknown, now: number): MigrateResult {
     return {
       ok: true,
       migratedFrom: 2,
-      state: { ...rest, version: PROGRESS_VERSION, coins: 0, reputation: review.helps },
+      state: {
+        ...rest,
+        version: PROGRESS_VERSION,
+        coins: 0,
+        reputation: review.helps,
+        stamina: initStamina(now),
+      },
     };
   }
   if (version === 3) {

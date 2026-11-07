@@ -19,7 +19,11 @@ export function isModalOpen(): boolean {
 export function openModal(
   root: HTMLElement,
   /** `onClose(byUser)`: true khi người chơi tự đóng (×, bấm ra ngoài, Esc). */
-  options: { title: string; className?: string; onClose?(byUser: boolean): void },
+  options: {
+    title: string;
+    className?: string | undefined;
+    onClose?: ((byUser: boolean) => void) | undefined;
+  },
 ): Modal {
   const titleId = `modal-title-${String(Date.now())}`;
   const closeButton = el('button', {

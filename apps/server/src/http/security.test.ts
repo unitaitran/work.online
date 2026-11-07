@@ -195,11 +195,12 @@ describe('gói tin lạ, gửi dồn', () => {
     const app = make({ wsPerIp: 2 });
     const port = await listen(app);
     const acc = await account(app);
+    const acc2 = await account(app);
     expect(await wsStatus(port, acc.token, { origin: 'https://evil.example' })).toBe(403);
     expect(await wsStatus(port, acc.token, { origin: `http://127.0.0.1:${String(port)}` })).toBe(
       'open',
     );
-    expect(await wsStatus(port, acc.token)).toBe('open');
+    expect(await wsStatus(port, acc2.token)).toBe('open');
     expect(await wsStatus(port, acc.token)).toBe(429);
     // Gửi dồn 200 tin: server chỉ xử lý theo xô token, báo rate_limited.
     // (Kết nối thứ hai cùng tài khoản đã thay kết nối thứ nhất.)

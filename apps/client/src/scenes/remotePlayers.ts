@@ -296,7 +296,7 @@ export class RemotePlayers {
           seated ? this.seatLiftAt(player.x, player.z) : 0,
           player.z,
         );
-        player.avatar.root.rotation.y = player.facing;
+        player.avatar.root.rotation.set(0, player.facing, 0);
         player.avatar.setPose(player.pose);
         player.avatar.update(dt);
       } else {

@@ -174,13 +174,20 @@ describe('mở công ty (6A)', () => {
       await app1.close();
       apps.splice(apps.indexOf(app1), 1);
       const app2 = makeApp({ dbPath });
+      apps.push(app2);
       const me = await app2.inject({ method: 'GET', url: '/api/company/me', headers: a.headers });
       const detail = me.json<MyCompanyResponse>().detail;
       expect(detail?.company.name).toBe('Bánh Bao Vui Vẻ');
       expect(detail?.economy.stage).toBe(0);
       expect(detail?.economy.staff).toHaveLength(1);
+      await app2.close();
+      apps.splice(apps.indexOf(app2), 1);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // bỏ qua: thư mục tạm có thể đã bị xoá
+      }
     }
   });
 });

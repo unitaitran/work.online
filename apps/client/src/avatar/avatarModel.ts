@@ -668,9 +668,13 @@ export class AvatarModel {
   private applyPose(pose: PoseState): void {
     // Nằm ngửa: ngả cả người ra sau 90° quanh gót chân, nhấc lên cho lưng và đầu nằm trên đệm.
     this.rig.rotation.x = (-Math.PI / 2) * pose.lie;
+    this.rig.rotation.y = 0;
+    this.rig.rotation.z = 0;
     this.rig.position.y = LIE_LIFT * pose.lie;
     this.body.position.y = HIP_Y + pose.rootY;
     this.body.rotation.x = pose.bodyPitch;
+    // Nâng đầu tựa lên gối khi nằm (trục Z local ngả ra thành Y thế giới), tránh bị chìm/lún khuất đầu.
+    this.head.position.set(0, NECK_Y, -0.14 * pose.lie);
     this.head.rotation.set(pose.headPitch, 0, pose.headRoll);
     this.armLeft.rotation.set(pose.armLeftX, 0, pose.armLeftZ);
     this.armRight.rotation.set(pose.armRightX, 0, pose.armRightZ);

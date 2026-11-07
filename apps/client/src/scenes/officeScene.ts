@@ -693,6 +693,7 @@ export class OfficeScene implements SceneController {
     const hasInput = !this.inputLocked && Math.hypot(input.x, input.y) > 0.05;
 
     if (this.seated) {
+      this.facing = this.seated.facing;
       if (hasInput) this.standUp();
       else this.updateTyping(dt);
     }
@@ -705,10 +706,13 @@ export class OfficeScene implements SceneController {
   }
 
   frameUpdate(frameSeconds: number, alpha: number): void {
+    if (this.seated) {
+      this.facing = this.seated.facing;
+    }
     const x = lerp(this.previous.x, this.position.x, alpha);
     const z = lerp(this.previous.z, this.position.z, alpha);
     this.avatar.root.position.set(x, this.seated ? seatLift(this.seated) : 0, z);
-    this.avatar.root.rotation.y = this.facing;
+    this.avatar.root.rotation.set(0, this.facing, 0);
     this.blob.position.set(x, 0.006, z);
     this.blob.visible = this.blobAllowed && !this.seated;
     this.lighting.follow(x, z);
@@ -872,7 +876,10 @@ export class OfficeScene implements SceneController {
     if (pending && this.path.length === 0) {
       this.pending = null;
       const d = Math.hypot(pending.approach.x - moved.x, pending.approach.z - moved.z);
-      if (d <= ARRIVE_RADIUS + 0.05) this.use(pending);
+      if (d <= ARRIVE_RADIUS + 0.05) {
+        this.use(pending);
+        return;
+      }
     }
     const go = this.pendingGo;
     if (go && this.path.length === 0) {

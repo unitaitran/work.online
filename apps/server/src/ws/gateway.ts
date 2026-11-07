@@ -247,6 +247,9 @@ export function attachWebSocketGateway(
       case 'quick_chat':
         room.quickChat(userId, message.index);
         return;
+      case 'chat':
+        room.chat(userId, message.text, message.targetSid);
+        return;
       case 'ping':
         session.send({ type: 'pong', t: message.t, serverTime: now() });
         return;

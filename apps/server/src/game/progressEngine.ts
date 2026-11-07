@@ -30,6 +30,9 @@ import {
   type CareerUnlock,
   TASKS_HELD_MAX,
   taskWaitMs,
+  shopItem,
+  type ItemBuff,
+  type CompanyPerk,
 } from '@dilam/shared';
 import type { Repositories } from '../db/repositories';
 import { recordEarn } from './shop';
@@ -71,6 +74,10 @@ export interface PlayerContext {
   careerUnlock?(): CareerUnlock | undefined;
   /** Vị trí của người chơi khác cùng phòng theo mã nhân viên (null nếu không có). */
   colleagueAt?(code: string): Vec2 | null;
+  /** Danh sách perks của công ty đang ở (nếu ở phòng công ty). */
+  companyPerks?(): readonly CompanyPerk[] | undefined;
+  /** Đang mặc đồng phục công ty (nếu có). */
+  wearingUniform?(): boolean | undefined;
 }
 
 /** Tặng cà phê cho người chơi khác: phải đứng gần (m, theo vị trí server). */
@@ -220,7 +227,7 @@ export class ProgressEngine {
         });
         return {
           ok: true,
-          ...this.applyAndSave(userId, without, event, today, now, fortune),
+          ...this.applyAndSave(userId, without, event, today, now, fortune, player),
           today,
         };
       }
@@ -342,7 +349,11 @@ export class ProgressEngine {
     // Chỉ hành động hợp lệ mới tính vào khoảng nghỉ (tin sai bị chặn bởi giới hạn tần suất WS).
     live.lastAt.set(action.kind, now);
     if (!event) return { ok: true, state, outcome: null, today };
-    return { ok: true, ...this.applyAndSave(userId, state, event, today, now, fortune), today };
+    return {
+      ok: true,
+      ...this.applyAndSave(userId, state, event, today, now, fortune, player),
+      today,
+    };
   }
 
   /**
@@ -372,7 +383,15 @@ export class ProgressEngine {
       minutes,
       ...(seat === 'ceoMeeting' ? { ceo: true } : {}),
     });
-    const result = this.applyAndSave(player.userId, this.state(player.userId), event, today, now);
+    const result = this.applyAndSave(
+      player.userId,
+      this.state(player.userId),
+      event,
+      today,
+      now,
+      undefined,
+      player,
+    );
     return { ...result, today };
   }
 
@@ -407,7 +426,15 @@ export class ProgressEngine {
     const now = this.now(player.userId);
     const today = this.today(player.userId, player.timeZone);
     const event = makeEvent('room-event', now, 0, { kind });
-    return this.applyAndSave(player.userId, this.state(player.userId), event, today, now).outcome;
+    return this.applyAndSave(
+      player.userId,
+      this.state(player.userId),
+      event,
+      today,
+      now,
+      undefined,
+      player,
+    ).outcome;
   }
 
   /** Uống trà sữa khi được rủ (tự trả xu ở MilkTeaService): XP theo luật chung. */
@@ -415,7 +442,15 @@ export class ProgressEngine {
     const now = this.now(player.userId);
     const today = this.today(player.userId, player.timeZone);
     const event = makeEvent('milk-tea', now, 0, {});
-    return this.applyAndSave(player.userId, this.state(player.userId), event, today, now).outcome;
+    return this.applyAndSave(
+      player.userId,
+      this.state(player.userId),
+      event,
+      today,
+      now,
+      undefined,
+      player,
+    ).outcome;
   }
 
   private applyAndSave(
@@ -425,8 +460,22 @@ export class ProgressEngine {
     today: string,
     now: number,
     fortune?: ActionOutcome['fortune'],
+    playerContext?: PlayerContext,
   ): { state: ProgressState; outcome: ActionOutcome } {
-    const result = applyEvent(state, event, { today, now });
+    const equippedIds = this.repos.inventory.equipped(userId);
+    const itemBuffs = equippedIds
+      .map((id) => shopItem(id)?.buff)
+      .filter((b): b is ItemBuff => b !== undefined);
+    const companyPerks = playerContext?.companyPerks?.();
+    const wearingUniform = playerContext?.wearingUniform?.();
+
+    const result = applyEvent(state, event, {
+      today,
+      now,
+      itemBuffs,
+      companyPerks,
+      wearingUniform,
+    });
     this.repos.transaction(() => {
       this.save(userId, result.state);
       recordEarn(

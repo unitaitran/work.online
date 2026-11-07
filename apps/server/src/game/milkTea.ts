@@ -32,25 +32,38 @@ export interface MilkTeaOptions {
 export class MilkTeaService {
   private readonly rounds = new Map<string, Round>();
   private readonly lastInvite = new Map<string, number>();
+  private readonly roomLastInvite = new Map<string, number>();
   private nextId = 1;
 
   constructor(private readonly o: MilkTeaOptions) {}
 
-  /** Rủ cả phòng. Trả lỗi hoặc null (đã mở, người rủ đã trả cốc của mình và được XP). */
-  invite(room: Room, userId: string): MilkTeaInviteError | null {
+  /** Rủ cả phòng hoặc rủ 1 người. Trả lỗi hoặc null (đã mở, người rủ đã trả cốc của mình và được XP). */
+  invite(room: Room, userId: string, targetSid?: number): MilkTeaInviteError | null {
     const now = this.o.now();
     const current = this.rounds.get(room.id);
     if (current && now < current.view.endsAt) return 'busy';
     if (current) this.finish(current);
-    const last = this.lastInvite.get(userId);
-    if (last !== undefined && now - last < MILK_TEA.cooldownMs) return 'cooldown';
+
     if (room.connected < 2) return 'alone';
     const host = room.profileOf(userId);
     if (!host) return 'alone';
+
+    // Kiểm tra cooldown cá nhân và cooldown phòng (5 phút / lần)
+    const last = this.lastInvite.get(userId);
+    if (last !== undefined && now - last < MILK_TEA.cooldownMs) return 'cooldown';
+    // Chỉ áp dụng cooldown cả phòng nếu rủ cả phòng
+    if (targetSid === undefined) {
+      const roomLast = this.roomLastInvite.get(room.id);
+      if (roomLast !== undefined && now - roomLast < MILK_TEA.cooldownMs) return 'cooldown';
+    }
+
     if (!this.o.charge(userId, MILK_TEA.price, 'tea:cup')) return 'coins';
     const xp = this.o.reward(userId);
     this.o.push(userId);
     this.lastInvite.set(userId, now);
+    if (targetSid === undefined) {
+      this.roomLastInvite.set(room.id, now);
+    }
     const view: MilkTeaRoundView = {
       id: this.nextId++,
       hostSid: host.sid,
@@ -61,8 +74,16 @@ export class MilkTeaService {
     const round: Round = { view, hostId: userId, room, replied: new Set(), cups: 1 };
     this.rounds.set(room.id, round);
     room.sendTo(userId, { type: 'tea_started', round: view, xp });
-    for (const id of room.userIds()) {
-      if (id !== userId) room.sendTo(id, { type: 'tea_round', round: view });
+    if (targetSid !== undefined) {
+      for (const id of room.userIds()) {
+        if (id !== userId && room.profileOf(id)?.sid === targetSid) {
+          room.sendTo(id, { type: 'tea_round', round: view });
+        }
+      }
+    } else {
+      for (const id of room.userIds()) {
+        if (id !== userId) room.sendTo(id, { type: 'tea_round', round: view });
+      }
     }
     return null;
   }
