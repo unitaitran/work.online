@@ -395,7 +395,12 @@ export function applyEvent(
   let nextMissionAt = state.daily.nextMissionAt;
   if (missionXp > 0) nextMissionAt = ctx.now + BALANCE.missions.cooldownMs;
 
-  let stamina = state.stamina ?? { current: BALANCE.stamina.baseMax, max: BALANCE.stamina.baseMax, updatedAt: ctx.now, exhausted: false };
+  let stamina = state.stamina ?? {
+    current: BALANCE.stamina.baseMax,
+    max: BALANCE.stamina.baseMax,
+    updatedAt: ctx.now,
+    exhausted: false,
+  };
   if (event.type === 'coffee-drink') {
     stamina = boostStamina(stamina, BALANCE.stamina.drinkBoost, ctx.now);
   } else if (event.type === 'work-tick' || event.type === 'focus-typing') {
@@ -405,13 +410,14 @@ export function applyEvent(
   // Kiệt sức do làm việc liên tục quá 30 phút mà chưa nghỉ: không nhận thêm XP làm việc
   const isWorkEvent = event.type === 'work-tick' || event.type === 'focus-typing';
   const base = xp.xp + missionXp;
-  const effectiveBase = (stamina.exhausted && isWorkEvent) ? missionXp : base;
+  const effectiveBase = stamina.exhausted && isWorkEvent ? missionXp : base;
   const granted = applyDailyCap(state.daily.earned, effectiveBase);
   // Nhật ký tách phần của hoạt động và phần thưởng việc sếp giao.
-  const effectiveXp = (stamina.exhausted && isWorkEvent) ? 0 : xp.xp;
+  const effectiveXp = stamina.exhausted && isWorkEvent ? 0 : xp.xp;
   const grantedEvent = applyDailyCap(state.daily.earned, effectiveXp);
   const log: LogEntry[] = [...state.log];
-  if (effectiveXp > 0) log.push({ at: ctx.now, source: event.type, xp: grantedEvent, base: effectiveXp });
+  if (effectiveXp > 0)
+    log.push({ at: ctx.now, source: event.type, xp: grantedEvent, base: effectiveXp });
   if (missionXp > 0) {
     log.push({ at: ctx.now, source: 'mission', xp: granted - grantedEvent, base: missionXp });
   }
@@ -522,17 +528,15 @@ export function hasCeoMeeting(state: ProgressState): boolean {
 // Thể lực (Stamina) - Giới hạn 30 phút làm việc liên tiếp
 // ---------------------------------------------------------------------------
 
-export type RestActivity =
-  | 'none'
-  | 'desk'
-  | 'window'
-  | 'sofa'
-  | 'massage'
-  | 'console'
-  | 'walking';
+export type RestActivity = 'none' | 'desk' | 'window' | 'sofa' | 'massage' | 'console' | 'walking';
 
 export function updateStamina(
-  currentStamina: { current: number; max: number; updatedAt: number; exhausted?: boolean | undefined },
+  currentStamina: {
+    current: number;
+    max: number;
+    updatedAt: number;
+    exhausted?: boolean | undefined;
+  },
   now: number,
   activity: RestActivity,
   companyPerks: readonly string[] = [],
@@ -543,7 +547,7 @@ export function updateStamina(
       current: currentStamina.current,
       max: currentStamina.max,
       updatedAt: currentStamina.updatedAt,
-      exhausted: currentStamina.exhausted ?? (currentStamina.current <= 0),
+      exhausted: currentStamina.exhausted ?? currentStamina.current <= 0,
     };
   }
 
@@ -552,7 +556,7 @@ export function updateStamina(
   const max = Math.max(targetMax, currentStamina.max);
 
   let current = currentStamina.current;
-  let exhausted = currentStamina.exhausted ?? (current <= 0);
+  let exhausted = currentStamina.exhausted ?? current <= 0;
 
   if (activity === 'desk') {
     // Nếu thời gian trôi qua lớn (nghỉ ngơi > 5 phút, offline hoặc qua ngày mới), thể lực tự hồi đầy
@@ -570,7 +574,10 @@ export function updateStamina(
     let regenRate = BALANCE.stamina.passiveRegenPerSecond;
     if (activity === 'massage' || (activity === 'sofa' && companyPerks.includes('massage'))) {
       regenRate = BALANCE.stamina.massageRegenPerSecond;
-    } else if (activity === 'console' || (activity === 'sofa' && companyPerks.includes('console'))) {
+    } else if (
+      activity === 'console' ||
+      (activity === 'sofa' && companyPerks.includes('console'))
+    ) {
       regenRate = BALANCE.stamina.consoleRegenPerSecond;
     } else if (activity === 'sofa') {
       regenRate = BALANCE.stamina.breakroomRegenPerSecond;

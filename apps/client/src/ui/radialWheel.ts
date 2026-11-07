@@ -46,12 +46,15 @@ export class RadialWheel {
         placeholder: '💬 Nhập tin nhắn... (Enter)',
         maxlength: '100',
       },
-    }) as HTMLInputElement;
+    });
 
     const centerZone = el('div', {
       className: 'radial-center-zone',
       children: [
-        el('div', { className: 'radial-center-tip', text: 'Giữ chuột ở giữa để chat (tối đa 5 tin/phút)' }),
+        el('div', {
+          className: 'radial-center-tip',
+          text: 'Giữ chuột ở giữa để chat (tối đa 5 tin/phút)',
+        }),
         this.centerInput,
       ],
     });
@@ -138,7 +141,10 @@ export class RadialWheel {
       } else {
         // Click ngoài vòng tròn thì đóng
         const rect = this.wheel.getBoundingClientRect();
-        const dist = Math.hypot(e.clientX - (rect.left + rect.width / 2), e.clientY - (rect.top + rect.height / 2));
+        const dist = Math.hypot(
+          e.clientX - (rect.left + rect.width / 2),
+          e.clientY - (rect.top + rect.height / 2),
+        );
         if (dist > 190) {
           this.close();
         }
@@ -169,7 +175,10 @@ export class RadialWheel {
 
     const now = Date.now();
     // Lọc các tin trong vòng 60 giây qua
-    while (this.chatTimestamps.length > 0 && now - (this.chatTimestamps[0] ?? 0) > CHAT_RATE_LIMIT_WINDOW_MS) {
+    while (
+      this.chatTimestamps.length > 0 &&
+      now - (this.chatTimestamps[0] ?? 0) > CHAT_RATE_LIMIT_WINDOW_MS
+    ) {
       this.chatTimestamps.shift();
     }
 

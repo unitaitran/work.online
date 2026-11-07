@@ -185,7 +185,9 @@ describe('mở công ty (6A)', () => {
     } finally {
       try {
         rmSync(dir, { recursive: true, force: true });
-      } catch {}
+      } catch {
+        // bỏ qua: thư mục tạm có thể đã bị xoá
+      }
     }
   });
 });

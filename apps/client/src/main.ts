@@ -233,7 +233,7 @@ if (localSave) {
 let toastReject: (text: string) => void = () => undefined;
 const reportReply = (reply: ActionReply, action?: Action): void => {
   if (reply.ok) {
-    if (reply.outcome && reply.outcome.granted === 0 && action) {
+    if (reply.outcome?.granted === 0 && action) {
       if (action.kind === 'chore') {
         const t = action.target;
         if (t.startsWith('plant-')) toastReject(STRINGS.progress.flavorLimits.plant);
@@ -256,7 +256,10 @@ const reportReply = (reply: ActionReply, action?: Action): void => {
 };
 bus.on((event) => {
   const action = actionForEvent(event);
-  if (action) void progress.act(action).then((r) => reportReply(r, action));
+  if (action)
+    void progress.act(action).then((r) => {
+      reportReply(r, action);
+    });
 });
 
 // Âm thanh dùng chung cho cả trang; chỉ bật sau lần chạm/bấm phím đầu tiên (chính sách autoplay).
@@ -1461,7 +1464,9 @@ function start(): void {
 
       if (nextStamina.exhausted && !wasExhausted) {
         wasExhausted = true;
-        officeHudView.showToast('⚠️ Bạn đã làm việc liên tục 30p và bị kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi lại.');
+        officeHudView.showToast(
+          '⚠️ Bạn đã làm việc liên tục 30p và bị kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi lại.',
+        );
       } else if (!nextStamina.exhausted && wasExhausted) {
         wasExhausted = false;
         officeHudView.showToast('✨ Thể lực đã hồi phục! Bạn có thể tiếp tục nhận XP làm việc.');

@@ -91,8 +91,8 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
   );
   const employer = state.employer
     ? (s.card.employers[state.employer] ??
-        (state.employer.startsWith('company:') ? o.companyName?.() : null) ??
-        s.card.companyUnknown)
+      (state.employer.startsWith('company:') ? o.companyName?.() : null) ??
+      s.card.companyUnknown)
     : s.card.unemployed;
   const department = state.department ? DEPARTMENT_NAMES[state.department] : s.card.noDepartment;
   const branch = state.branch ? BRANCH_NAMES[state.branch] : s.card.noBranch;
@@ -241,10 +241,7 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
             children: [
               el('span', { className: 'meta-icon', text: '🏢' }),
               el('div', {
-                children: [
-                  el('small', { text: s.card.company }),
-                  el('strong', { text: employer }),
-                ],
+                children: [el('small', { text: s.card.company }), el('strong', { text: employer })],
               }),
             ],
           }),
@@ -265,10 +262,7 @@ function renderCard(state: ProgressState, o: ProfilePanelOptions): HTMLElement {
             children: [
               el('span', { className: 'meta-icon', text: '🌿' }),
               el('div', {
-                children: [
-                  el('small', { text: s.card.branch }),
-                  el('strong', { text: branch }),
-                ],
+                children: [el('small', { text: s.card.branch }), el('strong', { text: branch })],
               }),
             ],
           }),

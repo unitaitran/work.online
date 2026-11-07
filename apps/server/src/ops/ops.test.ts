@@ -13,7 +13,9 @@ afterEach(() => {
   for (const d of dirs.splice(0)) {
     try {
       rmSync(d, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // bỏ qua: thư mục tạm có thể đã bị xoá
+    }
   }
 });
 const temp = (): string => {

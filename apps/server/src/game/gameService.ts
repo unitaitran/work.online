@@ -109,13 +109,13 @@ export function attachGameService(
       },
       companyPerks: () => {
         const room = gateway.sessionOf(userId)?.room;
-        if (!room || !room.kind.startsWith('company:')) return [];
+        if (!room?.kind.startsWith('company:')) return [];
         const companyId = room.kind.slice('company:'.length);
         return ctx.repos.companies.get(companyId)?.economy.perks ?? [];
       },
       wearingUniform: () => {
         const room = gateway.sessionOf(userId)?.room;
-        if (!room || !room.kind.startsWith('company:')) return false;
+        if (!room?.kind.startsWith('company:')) return false;
         const companyId = room.kind.slice('company:'.length);
         const co = ctx.repos.companies.get(companyId);
         if (!co) return false;

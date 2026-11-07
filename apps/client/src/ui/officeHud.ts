@@ -159,7 +159,12 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
   const staminaText = el('span', { className: 'stamina-bar-text', text: '⚡ 100/100' });
   const staminaBar = el('span', {
     className: 'stamina-bar',
-    attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '100' },
+    attrs: {
+      role: 'progressbar',
+      'aria-valuemin': '0',
+      'aria-valuemax': '100',
+      'aria-valuenow': '100',
+    },
     children: [staminaFill, staminaText],
   });
 
@@ -458,7 +463,8 @@ export function mountOfficeHud(root: HTMLElement, options: OfficeHudOptions): Of
       if (exhausted || pct <= 15) {
         staminaFill.className = 'stamina-bar-fill is-exhausted';
         staminaText.textContent = `⚡ Kiệt sức (${String(Math.round(current))}/${String(max)})`;
-        staminaBar.title = 'Đã kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi phục.';
+        staminaBar.title =
+          'Đã kiệt sức! Hãy vào sofa phòng nghỉ, chơi game, uống nước hoặc ngắm cửa sổ để hồi phục.';
       } else if (pct <= 40) {
         staminaFill.className = 'stamina-bar-fill is-tired';
         staminaText.textContent = `⚡ Mệt (${String(Math.round(current))}/${String(max)})`;

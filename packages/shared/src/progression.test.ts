@@ -176,7 +176,9 @@ describe('xpFor', () => {
   });
 
   it('task, cà phê, công quả, quẻ, họp', () => {
-    expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: true }), ctx()).xp).toBe(150);
+    expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: true }), ctx()).xp).toBe(
+      150,
+    );
     expect(xpFor(makeEvent('task-flip', T0, 0, { taskId: 1, completed: false }), ctx()).xp).toBe(0);
     expect(xpFor(gift(), ctx()).xp).toBe(80);
     expect(xpFor(chore(), ctx()).xp).toBe(120);

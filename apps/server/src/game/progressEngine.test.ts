@@ -221,7 +221,10 @@ describe('ProgressEngine', () => {
   it('xin quẻ: lần đầu trong ngày có XP, lần sau "xem lại"', () => {
     position = at('fortune');
     const first = act({ kind: 'fortune' });
-    expect(first).toMatchObject({ ok: true, outcome: { granted: 100, fortune: { repeat: false } } });
+    expect(first).toMatchObject({
+      ok: true,
+      outcome: { granted: 100, fortune: { repeat: false } },
+    });
     clock += 2000;
     expect(act({ kind: 'fortune' })).toMatchObject({
       outcome: { granted: 0, fortune: { repeat: true } },

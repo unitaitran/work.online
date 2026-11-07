@@ -68,8 +68,12 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
   directChatBox.hidden = true;
   const directChatInput = el('input', {
     className: 'creator-input',
-    attrs: { type: 'text', placeholder: 'Nhập tin nhắn riêng... (tối đa 100 ký tự)', maxlength: '100' },
-  }) as HTMLInputElement;
+    attrs: {
+      type: 'text',
+      placeholder: 'Nhập tin nhắn riêng... (tối đa 100 ký tự)',
+      maxlength: '100',
+    },
+  });
   const directChatSend = el('button', {
     className: 'button button-primary',
     text: 'Gửi',
@@ -150,7 +154,10 @@ export function mountSocialPanel(body: HTMLElement, o: SocialPanelOptions): void
         const teaBtn = el('button', {
           className: 'button button-soft button-compact',
           text: s.directTea,
-          attrs: { type: 'button', title: `Rủ riêng ${p.name} uống trà sữa (${String(MILK_TEA.price)} xu)` },
+          attrs: {
+            type: 'button',
+            title: `Rủ riêng ${p.name} uống trà sữa (${String(MILK_TEA.price)} xu)`,
+          },
         });
         teaBtn.addEventListener('click', () => {
           if (o.onDirectTeaInvite) {

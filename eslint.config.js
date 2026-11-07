@@ -22,6 +22,8 @@ export default defineConfig(
     },
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
+      // Số trong chuỗi ghép (`${n} xu`) là an toàn; vẫn chặn undefined/object.
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

@@ -77,9 +77,15 @@ function companyBadge(c: CompanyPublic): HTMLElement {
   const tags = el('div', {
     className: 'company-tag-row',
     children: [
-      el('span', { className: 'badge-pill badge-industry', text: `🏷️ ${s.industries[c.industry] ?? c.industry}` }),
+      el('span', {
+        className: 'badge-pill badge-industry',
+        text: `🏷️ ${s.industries[c.industry] ?? c.industry}`,
+      }),
       el('span', { className: 'badge-pill badge-stage', text: `🏢 ${s.stages[c.stage] ?? ''}` }),
-      el('span', { className: 'badge-pill badge-location', text: `📍 ${provinceOf(c.province)?.name ?? ''} (${s.floorLabel(c.building, c.floor)})` }),
+      el('span', {
+        className: 'badge-pill badge-location',
+        text: `📍 ${provinceOf(c.province)?.name ?? ''} (${s.floorLabel(c.building, c.floor)})`,
+      }),
       el('span', { className: 'badge-pill badge-members', text: `👥 ${s.members(c.members + 1)}` }),
     ],
   });
@@ -90,10 +96,7 @@ function companyBadge(c: CompanyPublic): HTMLElement {
       icon,
       el('div', {
         className: 'company-head-details',
-        children: [
-          el('h3', { className: 'company-name-hero', text: c.name }),
-          tags,
-        ],
+        children: [el('h3', { className: 'company-name-hero', text: c.name }), tags],
       }),
     ],
   });
@@ -495,7 +498,10 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
           el('div', {
             children: [
               el('span', { className: 'banner-label', text: 'Quỹ công ty khả dụng' }),
-              el('strong', { className: 'banner-value', text: `${Math.floor(treasury).toLocaleString('vi-VN')} xu` }),
+              el('strong', {
+                className: 'banner-value',
+                text: `${Math.floor(treasury).toLocaleString('vi-VN')} xu`,
+              }),
             ],
           }),
         ],
@@ -798,7 +804,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                     className: 'milestone-title',
                     text: d.stage.ipo
                       ? s.ipoTitle
-                      : `${s.stages[e.stage]} ➔ ${s.stages[e.stage + 1] ?? s.nextStage}`,
+                      : `${s.stages[e.stage] ?? ''} ➔ ${s.stages[e.stage + 1] ?? s.nextStage}`,
                   }),
                 ],
               }),
@@ -1079,7 +1085,7 @@ export function mountCompanyPanel(body: HTMLElement, api: CompanyApi): { refresh
                   ...(st.rank < 2
                     ? [
                         button(
-                          `Thăng chức (${COMPANY.promoteCost[st.rank + 1]} xu)`,
+                          `Thăng chức (${String(COMPANY.promoteCost[st.rank + 1] ?? 0)} xu)`,
                           () =>
                             void act('/api/company/staff/promote', { staffId: st.id }).then(load),
                           false,

@@ -411,11 +411,14 @@ export const STRINGS = {
     ],
     /** Thông điệp từ chối tế nhị khi một hành động chạm giới hạn trong ngày (tránh cảm giác bị phạt). */
     flavorLimits: {
-      plant: '🪴 Cây thì thầm: "Sen ơi tưới nhiều quá úng rễ của trẫm mất! Để trẫm thở và quang hợp tí nào ☀️"',
+      plant:
+        '🪴 Cây thì thầm: "Sen ơi tưới nhiều quá úng rễ của trẫm mất! Để trẫm thở và quang hợp tí nào ☀️"',
       wipe: '✨ Mặt bàn sáng bóng soi rõ cả mặt sếp rồi! Lau nữa là bay luôn lớp sơn gỗ đấy bạn ơi!',
-      fridge: '🧊 Tủ lạnh ngăn nắp như khách sạn 5 sao rồi! Nhường phần cho đồng nghiệp khác trổ tài nhé!',
+      fridge:
+        '🧊 Tủ lạnh ngăn nắp như khách sạn 5 sao rồi! Nhường phần cho đồng nghiệp khác trổ tài nhé!',
       printer: '🖨️ Máy in êm ru không một tiếng kẹt! Hãy để máy nghỉ ngơi một chút nhé!',
-      coffee: '☕ Tim đập thình thịch rồi 💓 Uống nữa tối nay đếm cừu tới sáng đấy, uống nước lọc mát lành nào!',
+      coffee:
+        '☕ Tim đập thình thịch rồi 💓 Uống nữa tối nay đếm cừu tới sáng đấy, uống nước lọc mát lành nào!',
       task: '📋 Bảng task sạch bong kin kít! Đừng tranh hết việc của đồng nghiệp chứ, chừa chút KPI cho người ta sống với!',
       desk: '🔥 Bàn phím bốc khói nhẹ! Đứng dậy vươn vai, nhìn xa 20 mét cho mắt nghỉ ngơi chống cận thị nào!',
     },
@@ -616,7 +619,8 @@ export const STRINGS = {
     hiddenNote: 'Chỉ ẩn với riêng bạn.',
     directChat: '💬 Chat riêng',
     directTea: '🧋 Rủ riêng',
-    cooldownNote: (sec: number) => `Chờ ${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')} để rủ lại`,
+    cooldownNote: (sec: number) =>
+      `Chờ ${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')} để rủ lại`,
     emoteNames: {
       wave: '👋 Vẫy tay',
       clap: '👏 Vỗ tay',

@@ -236,8 +236,20 @@ export class Room {
     if (targetSid !== undefined) {
       const target = Array.from(this.members.values()).find((m) => m.profile.sid === targetSid);
       if (target?.conn) {
-        target.conn.send({ type: 'chat', sid: member.profile.sid, text: clean, isDirect: true, targetSid });
-        member.conn.send({ type: 'chat', sid: member.profile.sid, text: clean, isDirect: true, targetSid });
+        target.conn.send({
+          type: 'chat',
+          sid: member.profile.sid,
+          text: clean,
+          isDirect: true,
+          targetSid,
+        });
+        member.conn.send({
+          type: 'chat',
+          sid: member.profile.sid,
+          text: clean,
+          isDirect: true,
+          targetSid,
+        });
       }
     } else {
       this.broadcastNear({ type: 'chat', sid: member.profile.sid, text: clean }, member);

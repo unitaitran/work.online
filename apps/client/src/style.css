@@ -303,7 +303,9 @@ body {
   box-shadow: 0 4px 16px rgba(59, 50, 65, 0.08);
   font-weight: 700;
   max-width: 60vw;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 button.office-badge:hover {
@@ -726,7 +728,9 @@ button.office-badge:hover {
   border-radius: 22px;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 20px 50px rgba(28, 23, 34, 0.28), 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 20px 50px rgba(28, 23, 34, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .modal-header {
@@ -4616,7 +4620,9 @@ button.office-badge:focus-visible {
   border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .kpi-card:hover {
   transform: translateY(-1px);
@@ -4890,7 +4896,10 @@ button.office-badge:focus-visible {
   flex-direction: column;
   justify-content: space-between;
   gap: 8px;
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .project-offer-card:hover {
   transform: translateY(-2px);
@@ -5209,7 +5218,9 @@ button.office-badge:focus-visible {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  transition: width 0.3s ease, background 0.3s ease;
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
 }
 
 .stamina-bar-fill.is-normal {
@@ -5226,8 +5237,12 @@ button.office-badge:focus-visible {
 }
 
 @keyframes stamina-pulse {
-  from { opacity: 0.6; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .stamina-bar-text {
@@ -5280,7 +5295,11 @@ button.office-badge:focus-visible {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
   pointer-events: auto;
 }
 

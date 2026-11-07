@@ -211,7 +211,13 @@ export type ServerMessage =
   | { type: 'states'; s: StateTuple[] }
   | { type: 'emote'; sid: number; emote: Emote }
   | { type: 'quick_chat'; sid: number; index: number }
-  | { type: 'chat'; sid: number; text: string; isDirect?: boolean | undefined; targetSid?: number | undefined }
+  | {
+      type: 'chat';
+      sid: number;
+      text: string;
+      isDirect?: boolean | undefined;
+      targetSid?: number | undefined;
+    }
   /** Vị trí gửi lên không hợp lệ (đi quá nhanh, xuyên tường): kéo về chỗ này. */
   | { type: 'correct'; x: number; z: number }
   | { type: 'idle_check'; deadline: number }

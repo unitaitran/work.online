@@ -30,7 +30,9 @@ export interface BragData {
 }
 
 /** Các ô số liệu (thuần, để test). */
-export function bragTiles(stats: DailyStats | undefined): { value: string; label: string; icon: string }[] {
+export function bragTiles(
+  stats: DailyStats | undefined,
+): { value: string; label: string; icon: string }[] {
   const s = STRINGS.brag;
   const st = stats ?? EMPTY_DAILY_STATS;
   const fmt = new Intl.NumberFormat('vi-VN');
@@ -234,7 +236,13 @@ export async function drawBragCard(data: BragData): Promise<HTMLCanvasElement> {
   ctx.fillStyle = 'rgba(255, 138, 101, 0.12)';
   for (let i = 0; i < 12; i += 1) {
     ctx.beginPath();
-    ctx.arc((i * 187 + 60) % (BRAG_WIDTH - 120) + 60, ((i * 103) % 400) + 90, 20 + (i % 4) * 12, 0, Math.PI * 2);
+    ctx.arc(
+      ((i * 187 + 60) % (BRAG_WIDTH - 120)) + 60,
+      ((i * 103) % 400) + 90,
+      20 + (i % 4) * 12,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
   }
 

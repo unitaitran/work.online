@@ -295,9 +295,7 @@ export function addWork(economy: CompanyEconomy, points: number): SettleResult {
   if (!project || points <= 0) {
     return { economy, completed: null, workAdded: 0, salaryPaid: 0 };
   }
-  const effectivePoints = economy.perks?.includes('deskDecor')
-    ? Math.round(points * 1.1)
-    : points;
+  const effectivePoints = economy.perks?.includes('deskDecor') ? Math.round(points * 1.1) : points;
   const progress = Math.min(project.work, project.progress + effectivePoints);
   if (progress < project.work) {
     return {
